@@ -1,1132 +1,528 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vela — Future Directions &amp; Design Roadmap</title>
-    <style>
-      :root {
-        --bg: #0b0f19;
-        --bg-2: #111827;
-        --fg: #f8fafc;
-        --muted: #94a3b8;
-        --accent: #38bdf8;
-        --accent-2: #a78bfa;
-        --accent-3: #34d399;
-        --accent-4: #f472b6;
-        --accent-5: #fbbf24;
-        --code-bg: #1e293b;
-        --card-bg: #151c2c;
-        --border: #334155;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        font-family:
-          system-ui,
-          -apple-system,
-          BlinkMacSystemFont,
-          "Segoe UI",
-          Roboto,
-          sans-serif;
-        background: var(--bg);
-        color: var(--fg);
-        line-height: 1.65;
-      }
-      header {
-        padding: 5rem 1rem 4rem;
-        text-align: center;
-        background:
-          radial-gradient(
-            circle at 20% 30%,
-            rgba(167, 139, 250, 0.12) 0%,
-            transparent 40%
-          ),
-          radial-gradient(
-            circle at 80% 70%,
-            rgba(56, 189, 248, 0.12) 0%,
-            transparent 40%
-          ),
-          var(--bg-2);
-        border-bottom: 1px solid var(--border);
-      }
-      nav.top-nav {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 0.45rem 0.9rem;
-        max-width: 1020px;
-        margin: 0 auto 1.75rem;
-      }
-      nav.top-nav a {
-        color: var(--muted);
-        text-decoration: none;
-        font-size: 0.9rem;
-        font-weight: 500;
-        padding: 0.25rem 0.6rem;
-        border-radius: 999px;
-        transition:
-          color 0.15s ease,
-          background 0.15s ease;
-      }
-      nav.top-nav a:hover,
-      nav.top-nav a.active {
-        color: var(--accent);
-        background: rgba(56, 189, 248, 0.1);
-      }
-      h1 {
-        margin: 0;
-        font-size: 3.4rem;
-        font-weight: 800;
-        letter-spacing: -0.03em;
-        background: linear-gradient(135deg, var(--accent-2), var(--accent));
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-      }
-      .tagline {
-        margin: 1rem auto 0;
-        font-size: 1.2rem;
-        color: var(--muted);
-        max-width: 720px;
-      }
-      main {
-        max-width: 960px;
-        margin: 0 auto;
-        padding: 2.5rem 1rem 5rem;
-      }
-      h2 {
-        margin-top: 4rem;
-        font-size: 1.95rem;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        border-bottom: 1px solid var(--border);
-        padding-bottom: 0.5rem;
-      }
-      h3 {
-        margin-top: 2rem;
-        color: var(--accent);
-        font-size: 1.3rem;
-        display: flex;
-        align-items: center;
-        gap: 0.6rem;
-        flex-wrap: wrap;
-      }
-      h4 {
-        margin: 1.2rem 0 0.5rem;
-        color: var(--accent-3);
-        font-size: 1.08rem;
-      }
-      p {
-        margin: 1rem 0;
-      }
-      a {
-        color: var(--accent);
-      }
-      code {
-        font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
-        background: var(--code-bg);
-        padding: 0.15rem 0.45rem;
-        border-radius: 0.35rem;
-        color: var(--accent);
-        font-size: 0.9rem;
-      }
-      pre {
-        background: var(--code-bg);
-        padding: 1.25rem;
-        border-radius: 0.75rem;
-        overflow-x: auto;
-        border: 1px solid var(--border);
-        line-height: 1.55;
-      }
-      pre code {
-        background: none;
-        padding: 0;
-        color: var(--fg);
-      }
-      .keyword {
-        color: #f472b6;
-      }
-      .type {
-        color: #38bdf8;
-      }
-      .string {
-        color: #4ade80;
-      }
-      .comment {
-        color: var(--muted);
-        font-style: italic;
-      }
-      .number {
-        color: #fbbf24;
-      }
-      .intro {
-        font-size: 1.12rem;
-        color: var(--muted);
-        margin-bottom: 2rem;
-      }
-      .badge {
-        display: inline-block;
-        padding: 0.2rem 0.6rem;
-        border-radius: 999px;
-        font-size: 0.74rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-      }
-      .b-resolved {
-        background: rgba(52, 211, 153, 0.16);
-        color: #6ee7b7;
-        border: 1px solid rgba(52, 211, 153, 0.3);
-      }
-      .b-idea {
-        background: rgba(56, 189, 248, 0.15);
-        color: #7dd3fc;
-        border: 1px solid rgba(56, 189, 248, 0.3);
-      }
-      .b-open {
-        background: rgba(250, 204, 21, 0.15);
-        color: #fde047;
-        border: 1px solid rgba(250, 204, 21, 0.3);
-      }
-      .b-med {
-        background: rgba(251, 146, 60, 0.15);
-        color: #fdba74;
-      }
-      .b-low {
-        background: rgba(167, 139, 250, 0.15);
-        color: #c4b5fd;
-      }
-      .cards {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 1rem;
-        margin: 1.5rem 0;
-      }
-      .card,
-      .option {
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-radius: 0.85rem;
-        padding: 1.25rem 1.4rem;
-        margin: 1.25rem 0;
-      }
-      .card h3,
-      .option h3 {
-        margin-top: 0;
-      }
-      .note {
-        background: rgba(56, 189, 248, 0.08);
-        border-left: 4px solid var(--accent);
-        padding: 1rem 1.25rem;
-        border-radius: 0 0.5rem 0.5rem 0;
-        margin: 1.25rem 0;
-      }
-      .table-wrap {
-        overflow-x: auto;
-        margin: 1.5rem 0;
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 1.25rem 0;
-        font-size: 0.93rem;
-      }
-      th,
-      td {
-        border: 1px solid var(--border);
-        padding: 0.7rem 0.9rem;
-        text-align: left;
-        vertical-align: top;
-      }
-      th {
-        background: var(--card-bg);
-        color: var(--accent);
-      }
-      tr:nth-child(even) {
-        background: rgba(255, 255, 255, 0.02);
-      }
-      ul,
-      ol {
-        padding-left: 1.4rem;
-      }
-      li {
-        margin: 0.5rem 0;
-      }
-      footer {
-        border-top: 1px solid var(--border);
-        padding: 3rem 1rem;
-        text-align: center;
-        color: var(--muted);
-        font-size: 0.9rem;
-      }
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vela — Future Directions &amp; Design Roadmap</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --bg-2: #111827;
+      --fg: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #a78bfa;
+      --accent-3: #34d399;
+      --accent-4: #f472b6;
+      --accent-5: #fbbf24;
+      --code-bg: #1e293b;
+      --card-bg: #151c2c;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.65;
+    }
+    header {
+      padding: 5rem 1rem 4rem;
+      text-align: center;
+      background:
+        radial-gradient(circle at 20% 30%, rgba(167,139,250,0.12) 0%, transparent 40%),
+        radial-gradient(circle at 80% 70%, rgba(56,189,248,0.12) 0%, transparent 40%),
+        var(--bg-2);
+      border-bottom: 1px solid var(--border);
+    }
+    nav.top-nav {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.45rem 0.9rem;
+      max-width: 1020px;
+      margin: 0 auto 1.75rem;
+    }
+    nav.top-nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 0.25rem 0.6rem;
+      border-radius: 999px;
+      transition: color 0.15s ease, background 0.15s ease;
+    }
+    nav.top-nav a:hover, nav.top-nav a.active {
+      color: var(--accent);
+      background: rgba(56,189,248,0.1);
+    }
+    h1 {
+      margin: 0;
+      font-size: 3.4rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--accent-2), var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .tagline {
+      margin: 1rem auto 0;
+      font-size: 1.2rem;
+      color: var(--muted);
+      max-width: 720px;
+    }
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 2.5rem 1rem 5rem;
+    }
+    h2 {
+      margin-top: 4rem;
+      font-size: 1.95rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    h3 {
+      margin-top: 2rem;
+      color: var(--accent);
+      font-size: 1.3rem;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+    }
+    h4 {
+      margin: 1.2rem 0 0.5rem;
+      color: var(--accent-3);
+      font-size: 1.08rem;
+    }
+    p { margin: 1rem 0; }
+    a { color: var(--accent); }
+    code {
+      font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+      background: var(--code-bg);
+      padding: 0.15rem 0.45rem;
+      border-radius: 0.35rem;
+      color: var(--accent);
+      font-size: 0.9rem;
+    }
+    pre {
+      background: var(--code-bg);
+      padding: 1.25rem;
+      border-radius: 0.75rem;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      line-height: 1.55;
+    }
+    pre code { background: none; padding: 0; color: var(--fg); }
+    .keyword { color: #f472b6; }
+    .type { color: #38bdf8; }
+    .string { color: #4ade80; }
+    .comment { color: var(--muted); font-style: italic; }
+    .number { color: #fbbf24; }
+    .intro {
+      font-size: 1.12rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .b-resolved { background: rgba(52,211,153,0.16); color: #6ee7b7; border: 1px solid rgba(52,211,153,0.3); }
+    .b-idea { background: rgba(56,189,248,0.15); color: #7dd3fc; border: 1px solid rgba(56,189,248,0.3); }
+    .b-open { background: rgba(250,204,21,0.15); color: #fde047; border: 1px solid rgba(250,204,21,0.3); }
+    .b-med { background: rgba(251,146,60,0.15); color: #fdba74; }
+    .b-low { background: rgba(167,139,250,0.15); color: #c4b5fd; }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+      margin: 1.5rem 0;
+    }
+    .card, .option {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.85rem;
+      padding: 1.25rem 1.4rem;
+      margin: 1.25rem 0;
+    }
+    .card h3, .option h3 { margin-top: 0; }
+    .note {
+      background: rgba(56,189,248,0.08);
+      border-left: 4px solid var(--accent);
+      padding: 1rem 1.25rem;
+      border-radius: 0 0.5rem 0.5rem 0;
+      margin: 1.25rem 0;
+    }
+    .table-wrap { overflow-x: auto; margin: 1.5rem 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.25rem 0;
+      font-size: 0.93rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.7rem 0.9rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      background: var(--card-bg);
+      color: var(--accent);
+    }
+    tr:nth-child(even) { background: rgba(255,255,255,0.02); }
+    ul, ol { padding-left: 1.4rem; }
+    li { margin: 0.5rem 0; }
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 3rem 1rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+  
+    /* Unified pill navigation polish */
+    nav.top-nav, .doc-nav {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.45rem 0.9rem;
+      max-width: 1040px;
+      margin: 0 auto 1.5rem;
+    }
+    nav.top-nav a, .doc-nav a {
+      color: var(--muted, #94a3b8);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      transition: color 0.15s ease, background 0.15s ease;
+    }
+    nav.top-nav a:hover,
+    nav.top-nav a.active,
+    .doc-nav a:hover,
+    .doc-nav a[aria-current="page"] {
+      color: var(--accent, #38bdf8);
+      background: rgba(56, 189, 248, 0.12);
+    }
+  </style>
+</head>
+<body>
 
-      /* Unified pill navigation polish */
-      nav.top-nav,
-      .doc-nav {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 0.45rem 0.9rem;
-        max-width: 1040px;
-        margin: 0 auto 1.5rem;
-      }
-      nav.top-nav a,
-      .doc-nav a {
-        color: var(--muted, #94a3b8);
-        text-decoration: none;
-        font-size: 0.9rem;
-        font-weight: 500;
-        padding: 0.25rem 0.65rem;
-        border-radius: 999px;
-        transition:
-          color 0.15s ease,
-          background 0.15s ease;
-      }
-      nav.top-nav a:hover,
-      nav.top-nav a.active,
-      .doc-nav a:hover,
-      .doc-nav a[aria-current="page"] {
-        color: var(--accent, #38bdf8);
-        background: rgba(56, 189, 248, 0.12);
-      }
-    </style>
-  </head>
-  <body>
-    <header>
-      <nav class="top-nav" aria-label="Vela documentation">
-        <a href="index.html">Guide</a>
-        <a href="regions.html">Regions</a>
-        <a href="safety.html">Safety</a>
-        <a href="channels.html">Channels</a>
-        <a href="actors.html">Actors</a>
-        <a href="events.html">Events</a>
-        <a href="concurrency.html">Concurrency</a>
-        <a href="commitment.html">Commitments</a>
-        <a href="std.html">Library</a>
-        <a href="web.html">Web</a>
-        <a href="gui.html">GUI</a>
-        <a href="ide.html">Studio</a>
-        <a href="comparison.html">Comparison</a>
-        <a href="future.html" class="active" aria-current="page">Future</a>
-        <a href="tricks.html">Tricks</a>
-        <a href="maywaste.html">May Waste</a>
-        <a href="review.html">Review</a>
-      </nav>
-      <h1>Future Directions</h1>
-      <p class="tagline">
-        Open design questions, unshipped extensions to existing features,
-        systems-performance proposals, and long-term compiler directions for
-        Vela.
+  <header>
+    <nav class="top-nav" aria-label="Vela documentation">
+      <a href="index.html">Guide</a>
+      <a href="regions.html">Regions</a>
+      <a href="safety.html">Safety</a>
+      <a href="channels.html">Channels</a>
+      <a href="actors.html">Actors</a>
+      <a href="events.html">Events</a>
+      <a href="concurrency.html">Concurrency</a>
+      <a href="commitment.html">Commitments</a>
+      <a href="std.html">Library</a>
+      <a href="web.html">Web</a>
+      <a href="gui.html">GUI</a>
+      <a href="ide.html">Studio</a>
+      <a href="comparison.html">Comparison</a>
+      <a href="future.html" class="active" aria-current="page">Future</a>
+      <a href="tricks.html">Tricks</a>
+      <a href="maywaste.html">May Waste</a>
+      <a href="review.html">Review</a>
+    </nav>
+    <h1>Future Directions</h1>
+    <p class="tagline">
+      Open design questions, unshipped extensions to existing features, systems-performance proposals, and long-term compiler directions for Vela.
+    </p>
+  </header>
+
+  <main>
+    <p class="intro">
+      This consolidated notebook combines Vela's active future ideas (merging the original Future Directions and Kimi Edition notebooks). Core systems that have already landed (regions, actors, bounded channels, <code>select</code>, commitments &amp; <code>rush</code>, events, generic kinds, capturing lambdas, iterators, <code>Int512</code>, <code>region global</code>, <code>std/web</code>, and <code>std/gui</code>) are summarized briefly with links to their live docs &mdash; while <strong>all remaining unshipped follow-ups, sub-ideas, and open decisions</strong> stay documented below.
+    </p>
+
+    <section>
+      <h2><span aria-hidden="true">✅</span> Recently Shipped Foundations <span class="badge b-resolved">Resolved</span></h2>
+      <p>
+        Major milestones from earlier drafts of these notebooks are now implemented and documented on their dedicated pages; only their unbuilt follow-up extensions appear later in this document.
       </p>
-    </header>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Capability</th><th>Shipped Form</th><th>Documentation</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Region Memory &amp; Globals</strong></td><td><code>region r</code>, <code>^T@r</code>, <code>text@r</code>, <code>.copy()</code>, <code>region global(N)</code>, <code>default</code> regions</td><td><a href="regions.html">Regions</a>, <a href="index.html#region-global">Guide</a></td></tr>
+            <tr><td><strong>Errors &amp; Missing Values</strong></td><td><code>maybe T</code>, <code>T ~ E</code>, <code>fail</code>/<code>failure</code>, Plan B <code>{ ... }</code>, kind imitation</td><td><a href="index.html#maybe">Guide</a>, <a href="safety.html">Safety</a></td></tr>
+            <tr><td><strong>Generics, Patterns &amp; Operators</strong></td><td>Generic tasks/shapes/kinds, 5 structural words, <code>pattern</code> traits, operator methods (<code>plus</code>..<code>cmp</code>)</td><td><a href="index.html#generics">Generics</a>, <a href="index.html#patterns">Patterns</a></td></tr>
+            <tr><td><strong>Concurrency, Channels &amp; Actors</strong></td><td><code>Chan[own T]</code>, <code>actor</code> + M:N scheduler, <code>select ... otherwise ... fi</code>, <code>&lt;&lt;-</code> / <code>-&gt;&gt;</code></td><td><a href="channels.html">Channels</a>, <a href="actors.html">Actors</a>, <a href="concurrency.html">Concurrency</a></td></tr>
+            <tr><td><strong>Commitments &amp; Structured Async</strong></td><td><code>Commitment[T]</code>, <code>rush</code>, <code>=&gt;</code>, <code>.then()</code> / <code>.recover()</code>, <code>maybe Commitment[T]</code>, region splicing, concurrent <code>std/web</code> &amp; GUI frames</td><td><a href="commitment.html">Commitments</a>, <a href="web.html">Web</a>, <a href="gui.html">GUI</a></td></tr>
+            <tr><td><strong>Events &amp; Alters</strong></td><td>Watch, read, call (<code>before</code>/<code>after</code>), lifecycle hooks, <code>auto</code>/<code>.listen()</code>, guarded cycle graph</td><td><a href="events.html">Events</a></td></tr>
+            <tr><td><strong>Lambdas, Pipes, Loops &amp; Libraries</strong></td><td><code>[@r]</code>/<code>[bind @r]</code>/<code>[flex @r]</code> lambdas, shortcut lambdas, <code>|&gt;</code>, map/<code>finally</code> loops, <code>std/collections</code>, <code>std/int512</code>, <code>std/json</code>, <code>std/web</code>, <code>std/gui</code>, <code>std/sync</code></td><td><a href="index.html">Guide</a>, <a href="std.html">Library</a>, <a href="web.html">Web</a>, <a href="gui.html">GUI</a></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
 
-    <main>
-      <p class="intro">
-        This consolidated notebook combines Vela's active future ideas (merging
-        the original Future Directions and Kimi Edition notebooks). Core systems
-        that have already landed (regions, actors, bounded channels,
-        <code>select</code>, commitments &amp; <code>rush</code>, events,
-        generic kinds, capturing lambdas, iterators, <code>Int512</code>,
-        <code>region global</code>, <code>std/web</code>, and
-        <code>std/gui</code>) are summarized briefly with links to their live
-        docs &mdash; while
-        <strong
-          >all remaining unshipped follow-ups, sub-ideas, and open
-          decisions</strong
-        >
-        stay documented below.
-      </p>
+    <section id="memory">
+      <h2><span aria-hidden="true">🧠</span> Memory, Regions &amp; Resource Safety (Open Extensions)</h2>
 
-      <section>
-        <h2>
-          <span aria-hidden="true">✅</span> Recently Shipped Foundations
-          <span class="badge b-resolved">Resolved</span>
-        </h2>
+      <div class="option" id="move-pointers">
+        <h3>Move-Only Owning Pointers (<code>own ^T@r</code>) <span class="badge b-idea">Idea</span></h3>
         <p>
-          Major milestones from earlier drafts of these notebooks are now
-          implemented and documented on their dedicated pages; only their
-          unbuilt follow-up extensions appear later in this document.
+          Scoped regions free everything in <code>r</code> at block exit. To reclaim a single heap object early inside a long-lived region without waiting for the block to close, an explicit owning pointer <code>own ^T@r</code> would combine linear move checking (at most one owner, moved on assignment/pass) with single-object free when that owner leaves scope or calls an early release helper.
         </p>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Capability</th>
-                <th>Shipped Form</th>
-                <th>Documentation</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><strong>Region Memory &amp; Globals</strong></td>
-                <td>
-                  <code>region r</code>, <code>^T@r</code>, <code>text@r</code>,
-                  <code>.copy()</code>, <code>region global(N)</code>,
-                  <code>default</code> regions
-                </td>
-                <td>
-                  <a href="regions.html">Regions</a>,
-                  <a href="index.html#region-global">Guide</a>
-                </td>
-              </tr>
-              <tr>
-                <td><strong>Errors &amp; Missing Values</strong></td>
-                <td>
-                  <code>maybe T</code>, <code>T ~ E</code>,
-                  <code>fail</code>/<code>failure</code>, Plan B
-                  <code>{ ... }</code>, kind imitation
-                </td>
-                <td>
-                  <a href="index.html#maybe">Guide</a>,
-                  <a href="safety.html">Safety</a>
-                </td>
-              </tr>
-              <tr>
-                <td><strong>Generics, Patterns &amp; Operators</strong></td>
-                <td>
-                  Generic tasks/shapes/kinds, 5 structural words,
-                  <code>pattern</code> traits, operator methods
-                  (<code>plus</code>..<code>cmp</code>)
-                </td>
-                <td>
-                  <a href="index.html#generics">Generics</a>,
-                  <a href="index.html#patterns">Patterns</a>
-                </td>
-              </tr>
-              <tr>
-                <td><strong>Concurrency, Channels &amp; Actors</strong></td>
-                <td>
-                  <code>Chan[own T]</code>, <code>actor</code> + M:N scheduler,
-                  <code>select ... otherwise ... fi</code>,
-                  <code>&lt;&lt;-</code> / <code>-&gt;&gt;</code>
-                </td>
-                <td>
-                  <a href="channels.html">Channels</a>,
-                  <a href="actors.html">Actors</a>,
-                  <a href="concurrency.html">Concurrency</a>
-                </td>
-              </tr>
-              <tr>
-                <td><strong>Commitments &amp; Structured Async</strong></td>
-                <td>
-                  <code>Commitment[T]</code>, <code>rush</code>,
-                  <code>=&gt;</code>, <code>.then()</code> /
-                  <code>.recover()</code>, <code>maybe Commitment[T]</code>,
-                  region splicing, concurrent <code>std/web</code> &amp; GUI
-                  frames
-                </td>
-                <td>
-                  <a href="commitment.html">Commitments</a>,
-                  <a href="web.html">Web</a>, <a href="gui.html">GUI</a>
-                </td>
-              </tr>
-              <tr>
-                <td><strong>Events &amp; Alters</strong></td>
-                <td>
-                  Watch, read, call (<code>before</code>/<code>after</code>),
-                  lifecycle hooks, <code>auto</code>/<code>.listen()</code>,
-                  guarded cycle graph
-                </td>
-                <td><a href="events.html">Events</a></td>
-              </tr>
-              <tr>
-                <td><strong>Lambdas, Pipes, Loops &amp; Libraries</strong></td>
-                <td>
-                  <code>[@r]</code>/<code>[bind @r]</code>/<code
-                    >[flex @r]</code
-                  >
-                  lambdas, shortcut lambdas, <code>|&gt;</code>, map/<code
-                    >finally</code
-                  >
-                  loops, <code>std/collections</code>, <code>std/int512</code>,
-                  <code>std/json</code>, <code>std/web</code>,
-                  <code>std/gui</code>, <code>std/sync</code>
-                </td>
-                <td>
-                  <a href="index.html">Guide</a>,
-                  <a href="std.html">Library</a>, <a href="web.html">Web</a>,
-                  <a href="gui.html">GUI</a>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+      </div>
 
-      <section id="memory">
-        <h2>
-          <span aria-hidden="true">🧠</span> Memory, Regions &amp; Resource
-          Safety (Open Extensions)
-        </h2>
-
-        <div class="option" id="move-pointers">
-          <h3>
-            Move-Only Owning Pointers (<code>own ^T@r</code>)
-            <span class="badge b-idea">Idea</span>
-          </h3>
-          <p>
-            Scoped regions free everything in <code>r</code> at block exit. To
-            reclaim a single heap object early inside a long-lived region
-            without waiting for the block to close, an explicit owning pointer
-            <code>own ^T@r</code> would combine linear move checking (at most
-            one owner, moved on assignment/pass) with single-object free when
-            that owner leaves scope or calls an early release helper.
-          </p>
-        </div>
-
-        <div class="option" id="defer-guards">
-          <h3>
-            Scope Guards: <code>defer</code> &amp; Static Leak Checking
-            <span class="badge b-idea">Idea</span>
-          </h3>
-          <p>
-            Regions already close opened <code>File</code>s automatically on
-            scope exit, but general non-region resources (external sockets, OS
-            handles, locks, temporary state cleanup) have no general lexical
-            cleanup statement.
-          </p>
-          <pre><code><span class="keyword">task</span> copy_log(path: text@r) -&gt; nothing ~ FileError
+      <div class="option" id="defer-guards">
+        <h3>Scope Guards: <code>defer</code> &amp; Static Leak Checking <span class="badge b-idea">Idea</span></h3>
+        <p>
+          Regions already close opened <code>File</code>s automatically on scope exit, but general non-region resources (external sockets, OS handles, locks, temporary state cleanup) have no general lexical cleanup statement.
+        </p>
+        <pre><code><span class="keyword">task</span> copy_log(path: text@r) -&gt; nothing ~ FileError
     <span class="keyword">fixed</span> handle = open_raw(path) { <span class="keyword">failure</span> err <span class="keyword">&lt;-</span> <span class="keyword">fail</span> err }
     <span class="keyword">defer</span> handle.release()
     process(handle) { <span class="keyword">failure</span> err <span class="keyword">&lt;-</span> <span class="keyword">fail</span> err }
 <span class="keyword">fi</span></code></pre>
-          <p>
-            Paired with <strong>static leak checking</strong>,
-            resource-returning types could require every control-flow path to
-            pass, consume, or <code>defer</code>-release them.
-          </p>
-        </div>
-
-        <div class="option" id="borrowed-views">
-          <h3>
-            Read-Only Borrowed Views &amp; Array-to-Slice Conversions
-            <span class="badge b-low">Low</span>
-          </h3>
-          <ul>
-            <li id="array-to-slice">
-              <strong>Array-to-slice &amp; <code>@view</code>:</strong> Today
-              <code>[1, 2]</code> never becomes <code>[int]@r</code> directly
-              (you write <code>[1, 2, ...] at r</code> or
-              <code>new [int](xs) at r</code>). Candidate improvements:
-              <code>xs.slice() at r</code>, <code>p^[..]</code> to view a heap
-              array pointer without copying, and read-only view parameters
-              (<code>xs: [int]@view</code>) able to borrow stack arrays or
-              slices safely without growing them.
-            </li>
-            <li id="slices-without-reuse">
-              <strong>Non-reusing slices:</strong> A separate append-only slice
-              flavor that never reuses storage freed by <code>del()</code> so
-              older slice views/copies never observe overwritten slots (at
-              higher memory cost).
-            </li>
-            <li id="niche-nulls">
-              <strong>Niche-optimized nullability:</strong> Extending
-              <code>maybe ^T</code>'s zero-overhead null representation to
-              <code>maybe bool</code>, small kinds, and non-zero numeric
-              invariants.
-            </li>
-          </ul>
-        </div>
-
-        <div class="option" id="knowing-shallow-copies">
-          <h3>
-            Intentional Shallow Sharing &amp; <code>hold</code> Exclusive Locks
-            <span class="badge b-open">Open</span>
-          </h3>
-          <p>
-            Because <code>fixed</code> names refuse sharing slices, maps, or
-            pointers into mutable <code>flex</code> bindings, duplicating a
-            large <code>fixed</code> structure currently requires a deep
-            <code>.copy()</code>. Open questions to weigh before adding any
-            opt-out:
-          </p>
-          <ul>
-            <li>
-              A deliberate shared/read-only view vs. explicit
-              <code>hold</code> binding semantics (<code>hold</code> is
-              currently reserved in the lexer).
-            </li>
-            <li>
-              Whether a runtime check or single-writer lock marker (<code
-                >flex x!: int</code
-              >) should detect concurrent/unexpected alias writes if shallow
-              sharing is ever exposed.
-            </li>
-          </ul>
-        </div>
-
-        <div class="option" id="global-region-extras">
-          <h3>
-            Start-Time Values &amp; Static/Global Region Extensions
-            <span class="badge b-open">Open</span>
-          </h3>
-          <p>
-            <code>region global(N)</code> is built for fixed static data
-            declarations, while shared fields and startup decorators still
-            cannot allocate dynamic slices, joined text, or pointers before
-            <code>main</code> runs (<a href="index.html#decorators"
-              >Decorators</a
-            >). Possible follow-ups:
-          </p>
-          <ul>
-            <li>
-              Allowing <code>new T(...) at global</code>, joined text
-              <code>at global</code>, and bounded slices in
-              <code>global</code> (checked against its declared byte cap) so
-              startup registries and shared fields can store built
-              strings/tables safely.
-            </li>
-            <li>
-              Or per-shape <code>shared region pool</code> arenas scoped
-              exclusively to one shape's methods.
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <section id="concurrency-extras">
-        <h2>
-          <span aria-hidden="true">🌐</span> Concurrency, Actors &amp;
-          Commitments (Remaining Ideas)
-        </h2>
         <p>
-          Channels, actors, the M:N scheduler,
-          <code>select ... otherwise ... fi</code>, and <code>&lt;&lt;-</code> /
-          <code>-&gt;&gt;</code> operators are all implemented (see
-          <a href="concurrency.html">Concurrency</a>). The ideas below remain
-          unbuilt:
+          Paired with <strong>static leak checking</strong>, resource-returning types could require every control-flow path to pass, consume, or <code>defer</code>-release them.
         </p>
-        <div class="cards">
-          <div class="card">
-            <h3>
-              Zero-Copy <code>Chan[own region]</code>
-              <span class="badge b-idea">Idea</span>
-            </h3>
-            <p>
-              Handing ownership of an entire isolated region across a channel or
-              actor mailbox in O(1) without deep-copying regional graphs,
-              invalidating all sender handles to that region at send time.
-            </p>
-          </div>
-          <div class="card">
-            <h3>
-              Commitment Extensions <span class="badge b-idea">Idea</span>
-            </h3>
-            <p>
-              <code>Commitment[T]</code>, <code>rush</code>,
-              <code>.then()</code>/<code>.recover()</code>, and structured
-              auto-cancellation have landed (<a href="commitment.html"
-                >Commitments</a
-              >). Remaining extensions &mdash; collection combinators, actor
-              <code>ask</code>, deadlines, and non-blocking I/O &mdash; are
-              detailed in
-              <a href="#unlocked-concurrency">Unlocked Next Steps</a> below.
-            </p>
-          </div>
-          <div class="card">
-            <h3>
-              Actor Extras: Supervision &amp; Mailboxes
-              <span class="badge b-open">Open</span>
-            </h3>
-            <p>
-              Configurable bounded mailbox overflow strategies (drop-oldest vs.
-              backpressure), actor lifecycle restart hooks/supervision trees,
-              and runtime scheduler worker metrics.
-            </p>
-          </div>
-          <div class="card">
-            <h3>
-              Multi-Core Region Isolation Proofs
-              <span class="badge b-open">Open</span>
-            </h3>
-            <p>
-              Explicit rules for running reactive
-              <a href="events.html">events</a> safely when triggered from
-              concurrent actor contexts, and synchronized global/shared state
-              access.
-            </p>
-          </div>
-        </div>
-      </section>
+      </div>
 
-      <section id="methods-generics">
-        <h2>
-          <span aria-hidden="true">🧩</span> Methods, Generics, Groups &amp;
-          Lambdas (Remaining Extras)
-        </h2>
-
-        <div class="option" id="methods-later">
-          <h3>Method Extensions <span class="badge b-idea">Idea</span></h3>
-          <ul>
-            <li id="methods-property">
-              <strong>Computed <code>property</code> members:</strong>
-              No-argument read-like members whose answer is cached until a field
-              they read is modified by an <code>alters</code> method.
-            </li>
-            <li id="methods-kind-order">
-              <strong>Ordered kind helpers:</strong> Automatic
-              <code>.next()</code>, <code>.prev()</code> (returning
-              <code>maybe</code>), <code>.first</code>, and
-              <code>.last</code> on payloadless enum-like kinds.
-            </li>
-            <li id="methods-in-this">
-              <strong>Methods allocating in their value's region:</strong>
-              Passing <code>@this</code> implicitly to
-              <code>alters</code> methods so a shape can grow its own
-              <code>.items.add(...)</code> slice internally rather than forcing
-              callers to pass <code>r</code> explicitly.
-            </li>
-            <li id="methods-own-types">
-              <strong>Explicit generic arguments on method calls:</strong>
-              Allowing <code>b.mapped&lt;text&gt;()</code> where return types
-              cannot be inferred solely from arguments.
-            </li>
-            <li id="methods-elsewhere">
-              <strong
-                >Extension methods &amp; custom
-                <code>==</code>/<code>~=</code>:</strong
-              >
-              Letting shapes override
-              <code>similar(other: This) -&gt; bool</code> for custom deep
-              equality/cycle-safe structural checks, and deciding whether
-              foreign modules may ever attach non-<code>priv</code> methods.
-            </li>
-            <li id="shared-in-generic-shapes">
-              <strong>Shared members inside generic shapes:</strong>
-              Per-instantiation vs. shared-across-all-<code>T</code> fields on
-              <code>Box&lt;T&gt;</code>.
-            </li>
-          </ul>
-        </div>
-
-        <div class="option" id="group-values">
-          <h3>
-            Type Groups: Nested Loops, Type Matching &amp; Region Groups
-            <span class="badge b-idea">Idea</span>
-          </h3>
-          <ul>
-            <li>
-              <strong>Loops inside loops over one group:</strong>
-              <code>each v: A in args</code> naming the turn's type parameter
-              explicitly so nested iteration over the same group does not
-              collide on <code>P</code>.
-            </li>
-            <li>
-              <strong
-                >Matching a generic/group value by type (<code>match v?</code
-                >):</strong
-              >
-              Allowing compile-time pruned branches over polymorphic group
-              values (<code>case int n</code>,
-              <code>case [int] xs</code> read-only view,
-              <code>case (int, float) a, b</code>) where currently only
-              <code>v.type</code> text exists.
-            </li>
-            <li>
-              <strong
-                >Writing <code>(P...)</code> as a standalone binding tuple
-                type</strong
-              >
-              and allowing <strong>regions inside a type group</strong> (today
-              regions must be named beside <code>P...</code>).
-            </li>
-          </ul>
-        </div>
-
-        <div class="option" id="pattern-values">
-          <h3>
-            Dynamic Pattern Values (Existential Dispatch)
-            <span class="badge b-idea">Idea</span>
-          </h3>
-          <p>
-            Patterns currently constrain generic type parameters statically
-            (<code>&lt;T: Shaped&gt;</code>). Adding dynamic existential pattern
-            values (<code>[Shaped]@r</code>) would pair a region-scoped pointer
-            with a compiler-generated vtable so heterogeneous shapes can live in
-            a single slice and downcast via <code>match</code>.
-          </p>
-        </div>
-
-        <div class="option" id="generics-lambdas-extras">
-          <h3>
-            Generics, Lambdas, Iterators &amp; Operators Follow-Ups
-            <span class="badge b-idea">Idea</span>
-          </h3>
-          <ul>
-            <li id="undecided-generic-region">
-              <strong>Optional region parameters on generic shapes:</strong>
-              Skipping unused region parameters when
-              <code>Box&lt;T&gt;</code> is instantiated with region-free types
-              like <code>Box&lt;int&gt;</code>.
-            </li>
-            <li>
-              <strong>Operator overloading extras:</strong> Mixed-type operands
-              (<code>Int512 + int</code>), custom <code>==</code>/<code
-                >!=</code
-              >
-              value equality, <code>**</code> overloading, and bitwise operator
-              overloading.
-            </li>
-            <li>
-              <strong>BigInt family expansion:</strong> Adding unsigned
-              <code>UInt512</code>, <code>Int128</code>/<code>UInt128</code>,
-              <code>Int256</code>/<code>UInt256</code>,
-              <code>Int1024</code>/<code>UInt1024</code>, bit shifts,
-              <code>pow_mod</code>, <code>isqrt</code>, and <code>gcd</code> in
-              <code>std/int512</code> (or sibling modules).
-            </li>
-            <li id="iterator-improvements">
-              <strong>Lazy iterator Phase 2:</strong> Short return/variable
-              types for uncollected chains, compiler loop fusion into a single C
-              loop, <code>[@r]</code> capturing lambdas inside iterator
-              adapters, generators/lazy streams, and additional sources/adapters
-              (ranges, lines, <code>flat_map</code>, <code>chunks</code>,
-              <code>windows</code>, <code>rev</code>).
-            </li>
-            <li>
-              <strong>Lambda &amp; task-value extras:</strong> Capturing
-              field/array places (<code>[flex&amp; p.x, @r]</code>),
-              growing/shrinking captured slice copies safely, cloning held
-              <code>[flex @r]</code> blocks explicitly, devirtualizing known
-              task values, naming generic tasks (<code>first&lt;int&gt;</code>)
-              and instance methods (<code>Point.area</code>) as task values, and
-              multi-return task value types.
-            </li>
-            <li>
-              <strong>Wrappers &amp; decorators extras:</strong> Wrappers on
-              methods of generic shapes (<code>shape Box&lt;T&gt;</code>),
-              decorators on shapes once shapes can be passed as values, and
-              compile-time static registry tables for startup decorators.
-            </li>
-            <li>
-              <strong>Derive service:</strong> Beyond built-in
-              <code>.str()</code> and <code>~=</code>, opt-in
-              <code>derive</code> for hashing, cloning, and fast value equality.
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <section id="perf-systems">
-        <h2>
-          <span aria-hidden="true">⚡</span> Performance, Macros &amp; Low-Level
-          Control
-        </h2>
-        <div class="cards">
-          <div class="card" id="comptime">
-            <h3>
-              Macros with Args &amp; <code>comptime</code>
-              <span class="badge b-idea">Idea</span>
-            </h3>
-            <p>
-              Hygienic value-taking macros (<code>task #SQUARE(x)</code>
-              evaluated once per arg), using macros in array type lengths
-              (<code>[int#SIZE]</code>), type macros (<code
-                >#Vec2 = (float, float)</code
-              >), constant folding of pure tuples, and full compile-time
-              execution (<code>comptime</code> tasks &amp;
-              <code>comptime bench</code>).
-            </p>
-          </div>
-          <div class="card">
-            <h3>SIMD Vector Types <span class="badge b-idea">Idea</span></h3>
-            <p>
-              Explicit <code>vec4f</code>/<code>vec8i</code> register types for
-              predictable lane arithmetic, reductions, and masks mapped cleanly
-              to target intrinsics or scalar fallbacks in C11.
-            </p>
-          </div>
-          <div class="card">
-            <h3>
-              Controlled Shape Layout <span class="badge b-idea">Idea</span>
-            </h3>
-            <p>
-              <code>packed</code>, <code>aligned(64)</code>, and
-              <code>hot</code> field-grouping layout directives lowered to C11
-              <code>_Alignas</code> / packed attributes for systems, binary
-              formats, and cache tuning.
-            </p>
-          </div>
-          <div class="card">
-            <h3>
-              Typed Inline Assembly <span class="badge b-idea">Idea</span>
-            </h3>
-            <p>
-              Checking register constraints and clobbers against Vela types in
-              explicit <code>asm(...)</code> blocks for kernel, crypto, and
-              low-level drivers.
-            </p>
-          </div>
-          <div class="card">
-            <h3>
-              Monomorphization &amp; Representation
-              <span class="badge b-idea">Idea</span>
-            </h3>
-            <p>
-              Deduplicating identical generic C instantiations across modules,
-              explicit <code>inline</code> vs type-erased
-              <code>shared</code> generics hints, and tagged-pointer
-              optimization for small kinds.
-            </p>
-          </div>
-          <div class="card" id="bitwise">
-            <h3>Bitwise Operations <span class="badge b-med">Planned</span></h3>
-            <p>
-              Explicit bit masks, shifts, xor, and complement (either C-style
-              operators <code>&amp;</code>, <code>|</code>,
-              <code>&lt;&lt;</code>, <code>&gt;&gt;</code> with defined
-              overflow/shift bounds, or builtin methods like
-              <code>.band()</code>/<code>.shl()</code>).
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section id="types-syntax">
-        <h2>
-          <span aria-hidden="true">🎨</span> Bold Type-System &amp; Syntax
-          Directions
-        </h2>
+      <div class="option" id="borrowed-views">
+        <h3>Read-Only Borrowed Views &amp; Array-to-Slice Conversions <span class="badge b-low">Low</span></h3>
         <ul>
-          <li id="effects">
-            <strong>Algebraic Effects:</strong> Explicit lexical
-            <code>effect</code> declarations, <code>perform</code>, and
-            <code>handle ... resume</code> blocks without implicit effect
-            inference.
-          </li>
-          <li id="typestate">
-            <strong>Typestate &amp; Session Types:</strong> Phantom generic
-            state tags (e.g. <code>File&lt;Open&gt;</code> &rarr;
-            <code>File&lt;Closed&gt;</code>) and affine single-use rules for
-            protocol safety.
-          </li>
-          <li id="refinement">
-            <strong>Refinement &amp; Distinct Types:</strong>
-            Compile/runtime-checked constraints (<code>int where n &gt; 0</code
-            >), parameterized type aliases (<code>alias BoxList&lt;T&gt;</code
-            >), and distinct newtypes so IDs aren't mixed with raw ints.
-          </li>
-          <li id="inner-kind-variants">
-            <strong>Flattened Inner-Kind Matching &amp; Case Guards:</strong>
-            Matching nested errors directly (e.g.
-            <code>InputError.NotANumber</code> without two nested
-            <code>match</code> blocks), range cases &amp; <code>match</code> on
-            ints/chars, and boolean guards (<code
-              >case Circle r when r &gt; 0.0</code
-            >).
-          </li>
-          <li id="postfix-try">
-            <strong>Postfix <code>?</code> Error Propagation Sugar:</strong>
-            Early-returning the failure side of <code>T ~ E</code> (like Rust's
-            <code>?</code>) instead of writing
-            <code>{ failure err &lt;- fail err }</code>. Requires disambiguating
-            expression suffixes from tuple dynamic type queries (<code
-              >t.#5? is maybe int</code
-            >) and planned polymorphic matching (<code>match v?</code>); today
-            Vela uses Plan B or call pipes (<code>|&gt;</code>) instead.
-          </li>
-          <li id="ergonomics-open">
-            <strong>Syntax &amp; Statement Cleanup:</strong> Requiring
-            statements to end at a newline while permitting multiline
-            expressions inside <code>( )</code> / <code>{ }</code>; rejecting
-            multiline raw string literals; named call arguments (<code
-              >resize(width: 2.0, height: 3.0)</code
-            >); inclusive ranges (<code>0..=10</code>); explicit
-            <code>round</code>/<code>floor</code>;
-            <code>each i, v in xs</code> indexed slice loops; mid-loop typed
-            failure exits; <code>assert(...)</code>; and single-item tuple
-            syntax.
-          </li>
+          <li id="array-to-slice"><strong>Array-to-slice &amp; <code>@view</code>:</strong> Today <code>[1, 2]</code> never becomes <code>[int]@r</code> directly (you write <code>[1, 2, ...] at r</code> or <code>new [int](xs) at r</code>). Candidate improvements: <code>xs.slice() at r</code>, <code>p^[..]</code> to view a heap array pointer without copying, and read-only view parameters (<code>xs: [int]@view</code>) able to borrow stack arrays or slices safely without growing them.</li>
+          <li id="slices-without-reuse"><strong>Non-reusing slices:</strong> A separate append-only slice flavor that never reuses storage freed by <code>del()</code> so older slice views/copies never observe overwritten slots (at higher memory cost).</li>
+          <li id="niche-nulls"><strong>Niche-optimized nullability:</strong> Extending <code>maybe ^T</code>'s zero-overhead null representation to <code>maybe bool</code>, small kinds, and non-zero numeric invariants.</li>
         </ul>
-      </section>
+      </div>
 
-      <section id="tooling-stdlib">
-        <h2>
-          <span aria-hidden="true">🛠️</span> Tooling, Standard Library &amp;
-          Targets
-        </h2>
-        <div class="cards">
-          <div class="card">
-            <h3>CLI &amp; Compiler Modes</h3>
-            <ul>
-              <li>
-                <code>vela test</code> exposing the
-                <code>run</code>/<code>fail</code>/<code>trap</code> harness to
-                user projects
-              </li>
-              <li>
-                <code>vela fmt</code> formatter &amp;
-                <code>vela run</code> direct execution
-              </li>
-              <li>
-                <code>vela --guard</code> runtime safety build (deep-call trap,
-                alias &amp; stale slice-view checks)
-              </li>
-              <li>
-                <code>vela doc</code> extracting HTML docs from
-                <code>;;</code> doc comments &amp;
-                <code>.vela.md</code> literate programs
-              </li>
-              <li>
-                <code>#line</code> C source maps, standalone
-                <code>vela_rt.h</code> bundle output, and interned trap-site
-                tables
-              </li>
-            </ul>
-          </div>
-          <div class="card">
-            <h3>Ecosystem, Editor &amp; Stdlib</h3>
-            <ul>
-              <li>
-                Git-URL package manager (<code>vela.toml</code>, no central
-                registry lock-in)
-              </li>
-              <li>
-                Standalone <code>vela-lsp</code> adapter over
-                <code>ide/analysis</code> + browser WASM Playground
-              </li>
-              <li>
-                Studio region timelines, alias arrows, find-references/rename,
-                and C-diff pane
-              </li>
-              <li>
-                <code>std/sys</code> (args, env, exit),
-                <code>std/slices</code> (sort, search),
-                <code>std/text</code> (find, split, trim, case),
-                <code>std/random</code>, and shortest-round-trip float
-                formatting
-              </li>
-            </ul>
-          </div>
-          <div class="card">
-            <h3>Future Backends</h3>
-            <ul>
-              <li>
-                LLVM IR backend (optional faster optimizations alongside C11)
-              </li>
-              <li>
-                WebAssembly compilation target for sandboxed edge/browser
-                execution
-              </li>
-              <li>Bare-metal / minimal-runtime embedded target</li>
-              <li>Long-term self-hosting compiler once syntax stabilizes</li>
-            </ul>
-          </div>
-        </div>
-      </section>
-      <section id="unlocked-concurrency">
-        <h2>
-          <span aria-hidden="true">🚀</span> Unlocked by Recent Features
-          (Commitments, Actors, Channels &amp; Events)
-        </h2>
+      <div class="option" id="knowing-shallow-copies">
+        <h3>Intentional Shallow Sharing &amp; <code>hold</code> Exclusive Locks <span class="badge b-open">Open</span></h3>
         <p>
-          Now that <code>Commitment[T]</code>, <code>rush</code>, M:N scheduled
-          actors, bounded <code>Chan[own T]</code>, <code>select</code>, region
-          splicing, and guarded reactive events are live in Vela, several
-          higher-level capabilities fit the language naturally without inventing
-          unrelated machinery:
+          Because <code>fixed</code> names refuse sharing slices, maps, or pointers into mutable <code>flex</code> bindings, duplicating a large <code>fixed</code> structure currently requires a deep <code>.copy()</code>. Open questions to weigh before adding any opt-out:
         </p>
-        <div class="cards">
-          <div class="card" id="actor-ask">
-            <h3>
-              Actor Request&ndash;Reply (<code>ask</code> &rarr;
-              <code>Commitment[R]</code>) <span class="badge b-idea">Idea</span>
-            </h3>
-            <p>
-              Allowing an <code>actor</code> handler to declare a return value
-              (<code>on Fetch(id: int) -&gt; text</code>) and calling it with
-              <code>rush a.Fetch(1)</code> to yield a
-              <code>Commitment[text]</code>. Under the hood the caller allocates
-              a single-shot reply handle, so callers get type-safe
-              <code>&lt;&lt;-</code>, <code>select</code> timeouts, and
-              <code>.then()</code>/<code>.recover()</code> chains on actor state
-              without manually wiring reply channels.
-            </p>
-          </div>
-          <div class="card" id="commit-collections">
-            <h3>
-              Dynamic Fan-Out &amp; Collection Combinators
-              <span class="badge b-idea">Idea</span>
-            </h3>
-            <p>
-              <code>select</code> currently handles a fixed set of arms known at
-              compile time. With linear <code>Commitment[T]</code> + region
-              splicing in place, runtime helpers such as
-              <code>await_all(cs)</code>, <code>await_any(cs)</code> (cancelling
-              losers automatically), and parallel
-              <code>each item in xs rush ...</code> fan-out can process
-              variable-length slices (e.g. batching
-              <code>Client.fetch</code> requests or tile rendering) while
-              splicing all worker regions into a single caller region.
-            </p>
-          </div>
-          <div class="card" id="deadline-scopes">
-            <h3>
-              Hierarchical Deadlines &amp; Structured Timeouts
-              <span class="badge b-idea">Idea</span>
-            </h3>
-            <p>
-              Propagating a deadline through
-              <code>vela__rt__current_commitment</code> alongside cancellation
-              (<code>cancelled()</code> / <code>remaining_ms()</code>) lets a
-              parent timeout automatically cap inner <code>rush</code> tasks,
-              <code>select case after ms</code> arms, and
-              <code>std/web</code> request handlers without plumbing timeout
-              parameters through every helper.
-            </p>
-          </div>
-          <div class="card" id="async-reactor">
-            <h3>
-              Non-Blocking OS Event Reactor
-              (<code>epoll</code>/<code>kqueue</code>)
-              <span class="badge b-idea">Idea</span>
-            </h3>
-            <p>
-              Currently, blocking socket/file I/O inside <code>rush</code> (such
-              as <code>std/web</code> <code>serve_concurrent</code> or
-              <code>Client.fetch</code>) occupies a pool worker or helper thread
-              until completion. Integrating a non-blocking OS I/O poller into
-              the M:N scheduler lets paused tasks yield their OS thread and
-              resume only when descriptors become readable/writable.
-            </p>
-          </div>
-          <div class="card" id="chan-streams">
-            <h3>
-              Channel Iteration &amp; Concurrent Pipelines
-              <span class="badge b-idea">Idea</span>
-            </h3>
-            <p>
-              Connecting lazy iterators, channels, and commitments:
-              <code>each msg in ch</code> draining a
-              <code>Chan[T]</code> cleanly until close, bounded worker pools fed
-              by a shared channel and emitting per-item commitments, and
-              reactive <code>event</code> hooks safely pushing immutable
-              notifications into actor mailboxes.
-            </p>
-          </div>
-          <div class="card" id="indirect-rush">
-            <h3>
-              Indirect &amp; Value-Isolated <code>rush</code> Tasks
-              <span class="badge b-idea">Idea</span>
-            </h3>
-            <p>
-              Extending <code>rush</code> beyond direct named tasks to support
-              plain stateless lambdas and deep-copied immutable closures (<code
-                >[fixed @r]</code
-              >), while preserving the invariant that no mutable caller
-              reference or <code>alters</code> method can cross into concurrent
-              execution.
-            </p>
-          </div>
-        </div>
-      </section>
-    </main>
+        <ul>
+          <li>A deliberate shared/read-only view vs. explicit <code>hold</code> binding semantics (<code>hold</code> is currently reserved in the lexer).</li>
+          <li>Whether a runtime check or single-writer lock marker (<code>flex x!: int</code>) should detect concurrent/unexpected alias writes if shallow sharing is ever exposed.</li>
+        </ul>
+      </div>
 
-    <footer>
-      <p>Vela — consolidated roadmap preserving every open design thread.</p>
-    </footer>
-  </body>
+      <div class="option" id="global-region-extras">
+        <h3>Start-Time Values &amp; Static/Global Region Extensions <span class="badge b-open">Open</span></h3>
+        <p>
+          <code>region global(N)</code> is built for fixed static data declarations, while shared fields and startup decorators still cannot allocate dynamic slices, joined text, or pointers before <code>main</code> runs (<a href="index.html#decorators">Decorators</a>). Possible follow-ups:
+        </p>
+        <ul>
+          <li>Allowing <code>new T(...) at global</code>, joined text <code>at global</code>, and bounded slices in <code>global</code> (checked against its declared byte cap) so startup registries and shared fields can store built strings/tables safely.</li>
+          <li>Or per-shape <code>shared region pool</code> arenas scoped exclusively to one shape's methods.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="concurrency-extras">
+      <h2><span aria-hidden="true">🌐</span> Concurrency, Actors &amp; Commitments (Remaining Ideas)</h2>
+      <p>
+        Channels, actors, the M:N scheduler, <code>select ... otherwise ... fi</code>, and <code>&lt;&lt;-</code> / <code>-&gt;&gt;</code> operators are all implemented (see <a href="concurrency.html">Concurrency</a>). The ideas below remain unbuilt:
+      </p>
+      <div class="cards">
+        <div class="card">
+          <h3>Zero-Copy <code>Chan[own region]</code> <span class="badge b-idea">Idea</span></h3>
+          <p>Handing ownership of an entire isolated region across a channel or actor mailbox in O(1) without deep-copying regional graphs, invalidating all sender handles to that region at send time.</p>
+        </div>
+        <div class="card">
+          <h3>Commitment Extensions <span class="badge b-idea">Idea</span></h3>
+          <p><code>Commitment[T]</code>, <code>rush</code>, <code>.then()</code>/<code>.recover()</code>, and structured auto-cancellation have landed (<a href="commitment.html">Commitments</a>). Remaining extensions &mdash; collection combinators, actor <code>ask</code>, deadlines, and non-blocking I/O &mdash; are detailed in <a href="#unlocked-concurrency">Unlocked Next Steps</a> below.</p>
+        </div>
+        <div class="card">
+          <h3>Actor Extras: Supervision &amp; Mailboxes <span class="badge b-open">Open</span></h3>
+          <p>Configurable bounded mailbox overflow strategies (drop-oldest vs. backpressure), actor lifecycle restart hooks/supervision trees, and runtime scheduler worker metrics.</p>
+        </div>
+        <div class="card">
+          <h3>Multi-Core Region Isolation Proofs <span class="badge b-open">Open</span></h3>
+          <p>Explicit rules for running reactive <a href="events.html">events</a> safely when triggered from concurrent actor contexts, and synchronized global/shared state access.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="methods-generics">
+      <h2><span aria-hidden="true">🧩</span> Methods, Generics, Groups &amp; Lambdas (Remaining Extras)</h2>
+
+      <div class="option" id="methods-later">
+        <h3>Method Extensions <span class="badge b-idea">Idea</span></h3>
+        <ul>
+          <li id="methods-property"><strong>Computed <code>property</code> members:</strong> No-argument read-like members whose answer is cached until a field they read is modified by an <code>alters</code> method.</li>
+          <li id="methods-kind-order"><strong>Ordered kind helpers:</strong> Automatic <code>.next()</code>, <code>.prev()</code> (returning <code>maybe</code>), <code>.first</code>, and <code>.last</code> on payloadless enum-like kinds.</li>
+          <li id="methods-in-this"><strong>Methods allocating in their value's region:</strong> Passing <code>@this</code> implicitly to <code>alters</code> methods so a shape can grow its own <code>.items.add(...)</code> slice internally rather than forcing callers to pass <code>r</code> explicitly.</li>
+          <li id="methods-own-types"><strong>Explicit generic arguments on method calls:</strong> Allowing <code>b.mapped&lt;text&gt;()</code> where return types cannot be inferred solely from arguments.</li>
+          <li id="methods-elsewhere"><strong>Extension methods &amp; custom <code>==</code>/<code>~=</code>:</strong> Letting shapes override <code>similar(other: This) -&gt; bool</code> for custom deep equality/cycle-safe structural checks, and deciding whether foreign modules may ever attach non-<code>priv</code> methods.</li>
+          <li id="shared-in-generic-shapes"><strong>Shared members inside generic shapes:</strong> Per-instantiation vs. shared-across-all-<code>T</code> fields on <code>Box&lt;T&gt;</code>.</li>
+        </ul>
+      </div>
+
+      <div class="option" id="group-values">
+        <h3>Type Groups: Nested Loops, Type Matching &amp; Region Groups <span class="badge b-idea">Idea</span></h3>
+        <ul>
+          <li><strong>Loops inside loops over one group:</strong> <code>each v: A in args</code> naming the turn's type parameter explicitly so nested iteration over the same group does not collide on <code>P</code>.</li>
+          <li><strong>Matching a generic/group value by type (<code>match v?</code>):</strong> Allowing compile-time pruned branches over polymorphic group values (<code>case int n</code>, <code>case [int] xs</code> read-only view, <code>case (int, float) a, b</code>) where currently only <code>v.type</code> text exists.</li>
+          <li><strong>Writing <code>(P...)</code> as a standalone binding tuple type</strong> and allowing <strong>regions inside a type group</strong> (today regions must be named beside <code>P...</code>).</li>
+        </ul>
+      </div>
+
+      <div class="option" id="pattern-values">
+        <h3>Dynamic Pattern Values (Existential Dispatch) <span class="badge b-idea">Idea</span></h3>
+        <p>
+          Patterns currently constrain generic type parameters statically (<code>&lt;T: Shaped&gt;</code>). Adding dynamic existential pattern values (<code>[Shaped]@r</code>) would pair a region-scoped pointer with a compiler-generated vtable so heterogeneous shapes can live in a single slice and downcast via <code>match</code>.
+        </p>
+      </div>
+
+      <div class="option" id="generics-lambdas-extras">
+        <h3>Generics, Lambdas, Iterators &amp; Operators Follow-Ups <span class="badge b-idea">Idea</span></h3>
+        <ul>
+          <li id="undecided-generic-region"><strong>Optional region parameters on generic shapes:</strong> Skipping unused region parameters when <code>Box&lt;T&gt;</code> is instantiated with region-free types like <code>Box&lt;int&gt;</code>.</li>
+          <li><strong>Operator overloading extras:</strong> Mixed-type operands (<code>Int512 + int</code>), custom <code>==</code>/<code>!=</code> value equality, <code>**</code> overloading, and bitwise operator overloading.</li>
+          <li><strong>BigInt family expansion:</strong> Adding unsigned <code>UInt512</code>, <code>Int128</code>/<code>UInt128</code>, <code>Int256</code>/<code>UInt256</code>, <code>Int1024</code>/<code>UInt1024</code>, bit shifts, <code>pow_mod</code>, <code>isqrt</code>, and <code>gcd</code> in <code>std/int512</code> (or sibling modules).</li>
+          <li id="iterator-improvements"><strong>Lazy iterator Phase 2:</strong> Short return/variable types for uncollected chains, compiler loop fusion into a single C loop, <code>[@r]</code> capturing lambdas inside iterator adapters, generators/lazy streams, and additional sources/adapters (ranges, lines, <code>flat_map</code>, <code>chunks</code>, <code>windows</code>, <code>rev</code>).</li>
+          <li><strong>Lambda &amp; task-value extras:</strong> Capturing field/array places (<code>[flex&amp; p.x, @r]</code>), growing/shrinking captured slice copies safely, cloning held <code>[flex @r]</code> blocks explicitly, devirtualizing known task values, naming generic tasks (<code>first&lt;int&gt;</code>) and instance methods (<code>Point.area</code>) as task values, and multi-return task value types.</li>
+          <li><strong>Wrappers &amp; decorators extras:</strong> Wrappers on methods of generic shapes (<code>shape Box&lt;T&gt;</code>), decorators on shapes once shapes can be passed as values, and compile-time static registry tables for startup decorators.</li>
+          <li><strong>Derive service:</strong> Beyond built-in <code>.str()</code> and <code>~=</code>, opt-in <code>derive</code> for hashing, cloning, and fast value equality.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="perf-systems">
+      <h2><span aria-hidden="true">⚡</span> Performance, Macros &amp; Low-Level Control</h2>
+      <div class="cards">
+        <div class="card" id="comptime">
+          <h3>Macros with Args &amp; <code>comptime</code> <span class="badge b-idea">Idea</span></h3>
+          <p>Hygienic value-taking macros (<code>task #SQUARE(x)</code> evaluated once per arg), using macros in array type lengths (<code>[int#SIZE]</code>), type macros (<code>#Vec2 = (float, float)</code>), constant folding of pure tuples, and full compile-time execution (<code>comptime</code> tasks &amp; <code>comptime bench</code>).</p>
+        </div>
+        <div class="card">
+          <h3>SIMD Vector Types <span class="badge b-idea">Idea</span></h3>
+          <p>Explicit <code>vec4f</code>/<code>vec8i</code> register types for predictable lane arithmetic, reductions, and masks mapped cleanly to target intrinsics or scalar fallbacks in C11.</p>
+        </div>
+        <div class="card">
+          <h3>Controlled Shape Layout <span class="badge b-idea">Idea</span></h3>
+          <p><code>packed</code>, <code>aligned(64)</code>, and <code>hot</code> field-grouping layout directives lowered to C11 <code>_Alignas</code> / packed attributes for systems, binary formats, and cache tuning.</p>
+        </div>
+        <div class="card">
+          <h3>Typed Inline Assembly <span class="badge b-idea">Idea</span></h3>
+          <p>Checking register constraints and clobbers against Vela types in explicit <code>asm(...)</code> blocks for kernel, crypto, and low-level drivers.</p>
+        </div>
+        <div class="card">
+          <h3>Monomorphization &amp; Representation <span class="badge b-idea">Idea</span></h3>
+          <p>Deduplicating identical generic C instantiations across modules, explicit <code>inline</code> vs type-erased <code>shared</code> generics hints, and tagged-pointer optimization for small kinds.</p>
+        </div>
+        <div class="card" id="bitwise">
+          <h3>Bitwise Operations <span class="badge b-med">Planned</span></h3>
+          <p>Explicit bit masks, shifts, xor, and complement (either C-style operators <code>&amp;</code>, <code>|</code>, <code>&lt;&lt;</code>, <code>&gt;&gt;</code> with defined overflow/shift bounds, or builtin methods like <code>.band()</code>/<code>.shl()</code>).</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="types-syntax">
+      <h2><span aria-hidden="true">🎨</span> Bold Type-System &amp; Syntax Directions</h2>
+      <ul>
+        <li id="effects"><strong>Algebraic Effects:</strong> Explicit lexical <code>effect</code> declarations, <code>perform</code>, and <code>handle ... resume</code> blocks without implicit effect inference.</li>
+        <li id="typestate"><strong>Typestate &amp; Session Types:</strong> Phantom generic state tags (e.g. <code>File&lt;Open&gt;</code> &rarr; <code>File&lt;Closed&gt;</code>) and affine single-use rules for protocol safety.</li>
+        <li id="refinement"><strong>Refinement &amp; Distinct Types:</strong> Compile/runtime-checked constraints (<code>int where n &gt; 0</code>), parameterized type aliases (<code>alias BoxList&lt;T&gt;</code>), and distinct newtypes so IDs aren't mixed with raw ints.</li>
+        <li id="inner-kind-variants"><strong>Flattened Inner-Kind Matching &amp; Case Guards:</strong> Matching nested errors directly (e.g. <code>InputError.NotANumber</code> without two nested <code>match</code> blocks), range cases &amp; <code>match</code> on ints/chars, and boolean guards (<code>case Circle r when r &gt; 0.0</code>).</li>
+        <li id="postfix-try"><strong>Postfix <code>?</code> Error Propagation Sugar:</strong> Early-returning the failure side of <code>T ~ E</code> (like Rust's <code>?</code>) instead of writing <code>{ failure err &lt;- fail err }</code>. Requires disambiguating expression suffixes from tuple dynamic type queries (<code>t.#5? is maybe int</code>) and planned polymorphic matching (<code>match v?</code>); today Vela uses Plan B or call pipes (<code>|&gt;</code>) instead.</li>
+        <li id="ergonomics-open"><strong>Syntax &amp; Statement Cleanup:</strong> Requiring statements to end at a newline while permitting multiline expressions inside <code>( )</code> / <code>{ }</code>; rejecting multiline raw string literals; named call arguments (<code>resize(width: 2.0, height: 3.0)</code>); inclusive ranges (<code>0..=10</code>); explicit <code>round</code>/<code>floor</code>; <code>each i, v in xs</code> indexed slice loops; mid-loop typed failure exits; <code>assert(...)</code>; and single-item tuple syntax.</li>
+      </ul>
+    </section>
+
+    <section id="tooling-stdlib">
+      <h2><span aria-hidden="true">🛠️</span> Tooling, Standard Library &amp; Targets</h2>
+      <div class="cards">
+        <div class="card">
+          <h3>CLI &amp; Compiler Modes</h3>
+          <ul>
+            <li><code>vela test</code> exposing the <code>run</code>/<code>fail</code>/<code>trap</code> harness to user projects</li>
+            <li><code>vela fmt</code> formatter &amp; <code>vela run</code> direct execution</li>
+            <li><code>vela --guard</code> runtime safety build (deep-call trap, alias &amp; stale slice-view checks)</li>
+            <li><code>vela doc</code> extracting HTML docs from <code>;;</code> doc comments &amp; <code>.vela.md</code> literate programs</li>
+            <li><code>#line</code> C source maps, standalone <code>vela_rt.h</code> bundle output, and interned trap-site tables</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Ecosystem, Editor &amp; Stdlib</h3>
+          <ul>
+            <li>Git-URL package manager (<code>vela.toml</code>, no central registry lock-in)</li>
+            <li>Standalone <code>vela-lsp</code> adapter over <code>ide/analysis</code> + browser WASM Playground</li>
+            <li>Studio region timelines, alias arrows, find-references/rename, and C-diff pane</li>
+            <li><code>std/sys</code> (args, env, exit), <code>std/slices</code> (sort, search), <code>std/text</code> (find, split, trim, case), <code>std/random</code>, and shortest-round-trip float formatting</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Future Backends</h3>
+          <ul>
+            <li>LLVM IR backend (optional faster optimizations alongside C11)</li>
+            <li>WebAssembly compilation target for sandboxed edge/browser execution</li>
+            <li>Bare-metal / minimal-runtime embedded target</li>
+            <li>Long-term self-hosting compiler once syntax stabilizes</li>
+          </ul>
+        </div>
+      </div>
+    </section>
+    <section id="unlocked-concurrency">
+      <h2><span aria-hidden="true">🚀</span> Unlocked by Recent Features (Commitments, Actors, Channels &amp; Events)</h2>
+      <p>
+        Now that <code>Commitment[T]</code>, <code>rush</code>, M:N scheduled actors, bounded <code>Chan[own T]</code>, <code>select</code>, region splicing, and guarded reactive events are live in Vela, several higher-level capabilities fit the language naturally without inventing unrelated machinery:
+      </p>
+      <div class="cards">
+        <div class="card" id="actor-ask">
+          <h3>Actor Request&ndash;Reply (<code>ask</code> &rarr; <code>Commitment[R]</code>) <span class="badge b-idea">Idea</span></h3>
+          <p>
+            Allowing an <code>actor</code> handler to declare a return value (<code>on Fetch(id: int) -&gt; text</code>) and calling it with <code>rush a.Fetch(1)</code> to yield a <code>Commitment[text]</code>. Under the hood the caller allocates a single-shot reply handle, so callers get type-safe <code>&lt;&lt;-</code>, <code>select</code> timeouts, and <code>.then()</code>/<code>.recover()</code> chains on actor state without manually wiring reply channels.
+          </p>
+        </div>
+        <div class="card" id="commit-collections">
+          <h3>Dynamic Fan-Out &amp; Collection Combinators <span class="badge b-idea">Idea</span></h3>
+          <p>
+            <code>select</code> currently handles a fixed set of arms known at compile time. With linear <code>Commitment[T]</code> + region splicing in place, runtime helpers such as <code>await_all(cs)</code>, <code>await_any(cs)</code> (cancelling losers automatically), and parallel <code>each item in xs rush ...</code> fan-out can process variable-length slices (e.g. batching <code>Client.fetch</code> requests or tile rendering) while splicing all worker regions into a single caller region.
+          </p>
+        </div>
+        <div class="card" id="deadline-scopes">
+          <h3>Hierarchical Deadlines &amp; Structured Timeouts <span class="badge b-idea">Idea</span></h3>
+          <p>
+            Propagating a deadline through <code>vela__rt__current_commitment</code> alongside cancellation (<code>cancelled()</code> / <code>remaining_ms()</code>) lets a parent timeout automatically cap inner <code>rush</code> tasks, <code>select case after ms</code> arms, and <code>std/web</code> request handlers without plumbing timeout parameters through every helper.
+          </p>
+        </div>
+        <div class="card" id="async-reactor">
+          <h3>Non-Blocking OS Event Reactor (<code>epoll</code>/<code>kqueue</code>) <span class="badge b-idea">Idea</span></h3>
+          <p>
+            Currently, blocking socket/file I/O inside <code>rush</code> (such as <code>std/web</code> <code>serve_concurrent</code> or <code>Client.fetch</code>) occupies a pool worker or helper thread until completion. Integrating a non-blocking OS I/O poller into the M:N scheduler lets paused tasks yield their OS thread and resume only when descriptors become readable/writable.
+          </p>
+        </div>
+        <div class="card" id="chan-streams">
+          <h3>Channel Iteration &amp; Concurrent Pipelines <span class="badge b-idea">Idea</span></h3>
+          <p>
+            Connecting lazy iterators, channels, and commitments: <code>each msg in ch</code> draining a <code>Chan[T]</code> cleanly until close, bounded worker pools fed by a shared channel and emitting per-item commitments, and reactive <code>event</code> hooks safely pushing immutable notifications into actor mailboxes.
+          </p>
+        </div>
+        <div class="card" id="indirect-rush">
+          <h3>Indirect &amp; Value-Isolated <code>rush</code> Tasks <span class="badge b-idea">Idea</span></h3>
+          <p>
+            Extending <code>rush</code> beyond direct named tasks to support plain stateless lambdas and deep-copied immutable closures (<code>[fixed @r]</code>), while preserving the invariant that no mutable caller reference or <code>alters</code> method can cross into concurrent execution.
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Vela — consolidated roadmap preserving every open design thread.</p>
+  </footer>
+</body>
 </html>

@@ -1,329 +1,260 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vela — Actors &amp; Message Passing</title>
-    <style>
-      :root {
-        --bg: #0b0f19;
-        --bg-2: #111827;
-        --fg: #f8fafc;
-        --muted: #94a3b8;
-        --accent: #38bdf8;
-        --accent-2: #a78bfa;
-        --accent-3: #34d399;
-        --accent-4: #f472b6;
-        --code-bg: #1e293b;
-        --card-bg: #151c2c;
-        --border: #334155;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        font-family:
-          system-ui,
-          -apple-system,
-          BlinkMacSystemFont,
-          "Segoe UI",
-          Roboto,
-          sans-serif;
-        background: var(--bg);
-        color: var(--fg);
-        line-height: 1.65;
-      }
-      header {
-        padding: 5rem 1rem 4rem;
-        text-align: center;
-        background:
-          radial-gradient(
-            circle at 20% 30%,
-            rgba(167, 139, 250, 0.15) 0%,
-            transparent 40%
-          ),
-          radial-gradient(
-            circle at 80% 70%,
-            rgba(56, 189, 248, 0.15) 0%,
-            transparent 40%
-          ),
-          var(--bg-2);
-        border-bottom: 1px solid var(--border);
-      }
-      nav.top-nav {
-        max-width: 900px;
-        margin: 0 auto 2rem;
-        display: flex;
-        justify-content: center;
-        gap: 1.5rem;
-        flex-wrap: wrap;
-      }
-      nav.top-nav a {
-        color: var(--muted);
-        text-decoration: none;
-        font-size: 0.95rem;
-        font-weight: 500;
-        transition: color 0.15s ease;
-      }
-      nav.top-nav a:hover,
-      nav.top-nav a.active {
-        color: var(--accent);
-      }
-      h1 {
-        margin: 0;
-        font-size: 3.5rem;
-        font-weight: 800;
-        letter-spacing: -0.03em;
-        background: linear-gradient(135deg, var(--accent-2), var(--accent));
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-      }
-      .tagline {
-        margin: 1rem auto 0;
-        font-size: 1.25rem;
-        color: var(--muted);
-        max-width: 680px;
-      }
-      main {
-        max-width: 900px;
-        margin: 0 auto;
-        padding: 2.5rem 1rem 5rem;
-      }
-      h2 {
-        margin-top: 4rem;
-        font-size: 2rem;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        border-bottom: 1px solid var(--border);
-        padding-bottom: 0.5rem;
-      }
-      h2 .icon {
-        font-size: 1.5rem;
-      }
-      h3 {
-        margin-top: 2rem;
-        color: var(--accent);
-        font-size: 1.35rem;
-      }
-      p {
-        margin: 1rem 0;
-      }
-      code {
-        font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
-        background: var(--code-bg);
-        padding: 0.15rem 0.45rem;
-        border-radius: 0.35rem;
-        color: var(--accent);
-        font-size: 0.9rem;
-      }
-      pre {
-        background: var(--code-bg);
-        padding: 1.25rem;
-        border-radius: 0.75rem;
-        overflow-x: auto;
-        border: 1px solid var(--border);
-        line-height: 1.55;
-      }
-      pre code {
-        background: none;
-        padding: 0;
-        color: var(--fg);
-      }
-      .keyword {
-        color: #f472b6;
-      }
-      .type {
-        color: #38bdf8;
-      }
-      .string {
-        color: #4ade80;
-      }
-      .comment {
-        color: var(--muted);
-        font-style: italic;
-      }
-      .number {
-        color: #fbbf24;
-      }
-      .badge {
-        display: inline-block;
-        padding: 0.2rem 0.6rem;
-        border-radius: 999px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-      }
-      .b-blue {
-        background: rgba(56, 189, 248, 0.15);
-        color: var(--accent);
-        border: 1px solid rgba(56, 189, 248, 0.3);
-      }
-      .b-purple {
-        background: rgba(167, 139, 250, 0.15);
-        color: var(--accent-2);
-        border: 1px solid rgba(167, 139, 250, 0.3);
-      }
-      .b-green {
-        background: rgba(52, 211, 153, 0.15);
-        color: var(--accent-3);
-        border: 1px solid rgba(52, 211, 153, 0.3);
-      }
-      .note {
-        background: rgba(56, 189, 248, 0.08);
-        border-left: 4px solid var(--accent);
-        padding: 1rem 1.25rem;
-        border-radius: 0 0.5rem 0.5rem 0;
-        margin: 1.5rem 0;
-      }
-      .card {
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-radius: 0.75rem;
-        padding: 1.25rem;
-        margin: 1.5rem 0;
-      }
-      .card h4 {
-        margin: 0 0 0.5rem;
-        color: var(--accent-2);
-        font-size: 1.1rem;
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 1.5rem 0;
-      }
-      th,
-      td {
-        border: 1px solid var(--border);
-        padding: 0.75rem 1rem;
-        text-align: left;
-      }
-      th {
-        background: var(--card-bg);
-        color: var(--accent);
-      }
-      tr:nth-child(even) {
-        background: rgba(255, 255, 255, 0.02);
-      }
-      footer {
-        border-top: 1px solid var(--border);
-        padding: 3rem 1rem;
-        text-align: center;
-        color: var(--muted);
-        font-size: 0.9rem;
-      }
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vela — Actors &amp; Message Passing</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --bg-2: #111827;
+      --fg: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #a78bfa;
+      --accent-3: #34d399;
+      --accent-4: #f472b6;
+      --code-bg: #1e293b;
+      --card-bg: #151c2c;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.65;
+    }
+    header {
+      padding: 5rem 1rem 4rem;
+      text-align: center;
+      background:
+        radial-gradient(circle at 20% 30%, rgba(167,139,250,0.15) 0%, transparent 40%),
+        radial-gradient(circle at 80% 70%, rgba(56,189,248,0.15) 0%, transparent 40%),
+        var(--bg-2);
+      border-bottom: 1px solid var(--border);
+    }
+    nav.top-nav {
+      max-width: 900px;
+      margin: 0 auto 2rem;
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    nav.top-nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 500;
+      transition: color 0.15s ease;
+    }
+    nav.top-nav a:hover, nav.top-nav a.active {
+      color: var(--accent);
+    }
+    h1 {
+      margin: 0;
+      font-size: 3.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--accent-2), var(--accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .tagline {
+      margin: 1rem auto 0;
+      font-size: 1.25rem;
+      color: var(--muted);
+      max-width: 680px;
+    }
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2.5rem 1rem 5rem;
+    }
+    h2 {
+      margin-top: 4rem;
+      font-size: 2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    h2 .icon {
+      font-size: 1.5rem;
+    }
+    h3 {
+      margin-top: 2rem;
+      color: var(--accent);
+      font-size: 1.35rem;
+    }
+    p { margin: 1rem 0; }
+    code {
+      font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+      background: var(--code-bg);
+      padding: 0.15rem 0.45rem;
+      border-radius: 0.35rem;
+      color: var(--accent);
+      font-size: 0.9rem;
+    }
+    pre {
+      background: var(--code-bg);
+      padding: 1.25rem;
+      border-radius: 0.75rem;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      line-height: 1.55;
+    }
+    pre code { background: none; padding: 0; color: var(--fg); }
+    .keyword { color: #f472b6; }
+    .type { color: #38bdf8; }
+    .string { color: #4ade80; }
+    .comment { color: var(--muted); font-style: italic; }
+    .number { color: #fbbf24; }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .b-blue { background: rgba(56,189,248,0.15); color: var(--accent); border: 1px solid rgba(56,189,248,0.3); }
+    .b-purple { background: rgba(167,139,250,0.15); color: var(--accent-2); border: 1px solid rgba(167,139,250,0.3); }
+    .b-green { background: rgba(52,211,153,0.15); color: var(--accent-3); border: 1px solid rgba(52,211,153,0.3); }
+    .note {
+      background: rgba(56,189,248,0.08);
+      border-left: 4px solid var(--accent);
+      padding: 1rem 1.25rem;
+      border-radius: 0 0.5rem 0.5rem 0;
+      margin: 1.5rem 0;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      margin: 1.5rem 0;
+    }
+    .card h4 {
+      margin: 0 0 0.5rem;
+      color: var(--accent-2);
+      font-size: 1.1rem;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.75rem 1rem;
+      text-align: left;
+    }
+    th {
+      background: var(--card-bg);
+      color: var(--accent);
+    }
+    tr:nth-child(even) {
+      background: rgba(255,255,255,0.02);
+    }
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 3rem 1rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+  
+    /* Unified pill navigation polish */
+    nav.top-nav, .doc-nav {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.45rem 0.9rem;
+      max-width: 1040px;
+      margin: 0 auto 1.5rem;
+    }
+    nav.top-nav a, .doc-nav a {
+      color: var(--muted, #94a3b8);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      transition: color 0.15s ease, background 0.15s ease;
+    }
+    nav.top-nav a:hover,
+    nav.top-nav a.active,
+    .doc-nav a:hover,
+    .doc-nav a[aria-current="page"] {
+      color: var(--accent, #38bdf8);
+      background: rgba(56, 189, 248, 0.12);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <nav class="top-nav" aria-label="Vela documentation">
+      <a href="index.html">Guide</a>
+      <a href="regions.html">Regions</a>
+      <a href="safety.html">Safety</a>
+      <a href="channels.html">Channels</a>
+      <a href="actors.html" class="active" aria-current="page">Actors</a>
+      <a href="events.html">Events</a>
+      <a href="concurrency.html">Concurrency</a>
+      <a href="commitment.html">Commitments</a>
+      <a href="std.html">Library</a>
+      <a href="web.html">Web</a>
+      <a href="gui.html">GUI</a>
+      <a href="ide.html">Studio</a>
+      <a href="comparison.html">Comparison</a>
+      <a href="future.html">Future</a>
+      <a href="tricks.html">Tricks</a>
+      <a href="maywaste.html">May Waste</a>
+      <a href="review.html">Review</a>
+    </nav>
+    <h1>Actors &amp; Message Loops</h1>
+    <p class="tagline">
+      Autonomous concurrent entities with isolated private state, typed mailboxes,
+      and sequential message loops. Zero locks, zero deadlocks, compiled to strict ISO C11.
+    </p>
+    <div style="margin-top: 1.5rem;">
+      <span class="badge b-purple">Actor Model</span>
+      <span class="badge b-blue">Share Nothing</span>
+      <span class="badge b-green">Thread Isolation</span>
+    </div>
+  </header>
 
-      /* Unified pill navigation polish */
-      nav.top-nav,
-      .doc-nav {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 0.45rem 0.9rem;
-        max-width: 1040px;
-        margin: 0 auto 1.5rem;
-      }
-      nav.top-nav a,
-      .doc-nav a {
-        color: var(--muted, #94a3b8);
-        text-decoration: none;
-        font-size: 0.9rem;
-        font-weight: 500;
-        padding: 0.25rem 0.65rem;
-        border-radius: 999px;
-        transition:
-          color 0.15s ease,
-          background 0.15s ease;
-      }
-      nav.top-nav a:hover,
-      nav.top-nav a.active,
-      .doc-nav a:hover,
-      .doc-nav a[aria-current="page"] {
-        color: var(--accent, #38bdf8);
-        background: rgba(56, 189, 248, 0.12);
-      }
-    </style>
-  </head>
-  <body>
-    <header>
-      <nav class="top-nav" aria-label="Vela documentation">
-        <a href="index.html">Guide</a>
-        <a href="regions.html">Regions</a>
-        <a href="safety.html">Safety</a>
-        <a href="channels.html">Channels</a>
-        <a href="actors.html" class="active" aria-current="page">Actors</a>
-        <a href="events.html">Events</a>
-        <a href="concurrency.html">Concurrency</a>
-        <a href="commitment.html">Commitments</a>
-        <a href="std.html">Library</a>
-        <a href="web.html">Web</a>
-        <a href="gui.html">GUI</a>
-        <a href="ide.html">Studio</a>
-        <a href="comparison.html">Comparison</a>
-        <a href="future.html">Future</a>
-        <a href="tricks.html">Tricks</a>
-        <a href="maywaste.html">May Waste</a>
-        <a href="review.html">Review</a>
-      </nav>
-      <h1>Actors &amp; Message Loops</h1>
-      <p class="tagline">
-        Autonomous concurrent entities with isolated private state, typed
-        mailboxes, and sequential message loops. Zero locks, zero deadlocks,
-        compiled to strict ISO C11.
+  <main>
+    <section>
+      <h2><span class="icon">🎭</span> What is an Actor?</h2>
+      <p>
+        In traditional multi-threaded programming, threads communicate by mutating shared memory under mutex locks.
+        This design leads directly to race conditions, deadlocks, and unpredictable timing bugs.
       </p>
-      <div style="margin-top: 1.5rem">
-        <span class="badge b-purple">Actor Model</span>
-        <span class="badge b-blue">Share Nothing</span>
-        <span class="badge b-green">Thread Isolation</span>
+      <p>
+        Vela adopts the <strong>Actor Model</strong>: an actor is an autonomous execution unit that combines:
+      </p>
+      <ul>
+        <li><strong>Private Encapsulated State:</strong> An actor's fields belong exclusively to that actor. External code cannot read or modify them directly.</li>
+        <li><strong>A Mailbox Channel:</strong> Incoming messages queue in a lockless channel associated with the actor.</li>
+        <li><strong>A Sequential Message Loop:</strong> The actor processes exactly one message at a time in its own thread, executing the matching <code>on</code> handler.</li>
+      </ul>
+      <div class="note">
+        <strong>The Share-Nothing Invariant:</strong> Inside an actor handler, state mutation requires no locks or atomic operations because no other thread can ever access that state. Communication happens strictly through message passing!
       </div>
-    </header>
+    </section>
 
-    <main>
-      <section>
-        <h2><span class="icon">🎭</span> What is an Actor?</h2>
-        <p>
-          In traditional multi-threaded programming, threads communicate by
-          mutating shared memory under mutex locks. This design leads directly
-          to race conditions, deadlocks, and unpredictable timing bugs.
-        </p>
-        <p>
-          Vela adopts the <strong>Actor Model</strong>: an actor is an
-          autonomous execution unit that combines:
-        </p>
-        <ul>
-          <li>
-            <strong>Private Encapsulated State:</strong> An actor's fields
-            belong exclusively to that actor. External code cannot read or
-            modify them directly.
-          </li>
-          <li>
-            <strong>A Mailbox Channel:</strong> Incoming messages queue in a
-            lockless channel associated with the actor.
-          </li>
-          <li>
-            <strong>A Sequential Message Loop:</strong> The actor processes
-            exactly one message at a time in its own thread, executing the
-            matching <code>on</code> handler.
-          </li>
-        </ul>
-        <div class="note">
-          <strong>The Share-Nothing Invariant:</strong> Inside an actor handler,
-          state mutation requires no locks or atomic operations because no other
-          thread can ever access that state. Communication happens strictly
-          through message passing!
-        </div>
-      </section>
-
-      <section>
-        <h2><span class="icon">📝</span> Syntax and Declaration</h2>
-        <p>
-          An actor is declared with the <code>actor</code> keyword, followed by
-          its state parameters and message handlers:
-        </p>
-        <pre><code><span class="keyword">actor</span> Counter(count: int)
+    <section>
+      <h2><span class="icon">📝</span> Syntax and Declaration</h2>
+      <p>
+        An actor is declared with the <code>actor</code> keyword, followed by its state parameters and message handlers:
+      </p>
+      <pre><code><span class="keyword">actor</span> Counter(count: int)
 
     <span class="keyword">on</span> Increment(step: int)
         count += step
@@ -334,12 +265,11 @@
     <span class="keyword">fi</span>
 <span class="keyword">fi</span></code></pre>
 
-        <h3>Spawning and Dispatching Messages</h3>
-        <p>
-          Actors are spawned with the <code>spawn</code> expression, returning
-          an <code>Actor[T]</code> handle:
-        </p>
-        <pre><code><span class="keyword">task</span> main()
+      <h3>Spawning and Dispatching Messages</h3>
+      <p>
+        Actors are spawned with the <code>spawn</code> expression, returning an <code>Actor[T]</code> handle:
+      </p>
+      <pre><code><span class="keyword">task</span> main()
     <span class="keyword">fixed</span> c = spawn Counter(0)
 
     <span class="comment">; Dispatch messages asynchronously (both method and functional syntax supported)</span>
@@ -355,68 +285,56 @@
     <span class="comment">; Graceful shutdown</span>
     c.close()
 <span class="keyword">fi</span></code></pre>
-      </section>
+    </section>
 
-      <section>
-        <h2>
-          <span class="icon">⚖️</span> Actors vs. Events: What is the
-          Difference?
-        </h2>
+    <section>
+      <h2><span class="icon">⚖️</span> Actors vs. Events: What is the Difference?</h2>
+      <p>
+        Because both Actors and Events respond to occurrences, developers often wonder how they differ and when to use each:
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th>Dimension</th>
+            <th>Actors (<code>actor</code>)</th>
+            <th>Events (<code>event</code>)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Execution Context</strong></td>
+            <td>Runs on its own concurrent thread/fiber loop.</td>
+            <td>Runs synchronously within the caller's thread.</td>
+          </tr>
+          <tr>
+            <td><strong>State Ownership</strong></td>
+            <td>Owns encapsulated private state (share nothing).</td>
+            <td>Observes external state (fields, tasks, lifecycle).</td>
+          </tr>
+          <tr>
+            <td><strong>Invocation Trigger</strong></td>
+            <td>Dequeuing a message from its mailbox channel.</td>
+            <td>Field mutation (<code>on .hp</code>), task entry/exit, or lifecycle.</td>
+          </tr>
+          <tr>
+            <td><strong>Concurrency</strong></td>
+            <td>Asynchronous, decoupled, non-blocking message send.</td>
+            <td>Synchronous immediate hook with <code>alters(...)</code> verification.</td>
+          </tr>
+          <tr>
+            <td><strong>Primary Purpose</strong></td>
+            <td>Safe concurrent state management and worker pipelines.</td>
+            <td>Reactive UI triggers, invariant validation, and auditing.</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="card">
+        <h4>The Powerful Synergy: Bridging Events to Actors</h4>
         <p>
-          Because both Actors and Events respond to occurrences, developers
-          often wonder how they differ and when to use each:
+          Actors and events work best together. An event hook can detect a critical state transition and immediately dispatch an alert message into an Actor's mailbox:
         </p>
-        <table>
-          <thead>
-            <tr>
-              <th>Dimension</th>
-              <th>Actors (<code>actor</code>)</th>
-              <th>Events (<code>event</code>)</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><strong>Execution Context</strong></td>
-              <td>Runs on its own concurrent thread/fiber loop.</td>
-              <td>Runs synchronously within the caller's thread.</td>
-            </tr>
-            <tr>
-              <td><strong>State Ownership</strong></td>
-              <td>Owns encapsulated private state (share nothing).</td>
-              <td>Observes external state (fields, tasks, lifecycle).</td>
-            </tr>
-            <tr>
-              <td><strong>Invocation Trigger</strong></td>
-              <td>Dequeuing a message from its mailbox channel.</td>
-              <td>
-                Field mutation (<code>on .hp</code>), task entry/exit, or
-                lifecycle.
-              </td>
-            </tr>
-            <tr>
-              <td><strong>Concurrency</strong></td>
-              <td>Asynchronous, decoupled, non-blocking message send.</td>
-              <td>
-                Synchronous immediate hook with
-                <code>alters(...)</code> verification.
-              </td>
-            </tr>
-            <tr>
-              <td><strong>Primary Purpose</strong></td>
-              <td>Safe concurrent state management and worker pipelines.</td>
-              <td>Reactive UI triggers, invariant validation, and auditing.</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div class="card">
-          <h4>The Powerful Synergy: Bridging Events to Actors</h4>
-          <p>
-            Actors and events work best together. An event hook can detect a
-            critical state transition and immediately dispatch an alert message
-            into an Actor's mailbox:
-          </p>
-          <pre><code><span class="keyword">shape</span> Thermometer
+        <pre><code><span class="keyword">shape</span> Thermometer
     temperature: int
     monitor: Actor[Monitor]
 
@@ -426,77 +344,38 @@
         <span class="keyword">fi</span>
     <span class="keyword">fi</span>
 <span class="keyword">fi</span></code></pre>
-          <p>
-            The reactive trigger is immediate and verified at compile time,
-            while the heavy processing is handled asynchronously by the actor
-            without blocking the caller!
-          </p>
-        </div>
-      </section>
-
-      <section>
-        <h2>
-          <span class="icon">⚙️</span> Under the Hood: ISO C11 Codegen &amp; M:N
-          Scheduler
-        </h2>
         <p>
-          Vela compiles actors directly to efficient, standard ISO C11
-          multiplexed on an M:N green thread scheduler pool:
+          The reactive trigger is immediate and verified at compile time, while the heavy processing is handled asynchronously by the actor without blocking the caller!
         </p>
-        <ul>
-          <li>
-            <strong>Context Struct:</strong> A heap-allocated context struct
-            (<code>vela_actor__Name__ctx</code>) stores the mailbox handle and
-            mutable actor fields across step executions.
-          </li>
-          <li>
-            <strong>Step Function:</strong> A
-            <code>static void Name__step(void* raw_ctx)</code> function
-            processes batches of up to 16 messages sequentially with
-            <code>vela__rt__chan_try_recv</code>.
-          </li>
-          <li>
-            <strong>Message Tag Dispatch:</strong> The step switches on
-            <code>msg.tag</code>, extracts payload parameters from the tagged
-            union, and executes the handler body.
-          </li>
-          <li>
-            <strong>Auto-Parking &amp; Drain:</strong> If more messages remain
-            in the queue, <code>Name__step</code> reschedules itself on the
-            background pool. If the mailbox is empty, the actor parks with zero
-            CPU overhead until a new message is dispatched. When closed and
-            drained, the context is freed automatically.
-          </li>
-        </ul>
-      </section>
+      </div>
+    </section>
 
-      <section>
-        <h2><span class="icon">🛡️</span> State Safety Guarantees</h2>
-        <ol>
-          <li>
-            <strong>Zero Data Races on Actor State:</strong> External code
-            cannot read <code>c.count</code>; any attempt triggers a compilation
-            error: <code>actor state is private</code>.
-          </li>
-          <li>
-            <strong>No Mutex Lock Contention:</strong> Handlers execute
-            sequentially within the actor's thread, meaning handlers can mutate
-            state freely without locking.
-          </li>
-          <li>
-            <strong>Linear Ownership Transfer:</strong> Sending messages
-            carrying <code>own T</code> relinquishes sender ownership,
-            guaranteeing single-thread ownership across concurrency boundaries.
-          </li>
-        </ol>
-      </section>
-    </main>
-
-    <footer>
+    <section>
+      <h2><span class="icon">⚙️</span> Under the Hood: ISO C11 Codegen &amp; M:N Scheduler</h2>
       <p>
-        Vela Language Documentation &copy; 2026. Safe, race-free concurrency
-        compiled to ISO C11.
+        Vela compiles actors directly to efficient, standard ISO C11 multiplexed on an M:N green thread scheduler pool:
       </p>
-    </footer>
-  </body>
+      <ul>
+        <li><strong>Context Struct:</strong> A heap-allocated context struct (<code>vela_actor__Name__ctx</code>) stores the mailbox handle and mutable actor fields across step executions.</li>
+        <li><strong>Step Function:</strong> A <code>static void Name__step(void* raw_ctx)</code> function processes batches of up to 16 messages sequentially with <code>vela__rt__chan_try_recv</code>.</li>
+        <li><strong>Message Tag Dispatch:</strong> The step switches on <code>msg.tag</code>, extracts payload parameters from the tagged union, and executes the handler body.</li>
+        <li><strong>Auto-Parking &amp; Drain:</strong> If more messages remain in the queue, <code>Name__step</code> reschedules itself on the background pool. If the mailbox is empty, the actor parks with zero CPU overhead until a new message is dispatched. When closed and drained, the context is freed automatically.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2><span class="icon">🛡️</span> State Safety Guarantees</h2>
+      <ol>
+        <li><strong>Zero Data Races on Actor State:</strong> External code cannot read <code>c.count</code>; any attempt triggers a compilation error: <code>actor state is private</code>.</li>
+        <li><strong>No Mutex Lock Contention:</strong> Handlers execute sequentially within the actor's thread, meaning handlers can mutate state freely without locking.</li>
+        <li><strong>Linear Ownership Transfer:</strong> Sending messages carrying <code>own T</code> relinquishes sender ownership, guaranteeing single-thread ownership across concurrency boundaries.</li>
+      </ol>
+    </section>
+  </main>
+
+  <footer>
+    <p>Vela Language Documentation &copy; 2026. Safe, race-free concurrency compiled to ISO C11.</p>
+  </footer>
+</body>
 </html>
+

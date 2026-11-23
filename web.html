@@ -1,457 +1,316 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vela — Web Architecture &amp; std/web</title>
-    <style>
-      :root {
-        --bg: #0b0f19;
-        --bg-2: #111827;
-        --fg: #f8fafc;
-        --muted: #94a3b8;
-        --accent: #38bdf8;
-        --accent-2: #a78bfa;
-        --accent-3: #34d399;
-        --accent-4: #f472b6;
-        --code-bg: #1e293b;
-        --border: #334155;
-        --card-bg: #151c2c;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        font-family:
-          system-ui,
-          -apple-system,
-          BlinkMacSystemFont,
-          "Segoe UI",
-          Roboto,
-          sans-serif;
-        background: var(--bg);
-        color: var(--fg);
-        line-height: 1.65;
-      }
-      header {
-        padding: 5rem 1rem 4rem;
-        text-align: center;
-        border-bottom: 1px solid var(--border);
-        background:
-          radial-gradient(
-            circle at 20% 30%,
-            rgba(56, 189, 248, 0.14) 0%,
-            transparent 40%
-          ),
-          radial-gradient(
-            circle at 80% 70%,
-            rgba(52, 211, 153, 0.12) 0%,
-            transparent 40%
-          ),
-          var(--bg-2);
-      }
-      nav.top-nav {
-        max-width: 900px;
-        margin: 0 auto 2rem;
-        display: flex;
-        justify-content: center;
-        gap: 1.5rem;
-        flex-wrap: wrap;
-      }
-      nav.top-nav a {
-        color: var(--muted);
-        text-decoration: none;
-        font-size: 0.95rem;
-        font-weight: 500;
-        transition: color 0.15s ease;
-      }
-      nav.top-nav a:hover,
-      nav.top-nav a.active {
-        color: var(--accent);
-      }
-      h1 {
-        margin: 0;
-        font-size: 3.5rem;
-        font-weight: 800;
-        letter-spacing: -0.03em;
-        background: linear-gradient(135deg, var(--accent), var(--accent-3));
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-      }
-      .tagline {
-        margin-top: 1rem;
-        font-size: 1.25rem;
-        color: var(--muted);
-        max-width: 700px;
-        margin-left: auto;
-        margin-right: auto;
-      }
-      main {
-        max-width: 920px;
-        margin: 0 auto;
-        padding: 2.5rem 1rem 5rem;
-      }
-      h2 {
-        margin-top: 4rem;
-        font-size: 2rem;
-        display: flex;
-        align-items: center;
-        gap: 0.75rem;
-        color: var(--fg);
-        border-bottom: 1px solid var(--border);
-        padding-bottom: 0.5rem;
-      }
-      h2 .icon {
-        font-size: 1.5rem;
-      }
-      h3 {
-        margin-top: 2rem;
-        font-size: 1.35rem;
-        color: var(--accent);
-      }
-      p,
-      li {
-        color: var(--fg);
-      }
-      ul,
-      ol {
-        padding-left: 1.5rem;
-      }
-      code {
-        font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
-        font-size: 0.9em;
-        background: var(--code-bg);
-        padding: 0.15em 0.45em;
-        border-radius: 4px;
-        color: var(--accent);
-      }
-      pre {
-        background: var(--code-bg);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 1.25rem;
-        overflow-x: auto;
-        font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
-        font-size: 0.9rem;
-        line-height: 1.55;
-      }
-      pre code {
-        background: none;
-        padding: 0;
-        color: var(--fg);
-      }
-      .keyword {
-        color: #f472b6;
-      }
-      .type {
-        color: #38bdf8;
-      }
-      .string {
-        color: #4ade80;
-      }
-      .comment {
-        color: var(--muted);
-        font-style: italic;
-      }
-      .number {
-        color: #fbbf24;
-      }
-      .card {
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        padding: 1.25rem 1.5rem;
-        margin: 1.25rem 0;
-      }
-      .grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1.25rem;
-        margin: 1.5rem 0;
-      }
-      @media (max-width: 720px) {
-        .grid {
-          grid-template-columns: 1fr;
-        }
-      }
-      .badge {
-        display: inline-block;
-        padding: 0.2rem 0.6rem;
-        border-radius: 999px;
-        font-size: 0.75rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.03em;
-        margin-right: 0.5rem;
-      }
-      .b-blue {
-        background: rgba(56, 189, 248, 0.15);
-        color: #7dd3fc;
-      }
-      .b-green {
-        background: rgba(52, 211, 153, 0.15);
-        color: #6ee7b7;
-      }
-      .b-purple {
-        background: rgba(167, 139, 250, 0.15);
-        color: #c4b5fd;
-      }
-      .note {
-        background: linear-gradient(
-          90deg,
-          rgba(56, 189, 248, 0.1),
-          transparent
-        );
-        border-left: 4px solid var(--accent);
-        padding: 1.25rem 1.5rem;
-        border-radius: 0 0.75rem 0.75rem 0;
-        margin: 1.5rem 0;
-      }
-      .note strong {
-        color: var(--accent);
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        margin: 1.5rem 0;
-      }
-      th,
-      td {
-        border: 1px solid var(--border);
-        padding: 0.75rem 1rem;
-        text-align: left;
-      }
-      th {
-        background: var(--card-bg);
-        color: var(--accent);
-      }
-      tr:nth-child(even) {
-        background: rgba(255, 255, 255, 0.02);
-      }
-      footer {
-        text-align: center;
-        padding: 3rem 1rem;
-        border-top: 1px solid var(--border);
-        color: var(--muted);
-        font-size: 0.9rem;
-      }
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vela — Web Architecture &amp; std/web</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --bg-2: #111827;
+      --fg: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #a78bfa;
+      --accent-3: #34d399;
+      --accent-4: #f472b6;
+      --code-bg: #1e293b;
+      --border: #334155;
+      --card-bg: #151c2c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.65;
+    }
+    header {
+      padding: 5rem 1rem 4rem;
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      background:
+        radial-gradient(circle at 20% 30%, rgba(56,189,248,0.14) 0%, transparent 40%),
+        radial-gradient(circle at 80% 70%, rgba(52,211,153,0.12) 0%, transparent 40%),
+        var(--bg-2);
+    }
+    nav.top-nav {
+      max-width: 900px;
+      margin: 0 auto 2rem;
+      display: flex;
+      justify-content: center;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+    }
+    nav.top-nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.95rem;
+      font-weight: 500;
+      transition: color 0.15s ease;
+    }
+    nav.top-nav a:hover, nav.top-nav a.active {
+      color: var(--accent);
+    }
+    h1 {
+      margin: 0;
+      font-size: 3.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--accent), var(--accent-3));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .tagline {
+      margin-top: 1rem;
+      font-size: 1.25rem;
+      color: var(--muted);
+      max-width: 700px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    main {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 2.5rem 1rem 5rem;
+    }
+    h2 {
+      margin-top: 4rem;
+      font-size: 2rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      color: var(--fg);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    h2 .icon {
+      font-size: 1.5rem;
+    }
+    h3 {
+      margin-top: 2rem;
+      font-size: 1.35rem;
+      color: var(--accent);
+    }
+    p, li {
+      color: var(--fg);
+    }
+    ul, ol {
+      padding-left: 1.5rem;
+    }
+    code {
+      font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+      font-size: 0.9em;
+      background: var(--code-bg);
+      padding: 0.15em 0.45em;
+      border-radius: 4px;
+      color: var(--accent);
+    }
+    pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+      overflow-x: auto;
+      font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+      font-size: 0.9rem;
+      line-height: 1.55;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+      color: var(--fg);
+    }
+    .keyword { color: #f472b6; }
+    .type { color: #38bdf8; }
+    .string { color: #4ade80; }
+    .comment { color: var(--muted); font-style: italic; }
+    .number { color: #fbbf24; }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem 1.5rem;
+      margin: 1.25rem 0;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.25rem;
+      margin: 1.5rem 0;
+    }
+    @media (max-width: 720px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-right: 0.5rem;
+    }
+    .b-blue { background: rgba(56,189,248,0.15); color: #7dd3fc; }
+    .b-green { background: rgba(52,211,153,0.15); color: #6ee7b7; }
+    .b-purple { background: rgba(167,139,250,0.15); color: #c4b5fd; }
+    .note {
+      background: linear-gradient(90deg, rgba(56,189,248,0.1), transparent);
+      border-left: 4px solid var(--accent);
+      padding: 1.25rem 1.5rem;
+      border-radius: 0 0.75rem 0.75rem 0;
+      margin: 1.5rem 0;
+    }
+    .note strong { color: var(--accent); }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 1.5rem 0;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.75rem 1rem;
+      text-align: left;
+    }
+    th {
+      background: var(--card-bg);
+      color: var(--accent);
+    }
+    tr:nth-child(even) {
+      background: rgba(255,255,255,0.02);
+    }
+    footer {
+      text-align: center;
+      padding: 3rem 1rem;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+  
+    /* Unified pill navigation polish */
+    nav.top-nav, .doc-nav {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.45rem 0.9rem;
+      max-width: 1040px;
+      margin: 0 auto 1.5rem;
+    }
+    nav.top-nav a, .doc-nav a {
+      color: var(--muted, #94a3b8);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      transition: color 0.15s ease, background 0.15s ease;
+    }
+    nav.top-nav a:hover,
+    nav.top-nav a.active,
+    .doc-nav a:hover,
+    .doc-nav a[aria-current="page"] {
+      color: var(--accent, #38bdf8);
+      background: rgba(56, 189, 248, 0.12);
+    }
+  </style>
+</head>
+<body>
 
-      /* Unified pill navigation polish */
-      nav.top-nav,
-      .doc-nav {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 0.45rem 0.9rem;
-        max-width: 1040px;
-        margin: 0 auto 1.5rem;
-      }
-      nav.top-nav a,
-      .doc-nav a {
-        color: var(--muted, #94a3b8);
-        text-decoration: none;
-        font-size: 0.9rem;
-        font-weight: 500;
-        padding: 0.25rem 0.65rem;
-        border-radius: 999px;
-        transition:
-          color 0.15s ease,
-          background 0.15s ease;
-      }
-      nav.top-nav a:hover,
-      nav.top-nav a.active,
-      .doc-nav a:hover,
-      .doc-nav a[aria-current="page"] {
-        color: var(--accent, #38bdf8);
-        background: rgba(56, 189, 248, 0.12);
-      }
-    </style>
-  </head>
-  <body>
-    <header>
-      <nav class="top-nav" aria-label="Vela documentation">
-        <a href="index.html">Guide</a>
-        <a href="regions.html">Regions</a>
-        <a href="safety.html">Safety</a>
-        <a href="channels.html">Channels</a>
-        <a href="actors.html">Actors</a>
-        <a href="events.html">Events</a>
-        <a href="concurrency.html">Concurrency</a>
-        <a href="commitment.html">Commitments</a>
-        <a href="std.html">Library</a>
-        <a href="web.html" class="active" aria-current="page">Web</a>
-        <a href="gui.html">GUI</a>
-        <a href="ide.html">Studio</a>
-        <a href="comparison.html">Comparison</a>
-        <a href="future.html">Future</a>
-        <a href="tricks.html">Tricks</a>
-        <a href="maywaste.html">May Waste</a>
-        <a href="review.html">Review</a>
-      </nav>
-      <h1>Vela Web Architecture</h1>
-      <p class="tagline">
-        High-performance HTTP/1.1 microservices, REST APIs, static file
-        delivery, and native RFC 6455 WebSockets with scoped request regions and
-        zero garbage collection.
+  <header>
+    <nav class="top-nav" aria-label="Vela documentation">
+      <a href="index.html">Guide</a>
+      <a href="regions.html">Regions</a>
+      <a href="safety.html">Safety</a>
+      <a href="channels.html">Channels</a>
+      <a href="actors.html">Actors</a>
+      <a href="events.html">Events</a>
+      <a href="concurrency.html">Concurrency</a>
+      <a href="commitment.html">Commitments</a>
+      <a href="std.html">Library</a>
+      <a href="web.html" class="active" aria-current="page">Web</a>
+      <a href="gui.html">GUI</a>
+      <a href="ide.html">Studio</a>
+      <a href="comparison.html">Comparison</a>
+      <a href="future.html">Future</a>
+      <a href="tricks.html">Tricks</a>
+      <a href="maywaste.html">May Waste</a>
+      <a href="review.html">Review</a>
+    </nav>
+    <h1>Vela Web Architecture</h1>
+    <p class="tagline">
+      High-performance HTTP/1.1 microservices, REST APIs, static file delivery, and native RFC 6455 WebSockets with scoped request regions and zero garbage collection.
+    </p>
+    <div style="margin-top: 1.5rem;">
+      <span class="badge b-blue">HTTP/1.1 Keep-Alive</span>
+      <span class="badge b-green">RFC 6455 WebSockets</span>
+      <span class="badge b-purple">Zero-GC Request Regions</span>
+    </div>
+  </header>
+
+  <main>
+    <section>
+      <h2><span class="icon">💡</span> 1. Overview &amp; Philosophy</h2>
+      <p>
+        Vela's standard web library, <code>std/web</code>, provides minimal yet complete building blocks for backend
+        services, full-duplex WebSocket streaming, REST APIs, and HTTP client communications. Inspired by the ergonomics and clarity
+        of Go's <code>net/http</code> and the low-overhead efficiency of Rust's networking stacks, Vela combines straightforward
+        abstractions with its own unique language capabilities:
       </p>
-      <div style="margin-top: 1.5rem">
-        <span class="badge b-blue">HTTP/1.1 Keep-Alive</span>
-        <span class="badge b-green">RFC 6455 WebSockets</span>
-        <span class="badge b-purple">Zero-GC Request Regions</span>
-      </div>
-    </header>
+      <ul>
+        <li><strong>Scoped Request Regions (<code>@r</code>):</strong> Memory allocated while processing an HTTP request lives in a dedicated per-request region. Once the response completes, the entire region is bulk-reclaimed instantly with zero garbage collection overhead or individual frees.</li>
+        <li><strong>Typed Failure Channels (<code>Response ~ WebError</code>):</strong> Route handlers declare errors explicitly using Vela's failure channel operator <code>~</code>, allowing clean error propagation with the <code>{ failure e ... }</code> pattern without hidden exceptions.</li>
+        <li><strong>Kind-Based Pattern Matching:</strong> HTTP methods and error states are represented by first-class kind definitions (<code>Method</code>, <code>WebError</code>), allowing exhaustive compile-time checking.</li>
+        <li><strong>Composable Decorator Middleware:</strong> Middleware layers wrap route handlers cleanly using Vela's wrapper syntax (<code>$(logging)</code>, <code>$(authenticate)</code>).</li>
+        <li><strong>Structured Concurrency (<a href="commitment.html"><code>rush</code> &amp; <code>Commitment[T]</code></a>):</strong> Offload requests across a multi-worker pool with <code>serve_concurrent</code> or fan out parallel HTTP client requests with region-spliced <code>rush Client.fetch(url, r)</code>.</li>
+      </ul>
+    </section>
 
-    <main>
-      <section>
-        <h2><span class="icon">💡</span> 1. Overview &amp; Philosophy</h2>
-        <p>
-          Vela's standard web library, <code>std/web</code>, provides minimal
-          yet complete building blocks for backend services, full-duplex
-          WebSocket streaming, REST APIs, and HTTP client communications.
-          Inspired by the ergonomics and clarity of Go's
-          <code>net/http</code> and the low-overhead efficiency of Rust's
-          networking stacks, Vela combines straightforward abstractions with its
-          own unique language capabilities:
-        </p>
-        <ul>
-          <li>
-            <strong>Scoped Request Regions (<code>@r</code>):</strong> Memory
-            allocated while processing an HTTP request lives in a dedicated
-            per-request region. Once the response completes, the entire region
-            is bulk-reclaimed instantly with zero garbage collection overhead or
-            individual frees.
-          </li>
-          <li>
-            <strong
-              >Typed Failure Channels (<code>Response ~ WebError</code
-              >):</strong
-            >
-            Route handlers declare errors explicitly using Vela's failure
-            channel operator <code>~</code>, allowing clean error propagation
-            with the <code>{ failure e ... }</code> pattern without hidden
-            exceptions.
-          </li>
-          <li>
-            <strong>Kind-Based Pattern Matching:</strong> HTTP methods and error
-            states are represented by first-class kind definitions
-            (<code>Method</code>, <code>WebError</code>), allowing exhaustive
-            compile-time checking.
-          </li>
-          <li>
-            <strong>Composable Decorator Middleware:</strong> Middleware layers
-            wrap route handlers cleanly using Vela's wrapper syntax
-            (<code>$(logging)</code>, <code>$(authenticate)</code>).
-          </li>
-          <li>
-            <strong
-              >Structured Concurrency (<a href="commitment.html"
-                ><code>rush</code> &amp; <code>Commitment[T]</code></a
-              >):</strong
-            >
-            Offload requests across a multi-worker pool with
-            <code>serve_concurrent</code> or fan out parallel HTTP client
-            requests with region-spliced <code>rush Client.fetch(url, r)</code>.
-          </li>
-        </ul>
-      </section>
+    <section>
+      <h2><span class="icon">⚙️</span> 2. Concurrency Architecture: Event Loop &amp; Commitment Worker Pool</h2>
+      <p>
+        <code>std/web</code> supports both single-threaded multiplexed I/O and commitment-backed worker-pool concurrency, letting you pick the right execution model per service while keeping the socket table thread-safe across <code>rush</code> workers:
+      </p>
 
-      <section>
-        <h2>
-          <span class="icon">⚙️</span> 2. Concurrency Architecture: Event Loop
-          &amp; Commitment Worker Pool
-        </h2>
-        <p>
-          <code>std/web</code> supports both single-threaded multiplexed I/O and
-          commitment-backed worker-pool concurrency, letting you pick the right
-          execution model per service while keeping the socket table thread-safe
-          across <code>rush</code> workers:
-        </p>
-
-        <div class="grid">
-          <div class="card">
-            <h3 style="margin-top: 0">
-              Single Event Loop (<code>Server.serve</code>)
-            </h3>
-            <p>
-              <strong>Mechanism:</strong> Non-blocking socket descriptors
-              multiplexed using OS primitives (<code>epoll</code> /
-              <code>Poll</code>).
-            </p>
-            <p>
-              <strong>Best For:</strong> Lightweight APIs, keep-alive bursts,
-              WebSockets, and high idle-connection fanout.
-            </p>
-            <ul>
-              <li>
-                <strong>Zero Synchronization Overhead:</strong> Handlers execute
-                sequentially in cooperative turns on one loop.
-              </li>
-              <li>
-                <strong>Minimal Footprint:</strong> Idle keep-alive connections
-                occupy only socket descriptors rather than worker threads.
-              </li>
-              <li>
-                <strong>Persistent Keep-Alive:</strong> Supports
-                <code>server.keep_alive(true)</code> (default) or
-                <code>false</code> for one-shot requests.
-              </li>
-            </ul>
-          </div>
-
-          <div class="card">
-            <h3 style="margin-top: 0">
-              Commitment Worker Pool (<code>Server.serve_concurrent</code>)
-            </h3>
-            <p>
-              <strong>Mechanism:</strong> Spawns <code>workers</code> concurrent
-              <code>rush</code> worker tasks reading accepted connections from a
-              bounded <code>Chan[int]</code>, each creating its own per-request
-              <code>@r</code> region.
-            </p>
-            <p>
-              <strong>Best For:</strong> CPU-heavy routes, blocking upstream
-              API/DB calls, or slow responses that would stall a single event
-              loop.
-            </p>
-            <ul>
-              <li>
-                <strong>Race-Free Isolation:</strong> Concurrent workers bypass
-                mutable shared singletons (<code>ServerState</code> /
-                <code>DefaultRouter</code>) and pass thread-safe local config.
-              </li>
-              <li>
-                <strong>Clean Shutdown:</strong> Launch under
-                <code
-                  >fixed srv = rush Server.new(...).serve_concurrent(...)</code
-                >
-                and stop cleanly via <code>srv.cancel()</code> (or a
-                <code>stop: maybe Chan[int]</code> channel) so all workers
-                cancel and join deterministically.
-              </li>
-            </ul>
-          </div>
+      <div class="grid">
+        <div class="card">
+          <h3 style="margin-top:0;">Single Event Loop (<code>Server.serve</code>)</h3>
+          <p><strong>Mechanism:</strong> Non-blocking socket descriptors multiplexed using OS primitives (<code>epoll</code> / <code>Poll</code>).</p>
+          <p><strong>Best For:</strong> Lightweight APIs, keep-alive bursts, WebSockets, and high idle-connection fanout.</p>
+          <ul>
+            <li><strong>Zero Synchronization Overhead:</strong> Handlers execute sequentially in cooperative turns on one loop.</li>
+            <li><strong>Minimal Footprint:</strong> Idle keep-alive connections occupy only socket descriptors rather than worker threads.</li>
+            <li><strong>Persistent Keep-Alive:</strong> Supports <code>server.keep_alive(true)</code> (default) or <code>false</code> for one-shot requests.</li>
+          </ul>
         </div>
-      </section>
 
-      <section>
-        <h2><span class="icon">🔌</span> 3. Real-Time WebSockets (RFC 6455)</h2>
-        <p>
-          For bidirectional, full-duplex communication (live metric dashboards,
-          chat systems, collaborative editors, terminal sessions),
-          <code>std/web</code> provides complete native RFC 6455 WebSocket
-          support across both server and client roles.
-        </p>
+        <div class="card">
+          <h3 style="margin-top:0;">Commitment Worker Pool (<code>Server.serve_concurrent</code>)</h3>
+          <p><strong>Mechanism:</strong> Spawns <code>workers</code> concurrent <code>rush</code> worker tasks reading accepted connections from a bounded <code>Chan[int]</code>, each creating its own per-request <code>@r</code> region.</p>
+          <p><strong>Best For:</strong> CPU-heavy routes, blocking upstream API/DB calls, or slow responses that would stall a single event loop.</p>
+          <ul>
+            <li><strong>Race-Free Isolation:</strong> Concurrent workers bypass mutable shared singletons (<code>ServerState</code> / <code>DefaultRouter</code>) and pass thread-safe local config.</li>
+            <li><strong>Clean Shutdown:</strong> Launch under <code>fixed srv = rush Server.new(...).serve_concurrent(...)</code> and stop cleanly via <code>srv.cancel()</code> (or a <code>stop: maybe Chan[int]</code> channel) so all workers cancel and join deterministically.</li>
+          </ul>
+        </div>
+      </div>
+    </section>
 
-        <h3>Server-Side WebSocket Routing</h3>
-        <p>
-          Routes can be declared with <code>app.ws(path, handler)</code>. When a
-          client sends an HTTP request with <code>Upgrade: websocket</code>, the
-          router automatically handles the cryptographic handshake and invokes
-          your handler with an open <code>WebSocket</code>:
-        </p>
+    <section>
+      <h2><span class="icon">🔌</span> 3. Real-Time WebSockets (RFC 6455)</h2>
+      <p>
+        For bidirectional, full-duplex communication (live metric dashboards, chat systems, collaborative editors, terminal sessions),
+        <code>std/web</code> provides complete native RFC 6455 WebSocket support across both server and client roles.
+      </p>
 
-        <pre><code><span class="keyword">include</span> std/web { router, WebSocket, WebSocketMessage, Request, serve }
+      <h3>Server-Side WebSocket Routing</h3>
+      <p>
+        Routes can be declared with <code>app.ws(path, handler)</code>. When a client sends an HTTP request with
+        <code>Upgrade: websocket</code>, the router automatically handles the cryptographic handshake and invokes your handler with an open <code>WebSocket</code>:
+      </p>
+
+      <pre><code><span class="keyword">include</span> std/web { router, WebSocket, WebSocketMessage, Request, serve }
 
 <span class="keyword">task</span> main()
     <span class="keyword">flex</span> app = router()
@@ -492,14 +351,12 @@
     serve(<span class="string">"127.0.0.1:8080"</span>, app.route) { <span class="keyword">failure</span> _ }
 <span class="keyword">fi</span></code></pre>
 
-        <h3>Client-Side WebSocket Connections</h3>
-        <p>
-          Vela programs can also initiate outgoing WebSocket connections using
-          <code>ws_connect(url, region)</code>. The client handles the
-          handshake, key generation, and RFC 6455 client masking automatically:
-        </p>
+      <h3>Client-Side WebSocket Connections</h3>
+      <p>
+        Vela programs can also initiate outgoing WebSocket connections using <code>ws_connect(url, region)</code>. The client handles the handshake, key generation, and RFC 6455 client masking automatically:
+      </p>
 
-        <pre><code><span class="keyword">include</span> std/web { ws_connect, WebSocketMessage }
+      <pre><code><span class="keyword">include</span> std/web { ws_connect, WebSocketMessage }
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r <span class="keyword">default</span>
@@ -525,130 +382,81 @@
     ws.close(<span class="number">1000</span>, <span class="string">"work done"</span>, r) { <span class="keyword">failure</span> _ }
 <span class="keyword">fi</span></code></pre>
 
-        <h3>WebSocket API Reference</h3>
-        <table>
-          <thead>
-            <tr>
-              <th>Method</th>
-              <th>Parameters</th>
-              <th>Return Type</th>
-              <th>Description</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td><code>is_open()</code></td>
-              <td>—</td>
-              <td><code>bool</code></td>
-              <td>
-                Returns <code>true</code> if the socket is connected and not
-                closed.
-              </td>
-            </tr>
-            <tr>
-              <td><code>send_text(msg, r)</code></td>
-              <td><code>msg: text</code>, <code>r: region default</code></td>
-              <td><code>int ~ SocketError</code></td>
-              <td>
-                Encodes and transmits a UTF-8 text frame (opcode
-                <code>0x1</code>).
-              </td>
-            </tr>
-            <tr>
-              <td><code>send_binary(data, r)</code></td>
-              <td><code>data: text</code>, <code>r: region default</code></td>
-              <td><code>int ~ SocketError</code></td>
-              <td>
-                Encodes and transmits a raw binary frame (opcode
-                <code>0x2</code>).
-              </td>
-            </tr>
-            <tr>
-              <td><code>recv(into)</code></td>
-              <td><code>into: region default</code></td>
-              <td><code>WebSocketMessage@into ~ SocketError</code></td>
-              <td>
-                Receives and unmasks the next message frame, allocating its
-                payload in <code>into</code>.
-              </td>
-            </tr>
-            <tr>
-              <td><code>ping(payload, r)</code></td>
-              <td>
-                <code>payload: text</code>, <code>r: region default</code>
-              </td>
-              <td><code>int ~ SocketError</code></td>
-              <td>
-                Sends an RFC 6455 heartbeat ping frame (opcode
-                <code>0x9</code>).
-              </td>
-            </tr>
-            <tr>
-              <td><code>pong(payload, r)</code></td>
-              <td>
-                <code>payload: text</code>, <code>r: region default</code>
-              </td>
-              <td><code>int ~ SocketError</code></td>
-              <td>
-                Sends an RFC 6455 heartbeat pong frame (opcode
-                <code>0xA</code>).
-              </td>
-            </tr>
-            <tr>
-              <td><code>close(code, reason, r)</code></td>
-              <td>
-                <code>code: int</code>, <code>reason: text</code>,
-                <code>r: region default</code>
-              </td>
-              <td><code>nothing ~ SocketError</code></td>
-              <td>
-                Transmits a close frame (opcode <code>0x8</code>) and closes the
-                underlying socket.
-              </td>
-            </tr>
-          </tbody>
-        </table>
+      <h3>WebSocket API Reference</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Method</th>
+            <th>Parameters</th>
+            <th>Return Type</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>is_open()</code></td>
+            <td>—</td>
+            <td><code>bool</code></td>
+            <td>Returns <code>true</code> if the socket is connected and not closed.</td>
+          </tr>
+          <tr>
+            <td><code>send_text(msg, r)</code></td>
+            <td><code>msg: text</code>, <code>r: region default</code></td>
+            <td><code>int ~ SocketError</code></td>
+            <td>Encodes and transmits a UTF-8 text frame (opcode <code>0x1</code>).</td>
+          </tr>
+          <tr>
+            <td><code>send_binary(data, r)</code></td>
+            <td><code>data: text</code>, <code>r: region default</code></td>
+            <td><code>int ~ SocketError</code></td>
+            <td>Encodes and transmits a raw binary frame (opcode <code>0x2</code>).</td>
+          </tr>
+          <tr>
+            <td><code>recv(into)</code></td>
+            <td><code>into: region default</code></td>
+            <td><code>WebSocketMessage@into ~ SocketError</code></td>
+            <td>Receives and unmasks the next message frame, allocating its payload in <code>into</code>.</td>
+          </tr>
+          <tr>
+            <td><code>ping(payload, r)</code></td>
+            <td><code>payload: text</code>, <code>r: region default</code></td>
+            <td><code>int ~ SocketError</code></td>
+            <td>Sends an RFC 6455 heartbeat ping frame (opcode <code>0x9</code>).</td>
+          </tr>
+          <tr>
+            <td><code>pong(payload, r)</code></td>
+            <td><code>payload: text</code>, <code>r: region default</code></td>
+            <td><code>int ~ SocketError</code></td>
+            <td>Sends an RFC 6455 heartbeat pong frame (opcode <code>0xA</code>).</td>
+          </tr>
+          <tr>
+            <td><code>close(code, reason, r)</code></td>
+            <td><code>code: int</code>, <code>reason: text</code>, <code>r: region default</code></td>
+            <td><code>nothing ~ SocketError</code></td>
+            <td>Transmits a close frame (opcode <code>0x8</code>) and closes the underlying socket.</td>
+          </tr>
+        </tbody>
+      </table>
 
-        <h3>WebSocket Frame Framing &amp; Masking Internals</h3>
-        <div class="card">
-          <h4>RFC 6455 Compliance Highlights</h4>
-          <ul>
-            <li>
-              <strong>Client-to-Server Masking:</strong> RFC 6455 mandates that
-              all frames originating from a client MUST be masked with a 4-byte
-              random masking key. <code>ws_connect</code> and
-              <code>send_text</code> handle this transparently in
-              <code>runtime/vela_rt.h</code>.
-            </li>
-            <li>
-              <strong>Extended Payloads:</strong> Supports standard payloads up
-              to 125 bytes, 16-bit extended payloads (up to 64 KiB), and 64-bit
-              extended payloads for large streams.
-            </li>
-            <li>
-              <strong>Cryptographic Handshake:</strong> The
-              <code>Sec-WebSocket-Key</code> header is hashed with the standard
-              RFC UUID (<code>258EAFA5-E914-47DA-95CA-C5AB0DC85B11</code>) via
-              SHA-1 and Base64-encoded in native C runtime helpers.
-            </li>
-            <li>
-              <strong>Zero-Copy Per-Message Lifecycles:</strong> By executing
-              <code>region msg_r default</code> inside message receive loops,
-              payload buffers are allocated in a temporary region and reclaimed
-              immediately without touching the garbage collector.
-            </li>
-          </ul>
-        </div>
-      </section>
+      <h3>WebSocket Frame Framing &amp; Masking Internals</h3>
+      <div class="card">
+        <h4>RFC 6455 Compliance Highlights</h4>
+        <ul>
+          <li><strong>Client-to-Server Masking:</strong> RFC 6455 mandates that all frames originating from a client MUST be masked with a 4-byte random masking key. <code>ws_connect</code> and <code>send_text</code> handle this transparently in <code>runtime/vela_rt.h</code>.</li>
+          <li><strong>Extended Payloads:</strong> Supports standard payloads up to 125 bytes, 16-bit extended payloads (up to 64 KiB), and 64-bit extended payloads for large streams.</li>
+          <li><strong>Cryptographic Handshake:</strong> The <code>Sec-WebSocket-Key</code> header is hashed with the standard RFC UUID (<code>258EAFA5-E914-47DA-95CA-C5AB0DC85B11</code>) via SHA-1 and Base64-encoded in native C runtime helpers.</li>
+          <li><strong>Zero-Copy Per-Message Lifecycles:</strong> By executing <code>region msg_r default</code> inside message receive loops, payload buffers are allocated in a temporary region and reclaimed immediately without touching the garbage collector.</li>
+        </ul>
+      </div>
+    </section>
 
-      <section>
-        <h2><span class="icon">🌐</span> 4. HTTP Server &amp; Routing</h2>
-        <p>
-          Vela provides both declarative decorator-based routing and
-          programmatic <code>Router</code> instances:
-        </p>
+    <section>
+      <h2><span class="icon">🌐</span> 4. HTTP Server &amp; Routing</h2>
+      <p>
+        Vela provides both declarative decorator-based routing and programmatic <code>Router</code> instances:
+      </p>
 
-        <pre><code><span class="keyword">include</span> std/web { router, Request, Response, WebError, text_response, json_response, serve }
+      <pre><code><span class="keyword">include</span> std/web { router, Request, Response, WebError, text_response, json_response, serve }
 
 <span class="keyword">task</span> get_user(req: Request@r, r: <span class="keyword">region default</span>) -&gt; Response@r ~ WebError@r
     <span class="keyword">fixed</span> id = req.param(<span class="string">"id"</span>) { <span class="string">"0"</span> }
@@ -672,13 +480,11 @@
     }
 <span class="keyword">fi</span></code></pre>
 
-        <h3>Continuous Listening with <code>Server</code></h3>
-        <p>
-          In production systems or long-running daemons, use
-          <code>Server.bind(host, port)</code> and
-          <code>server.serve(handler)</code> to accept requests continuously:
-        </p>
-        <pre><code><span class="keyword">include</span> std/web { Server, Request, Response, text_response }
+      <h3>Continuous Listening with <code>Server</code></h3>
+      <p>
+        In production systems or long-running daemons, use <code>Server.bind(host, port)</code> and <code>server.serve(handler)</code> to accept requests continuously:
+      </p>
+      <pre><code><span class="keyword">include</span> std/web { Server, Request, Response, text_response }
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r <span class="keyword">default</span>
@@ -695,17 +501,11 @@
     }
 <span class="keyword">fi</span></code></pre>
 
-        <h3>Concurrent Worker Pool (<code>serve_concurrent</code>)</h3>
-        <p>
-          Use
-          <code>Server.new(addr).serve_concurrent(handler, workers, stop)</code>
-          (or the top-level <code>serve_concurrent(...)</code> helper) when
-          requests perform slower work or concurrent backend aggregation. When
-          launched with <code>rush</code>, calling
-          <code>srv.cancel()</code> cleanly drains and stops the accept loop and
-          all workers:
-        </p>
-        <pre><code><span class="keyword">include</span> std/web { Server, Request, Response, WebError, text_response }
+      <h3>Concurrent Worker Pool (<code>serve_concurrent</code>)</h3>
+      <p>
+        Use <code>Server.new(addr).serve_concurrent(handler, workers, stop)</code> (or the top-level <code>serve_concurrent(...)</code> helper) when requests perform slower work or concurrent backend aggregation. When launched with <code>rush</code>, calling <code>srv.cancel()</code> cleanly drains and stops the accept loop and all workers:
+      </p>
+      <pre><code><span class="keyword">include</span> std/web { Server, Request, Response, WebError, text_response }
 
 <span class="keyword">task</span> handle_api(req: Request@r, r: <span class="keyword">region default</span>) -&gt; Response@r ~ WebError@r
     &lt;- text_response(<span class="string">"hello from concurrent worker"</span>, r)
@@ -717,26 +517,15 @@
     srv.cancel()
     &lt;&lt;- srv { <span class="keyword">failure</span> _ }
 <span class="keyword">fi</span></code></pre>
-      </section>
+    </section>
 
-      <section>
-        <h2>
-          <span class="icon">📡</span> 5. HTTP Client &amp; Parallel Requests
-          with Commitments
-        </h2>
-        <p>
-          <code>std/web</code> includes an HTTP client (<code>Client</code>,
-          <code>fetch</code>, <code>fetch_json</code>, <code>fetch_post</code>,
-          and <code>fetch_with_timeout</code>) for REST queries and microservice
-          calls. Because <code>rush</code> supports single-destination
-          <strong>region splicing</strong>, you can launch multiple
-          <code>rush Client.fetch(...)</code> calls in parallel, let each worker
-          build its <code>Response@r</code> in an isolated worker region, and
-          splice each result directly into its destination caller region on
-          settlement:
-        </p>
+    <section>
+      <h2><span class="icon">📡</span> 5. HTTP Client &amp; Parallel Requests with Commitments</h2>
+      <p>
+        <code>std/web</code> includes an HTTP client (<code>Client</code>, <code>fetch</code>, <code>fetch_json</code>, <code>fetch_post</code>, and <code>fetch_with_timeout</code>) for REST queries and microservice calls. Because <code>rush</code> supports single-destination <strong>region splicing</strong>, you can launch multiple <code>rush Client.fetch(...)</code> calls in parallel, let each worker build its <code>Response@r</code> in an isolated worker region, and splice each result directly into its destination caller region on settlement:
+      </p>
 
-        <pre><code><span class="keyword">include</span> std/web { Client, fetch_with_timeout }
+      <pre><code><span class="keyword">include</span> std/web { Client, fetch_with_timeout }
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r1 <span class="keyword">default</span>
@@ -757,57 +546,32 @@
     show(<span class="string">"profile="</span>, profile.body_data, <span class="string">" score="</span>, score.body_data)
 <span class="keyword">fi</span></code></pre>
 
-        <div class="callout">
-          <strong>Use Cases &amp; Complete Example:</strong>
-          <ul>
-            <li>
-              <strong>API Gateway Fan-Out:</strong> Fetch user profile,
-              permissions, and billing concurrently and combine results once
-              both settle.
-            </li>
-            <li>
-              <strong>Replica Racing &amp; Hedged Requests:</strong> Combine
-              <code>rush Client.fetch(...)</code> with
-              <code>select ... case after ms ... fi</code> so losing HTTP
-              commitments are automatically cancelled.
-            </li>
-            <li>
-              <strong>Full Runnable Demo:</strong> See
-              <a href="../examples/io_and_system/web_concurrent.vela"
-                ><code>examples/io_and_system/web_concurrent.vela</code></a
-              >
-              (concurrent 2-worker server + parallel region-spliced client
-              requests + <code>srv.cancel()</code> shutdown).
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <section>
-        <h2><span class="icon">🔒</span> 6. Security &amp; Confinement</h2>
-        <p>
-          Serving files via <code>app.files(prefix, directory)</code> applies
-          strict path sanitization:
-        </p>
+      <div class="callout">
+        <strong>Use Cases &amp; Complete Example:</strong>
         <ul>
-          <li>
-            Directory traversal sequences (<code>..</code>) are trapped and
-            rejected with <code>400 Bad Request</code>.
-          </li>
-          <li>Absolute paths escaping the root folder are forbidden.</li>
-          <li>
-            Hidden files starting with <code>.</code> are blocked from public
-            dispatch.
-          </li>
+          <li><strong>API Gateway Fan-Out:</strong> Fetch user profile, permissions, and billing concurrently and combine results once both settle.</li>
+          <li><strong>Replica Racing &amp; Hedged Requests:</strong> Combine <code>rush Client.fetch(...)</code> with <code>select ... case after ms ... fi</code> so losing HTTP commitments are automatically cancelled.</li>
+          <li><strong>Full Runnable Demo:</strong> See <a href="../examples/io_and_system/web_concurrent.vela"><code>examples/io_and_system/web_concurrent.vela</code></a> (concurrent 2-worker server + parallel region-spliced client requests + <code>srv.cancel()</code> shutdown).</li>
         </ul>
-      </section>
-    </main>
+      </div>
+    </section>
 
-    <footer>
+    <section>
+      <h2><span class="icon">🔒</span> 6. Security &amp; Confinement</h2>
       <p>
-        Vela Language &bull; Standard Web Library (std/web) &bull; Concurrency,
-        Regions, and WebSockets
+        Serving files via <code>app.files(prefix, directory)</code> applies strict path sanitization:
       </p>
-    </footer>
-  </body>
+      <ul>
+        <li>Directory traversal sequences (<code>..</code>) are trapped and rejected with <code>400 Bad Request</code>.</li>
+        <li>Absolute paths escaping the root folder are forbidden.</li>
+        <li>Hidden files starting with <code>.</code> are blocked from public dispatch.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <p>Vela Language &bull; Standard Web Library (std/web) &bull; Concurrency, Regions, and WebSockets</p>
+  </footer>
+
+</body>
 </html>

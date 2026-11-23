@@ -1,842 +1,491 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vela — Safety, Data-Race &amp; Alters Guarantees</title>
-    <style>
-      :root {
-        --bg: #0b0f19;
-        --bg-2: #111827;
-        --fg: #f8fafc;
-        --muted: #94a3b8;
-        --accent: #38bdf8;
-        --accent-2: #a78bfa;
-        --accent-3: #34d399;
-        --accent-4: #f472b6;
-        --accent-5: #fbbf24;
-        --code-bg: #1e293b;
-        --card-bg: #151c2c;
-        --border: #334155;
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        font-family:
-          system-ui,
-          -apple-system,
-          BlinkMacSystemFont,
-          "Segoe UI",
-          Roboto,
-          sans-serif;
-        background: var(--bg);
-        color: var(--fg);
-        line-height: 1.65;
-      }
-      header {
-        padding: 5rem 1rem 4rem;
-        text-align: center;
-        background:
-          radial-gradient(
-            circle at 20% 30%,
-            rgba(248, 113, 113, 0.1) 0%,
-            transparent 40%
-          ),
-          radial-gradient(
-            circle at 80% 70%,
-            rgba(167, 139, 250, 0.12) 0%,
-            transparent 40%
-          ),
-          var(--bg-2);
-        border-bottom: 1px solid var(--border);
-      }
-      h1 {
-        margin: 0;
-        font-size: 3.5rem;
-        font-weight: 800;
-        letter-spacing: -0.03em;
-        background: linear-gradient(135deg, var(--accent-4), var(--accent-2));
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-      }
-      .tagline {
-        margin-top: 1rem;
-        font-size: 1.25rem;
-        color: var(--muted);
-        max-width: 650px;
-        margin-left: auto;
-        margin-right: auto;
-      }
-      main {
-        max-width: 900px;
-        margin: 0 auto;
-        padding: 2rem 1rem 5rem;
-      }
-      h2 {
-        margin-top: 4rem;
-        font-size: 2rem;
-        color: var(--fg);
-      }
-      h3 {
-        margin: 0 0 0.75rem;
-        color: var(--fg);
-        font-size: 1.25rem;
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 0.75rem;
-      }
-      p {
-        margin: 1rem 0;
-      }
-      code {
-        font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
-        background: var(--code-bg);
-        padding: 0.15rem 0.45rem;
-        border-radius: 0.35rem;
-        color: var(--accent);
-        font-size: 0.9rem;
-        overflow-wrap: anywhere;
-      }
-      pre {
-        background: var(--code-bg);
-        padding: 1.25rem;
-        border-radius: 0.75rem;
-        overflow-x: auto;
-        border: 1px solid var(--border);
-        line-height: 1.55;
-      }
-      pre code {
-        background: none;
-        padding: 0;
-      }
-      .keyword {
-        color: var(--accent-2);
-      }
-      .string {
-        color: var(--accent-3);
-      }
-      .comment {
-        color: var(--muted);
-      }
-      .intro {
-        font-size: 1.15rem;
-        color: var(--muted);
-        margin-bottom: 2rem;
-      }
-      .entry {
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-radius: 1rem;
-        padding: 1.5rem;
-        margin: 1.25rem 0;
-      }
-      .entry dl {
-        margin: 0.75rem 0 0;
-      }
-      .entry dt {
-        color: var(--accent-2);
-        font-weight: 700;
-        margin-top: 0.75rem;
-      }
-      .entry dd {
-        margin: 0.25rem 0 0;
-        color: var(--muted);
-      }
-      .badge {
-        display: inline-block;
-        padding: 0.2rem 0.6rem;
-        border-radius: 999px;
-        font-size: 0.75rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.03em;
-      }
-      .b-open {
-        background: rgba(248, 113, 113, 0.15);
-        color: #fca5a5;
-      }
-      .b-design {
-        background: rgba(56, 189, 248, 0.15);
-        color: #7dd3fc;
-      }
-      .b-warned {
-        background: rgba(250, 204, 21, 0.15);
-        color: #fde047;
-      }
-      .b-later {
-        background: rgba(167, 139, 250, 0.15);
-        color: #c4b5fd;
-      }
-      .b-checked {
-        background: rgba(52, 211, 153, 0.15);
-        color: #6ee7b7;
-      }
-      .b-trapped {
-        background: rgba(251, 146, 60, 0.15);
-        color: #fdba74;
-      }
-      td.when {
-        white-space: nowrap;
-      }
-      .note {
-        background: linear-gradient(
-          90deg,
-          rgba(56, 189, 248, 0.1),
-          transparent
-        );
-        border-left: 4px solid var(--accent);
-        padding: 1.25rem 1.5rem;
-        border-radius: 0 0.75rem 0.75rem 0;
-        margin: 1.5rem 0;
-      }
-      .note strong {
-        color: var(--accent);
-      }
-      .table-wrap {
-        overflow-x: auto;
-        margin: 1.5rem 0;
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.92rem;
-      }
-      th,
-      td {
-        text-align: left;
-        padding: 0.6rem 0.75rem;
-        border-bottom: 1px solid var(--border);
-        vertical-align: top;
-      }
-      th {
-        color: var(--accent-2);
-        font-weight: 700;
-      }
-      td {
-        color: var(--muted);
-      }
-      main a {
-        color: var(--accent);
-      }
-      ul {
-        padding-left: 1.5rem;
-      }
-      li {
-        margin: 0.6rem 0;
-      }
-      footer {
-        text-align: center;
-        padding: 3rem 1rem;
-        color: var(--muted);
-        border-top: 1px solid var(--border);
-        background: var(--bg-2);
-      }
-      .doc-nav,
-      nav.top-nav {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 0.45rem 0.9rem;
-        max-width: 1020px;
-        margin: 0 auto 1.75rem;
-      }
-      .doc-nav a,
-      nav.top-nav a {
-        color: var(--muted);
-        text-decoration: none;
-        font-size: 0.9rem;
-        font-weight: 500;
-        padding: 0.25rem 0.6rem;
-        border-radius: 999px;
-        transition:
-          color 0.15s ease,
-          background 0.15s ease;
-      }
-      .doc-nav a:hover,
-      .doc-nav a[aria-current="page"],
-      nav.top-nav a:hover,
-      nav.top-nav a.active {
-        color: var(--accent);
-        background: rgba(56, 189, 248, 0.1);
-      }
-      .hazard-card {
-        background: var(--card-bg);
-        border: 1px solid var(--border);
-        border-left: 4px solid var(--accent-5);
-        border-radius: 0.75rem;
-        padding: 1.25rem 1.4rem;
-        margin: 1.25rem 0;
-      }
-      .hazard-card h4 {
-        margin: 0 0 0.6rem;
-        color: var(--fg);
-        display: flex;
-        align-items: center;
-        gap: 0.6rem;
-        flex-wrap: wrap;
-      }
-      @media (max-width: 600px) {
-        h1 {
-          font-size: 2.5rem;
-        }
-        h2 {
-          font-size: 1.6rem;
-        }
-      }
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vela — Safety, Data-Race &amp; Alters Guarantees</title>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --bg-2: #111827;
+      --fg: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-2: #a78bfa;
+      --accent-3: #34d399;
+      --accent-4: #f472b6;
+      --accent-5: #fbbf24;
+      --code-bg: #1e293b;
+      --card-bg: #151c2c;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.65;
+    }
+    header {
+      padding: 5rem 1rem 4rem;
+      text-align: center;
+      background:
+        radial-gradient(circle at 20% 30%, rgba(248,113,113,0.1) 0%, transparent 40%),
+        radial-gradient(circle at 80% 70%, rgba(167,139,250,0.12) 0%, transparent 40%),
+        var(--bg-2);
+      border-bottom: 1px solid var(--border);
+    }
+    h1 {
+      margin: 0;
+      font-size: 3.5rem;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      background: linear-gradient(135deg, var(--accent-4), var(--accent-2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .tagline {
+      margin-top: 1rem;
+      font-size: 1.25rem;
+      color: var(--muted);
+      max-width: 650px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem 1rem 5rem;
+    }
+    h2 {
+      margin-top: 4rem;
+      font-size: 2rem;
+      color: var(--fg);
+    }
+    h3 {
+      margin: 0 0 0.75rem;
+      color: var(--fg);
+      font-size: 1.25rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    p { margin: 1rem 0; }
+    code {
+      font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+      background: var(--code-bg);
+      padding: 0.15rem 0.45rem;
+      border-radius: 0.35rem;
+      color: var(--accent);
+      font-size: 0.9rem;
+      overflow-wrap: anywhere;
+    }
+    pre {
+      background: var(--code-bg);
+      padding: 1.25rem;
+      border-radius: 0.75rem;
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      line-height: 1.55;
+    }
+    pre code { background: none; padding: 0; }
+    .keyword { color: var(--accent-2); }
+    .string { color: var(--accent-3); }
+    .comment { color: var(--muted); }
+    .intro {
+      font-size: 1.15rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+    }
+    .entry {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin: 1.25rem 0;
+    }
+    .entry dl { margin: 0.75rem 0 0; }
+    .entry dt { color: var(--accent-2); font-weight: 700; margin-top: 0.75rem; }
+    .entry dd { margin: 0.25rem 0 0; color: var(--muted); }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .b-open { background: rgba(248,113,113,0.15); color: #fca5a5; }
+    .b-design { background: rgba(56,189,248,0.15); color: #7dd3fc; }
+    .b-warned { background: rgba(250,204,21,0.15); color: #fde047; }
+    .b-later { background: rgba(167,139,250,0.15); color: #c4b5fd; }
+    .b-checked { background: rgba(52,211,153,0.15); color: #6ee7b7; }
+    .b-trapped { background: rgba(251,146,60,0.15); color: #fdba74; }
+    td.when { white-space: nowrap; }
+    .note {
+      background: linear-gradient(90deg, rgba(56,189,248,0.1), transparent);
+      border-left: 4px solid var(--accent);
+      padding: 1.25rem 1.5rem;
+      border-radius: 0 0.75rem 0.75rem 0;
+      margin: 1.5rem 0;
+    }
+    .note strong { color: var(--accent); }
+    .table-wrap { overflow-x: auto; margin: 1.5rem 0; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+    th, td { text-align: left; padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { color: var(--accent-2); font-weight: 700; }
+    td { color: var(--muted); }
+    main a { color: var(--accent); }
+    ul { padding-left: 1.5rem; }
+    li { margin: 0.6rem 0; }
+    footer {
+      text-align: center;
+      padding: 3rem 1rem;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      background: var(--bg-2);
+    }
+    .doc-nav, nav.top-nav {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.45rem 0.9rem;
+      max-width: 1020px;
+      margin: 0 auto 1.75rem;
+    }
+    .doc-nav a, nav.top-nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 0.25rem 0.6rem;
+      border-radius: 999px;
+      transition: color 0.15s ease, background 0.15s ease;
+    }
+    .doc-nav a:hover,
+    .doc-nav a[aria-current="page"],
+    nav.top-nav a:hover,
+    nav.top-nav a.active {
+      color: var(--accent);
+      background: rgba(56,189,248,0.1);
+    }
+    .hazard-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent-5);
+      border-radius: 0.75rem;
+      padding: 1.25rem 1.4rem;
+      margin: 1.25rem 0;
+    }
+    .hazard-card h4 {
+      margin: 0 0 0.6rem;
+      color: var(--fg);
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      flex-wrap: wrap;
+    }
+    @media (max-width: 600px) {
+      h1 { font-size: 2.5rem; }
+      h2 { font-size: 1.6rem; }
+    }
+  
+    /* Unified pill navigation polish */
+    nav.top-nav, .doc-nav {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 0.45rem 0.9rem;
+      max-width: 1040px;
+      margin: 0 auto 1.5rem;
+    }
+    nav.top-nav a, .doc-nav a {
+      color: var(--muted, #94a3b8);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      transition: color 0.15s ease, background 0.15s ease;
+    }
+    nav.top-nav a:hover,
+    nav.top-nav a.active,
+    .doc-nav a:hover,
+    .doc-nav a[aria-current="page"] {
+      color: var(--accent, #38bdf8);
+      background: rgba(56, 189, 248, 0.12);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <nav class="top-nav" aria-label="Vela documentation">
+      <a href="index.html">Guide</a>
+      <a href="regions.html">Regions</a>
+      <a href="safety.html" class="active" aria-current="page">Safety</a>
+      <a href="channels.html">Channels</a>
+      <a href="actors.html">Actors</a>
+      <a href="events.html">Events</a>
+      <a href="concurrency.html">Concurrency</a>
+      <a href="commitment.html">Commitments</a>
+      <a href="std.html">Library</a>
+      <a href="web.html">Web</a>
+      <a href="gui.html">GUI</a>
+      <a href="ide.html">Studio</a>
+      <a href="comparison.html">Comparison</a>
+      <a href="future.html">Future</a>
+      <a href="tricks.html">Tricks</a>
+      <a href="maywaste.html">May Waste</a>
+      <a href="review.html">Review</a>
+    </nav>
+    <h1>Safety &amp; Race Guarantees</h1>
+    <p class="tagline">What a compiled Vela program can't do wrong, how channels, actors, and alters contracts eliminate data races, what traps at run time, and the concerns still open.</p>
+  </header>
 
-      /* Unified pill navigation polish */
-      nav.top-nav,
-      .doc-nav {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 0.45rem 0.9rem;
-        max-width: 1040px;
-        margin: 0 auto 1.5rem;
-      }
-      nav.top-nav a,
-      .doc-nav a {
-        color: var(--muted, #94a3b8);
-        text-decoration: none;
-        font-size: 0.9rem;
-        font-weight: 500;
-        padding: 0.25rem 0.65rem;
-        border-radius: 999px;
-        transition:
-          color 0.15s ease,
-          background 0.15s ease;
-      }
-      nav.top-nav a:hover,
-      nav.top-nav a.active,
-      .doc-nav a:hover,
-      .doc-nav a[aria-current="page"] {
-        color: var(--accent, #38bdf8);
-        background: rgba(56, 189, 248, 0.12);
-      }
-    </style>
-  </head>
-  <body>
-    <header>
-      <nav class="top-nav" aria-label="Vela documentation">
-        <a href="index.html">Guide</a>
-        <a href="regions.html">Regions</a>
-        <a href="safety.html" class="active" aria-current="page">Safety</a>
-        <a href="channels.html">Channels</a>
-        <a href="actors.html">Actors</a>
-        <a href="events.html">Events</a>
-        <a href="concurrency.html">Concurrency</a>
-        <a href="commitment.html">Commitments</a>
-        <a href="std.html">Library</a>
-        <a href="web.html">Web</a>
-        <a href="gui.html">GUI</a>
-        <a href="ide.html">Studio</a>
-        <a href="comparison.html">Comparison</a>
-        <a href="future.html">Future</a>
-        <a href="tricks.html">Tricks</a>
-        <a href="maywaste.html">May Waste</a>
-        <a href="review.html">Review</a>
-      </nav>
-      <h1>Safety &amp; Race Guarantees</h1>
-      <p class="tagline">
-        What a compiled Vela program can't do wrong, how channels, actors, and
-        alters contracts eliminate data races, what traps at run time, and the
-        concerns still open.
-      </p>
-    </header>
+  <main>
+    <p class="intro">
+      A Vela program has no null pointers, no memory used after it is freed, no value read before it is set, and no
+      integer that wraps: the compiler refuses what it can tell is wrong, and the program stops with a message saying
+      where for what only running it tells. This page lists those rules, and the concerns neither settles yet, to come
+      back to. Most of the concerns are about places two names share. In Vela a value behaves as a copy: giving it to a
+      task, binding it to another name, or putting it in a shape never lets two names change one thing. A few features
+      give that up on purpose, since they are how two names share one place: a reference (<code>flex&amp;</code>,
+      <code>bind&amp;</code>, <code>fixed&amp;</code>), a pointer (<code>^T</code>), a shared field, a slice (a view of items in a region, so a
+      copy of it sees the same items), and a <code>File</code> (a copy names the same open file). Nothing here changes
+      the language.
+    </p>
 
-    <main>
-      <p class="intro">
-        A Vela program has no null pointers, no memory used after it is freed,
-        no value read before it is set, and no integer that wraps: the compiler
-        refuses what it can tell is wrong, and the program stops with a message
-        saying where for what only running it tells. This page lists those
-        rules, and the concerns neither settles yet, to come back to. Most of
-        the concerns are about places two names share. In Vela a value behaves
-        as a copy: giving it to a task, binding it to another name, or putting
-        it in a shape never lets two names change one thing. A few features give
-        that up on purpose, since they are how two names share one place: a
-        reference (<code>flex&amp;</code>,
-        <code>bind&amp;</code>, <code>fixed&amp;</code>), a pointer
-        (<code>^T</code>), a shared field, a slice (a view of items in a region,
-        so a copy of it sees the same items), and a <code>File</code> (a copy
-        names the same open file). Nothing here changes the language.
-      </p>
+    <div class="note">
+      <strong>How to read the marks.</strong>
+      <span class="badge b-checked">checked</span> is refused by the compiler today;
+      <span class="badge b-trapped">trapped</span> stops the running program with a message saying where;
+      <span class="badge b-warned">warned</span> builds, with a <a href="index.html#warnings">warning</a>;
+      <span class="badge b-design">by design</span> is how the feature is meant to work, written down so it is known;
+      <span class="badge b-open">open</span> is a concern neither catches;
+      <span class="badge b-later">later</span> waits for a feature Vela doesn't have yet.
+    </div>
 
-      <div class="note">
-        <strong>How to read the marks.</strong>
-        <span class="badge b-checked">checked</span> is refused by the compiler
-        today; <span class="badge b-trapped">trapped</span> stops the running
-        program with a message saying where;
-        <span class="badge b-warned">warned</span> builds, with a
-        <a href="index.html#warnings">warning</a>;
-        <span class="badge b-design">by design</span> is how the feature is
-        meant to work, written down so it is known;
-        <span class="badge b-open">open</span> is a concern neither catches;
-        <span class="badge b-later">later</span> waits for a feature Vela
-        doesn't have yet.
+    <section>
+      <h2 id="checked">What is checked</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Rule</th><th>When</th><th>What it prevents</th></tr></thead>
+          <tbody>
+            <tr>
+              <td>A place a call changes is given once: two parameters that may change it
+                (<code>flex&amp;</code> or <code>bind&amp;</code>), or one of those and a <code>fixed&amp;</code> or a
+                plain parameter, never name one place, and nor do <code>&amp;xs[i]</code> and <code>&amp;xs[j]</code>,
+                which may. A method that <code>alters</code> the value it is called on counts as changing it. Two
+                slices count as two places even when they view the same items (see <a href="#slice-copies">below</a>).</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>A task changing a value through one parameter while it reads it through another. See
+                <a href="index.html#parameters">Parameters</a>.</td>
+            </tr>
+            <tr>
+              <td>A large plain parameter, <code>x: T</code>, is read where the caller keeps it only when nothing
+                can change it while the task runs: a local variable, or a field or an array item of one, with no
+                later argument that calls a task. Anything else is copied first.</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>A value given as a copy changing under the task. See
+                <a href="index.html#large-values">Large values</a>.</td>
+            </tr>
+            <tr>
+              <td>A reference names a place: never an item of a slice, which moves when the slice grows, a part
+                taken of a value, a call's value, or a result. (The value an <code>alters</code> method is called on
+                may be an item of a slice; see <a href="#method-on-a-slice-item">below</a>.)</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>A reference to memory that has moved, or to a value that is gone. See
+                <a href="index.html#references">References</a>.</td>
+            </tr>
+            <tr>
+              <td>A pointer always points to something (a missing one is a <code>maybe ^T</code>). A pointer, a
+                slice, and text of a region (<code>text@r</code>) point into a region that outlives them: none is
+                sent from a task, kept in a longer-lived variable, field, or shared field, or given to a parameter
+                that could keep it, where its region would end first.</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>Null pointers, and pointers into memory that was freed. See
+                <a href="regions.html#guarantees">What regions guarantee</a> and
+                <a href="index.html#region-lifetime">A region lives until its block closes</a>.</td>
+            </tr>
+            <tr>
+              <td>A task value always holds a task (a missing one is a <code>maybe</code>), is called with the
+                values its type takes, and its type says the regions of what it takes and sends, as a header does, so
+                it holds nothing in any region and can go anywhere. A place or a region it takes is given at each call
+                and checked there as at a named call: marked, given once where it changes, never an item of a slice,
+                and a region the caller allocates in, where what it sends then lives. A task taking types never
+                finds one of them in a region a task type takes, whose name is the type's own and says nothing of
+                the caller's regions. A type group holding places gives them on as places, checked where the call giving them
+                is, and never holds a region, which is named beside it. A method wrapping a method of every value alters the
+                value exactly when the wrapped method does, so neither sees a value that never changes change under it.</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>Calling through a null or stray function pointer, or with the wrong values; a place changed through
+                one parameter while read through another; a value sent in a region that ends first. See
+                <a href="index.html#task-types-places">Places and regions</a>.</td>
+            </tr>
+            <tr>
+              <td>A plain lambda takes nothing from the code around it, and one that keeps what it uses,
+                <code>[@r]</code>, keeps copies in a block of <code>r</code>, which its type names, so neither reads a
+                variable after the task that wrote it has ended, nor what it keeps after <code>r</code> is freed. It keeps
+                no copy of a value of another region, and its copy of a slice never changes the slice's length. A variable it keeps
+                as a place, <code>[flex&amp; count, @r]</code>, is one declared before <code>r</code>, in its block or one
+                around it, so the lambda ends first.</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>A closure reading a dead stack frame, or memory its region freed. See <a href="index.html#lambdas">Lambdas</a>
+                and <a href="index.html#kept-lambdas">Lambdas that keep what they use</a>.</td>
+            </tr>
+            <tr>
+              <td>A <code>[flex @r]</code> lambda, which changes what it keeps, is never copied: held in a
+                <code>flex</code> variable, given as a place, or named by a reference.</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>Two copies changing one hidden block, each seeing the other's changes as its own (a shared mutable
+                closure). See <a href="index.html#kept-lambdas">Lambdas that keep what they use</a>.</td>
+            </tr>
+            <tr>
+              <td>A tuple's items never change, neither assigned nor changed by a method that <code>alters</code>
+                them, and hold nothing that changes through a pointer, a slice, or an array.</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>A value that looks unchangeable changing through another name. See
+                <a href="index.html#tuples">Tuples</a>.</td>
+            </tr>
+            <tr>
+              <td>Nothing is read before it is set: every binding has a value, every field of a literal is given
+                or falls back on one, a named result is set on every path that reads or sends it, and a task that sends
+                a value sends one on every path.</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>Reading memory that holds nothing yet. See
+                <a href="index.html#tasks">Tasks</a>, <a href="index.html#field-defaults">field defaults</a>, and
+                <a href="index.html#named-results">Named Results</a>.</td>
+            </tr>
+            <tr>
+              <td>A <code>maybe</code> is opened before its value is used, and <code>==</code> compares it only
+                with <code>none</code>.</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>Using a value that isn't there, and mistaking an empty value for one that holds
+                something. See <a href="index.html#maybe">Maybe and Errors</a> and
+                <a href="index.html#maybe-compare">comparing a maybe</a>.</td>
+            </tr>
+            <tr>
+              <td>The error of a <code>T ~ E</code> isn't dropped by a call written as a statement, or bound to
+                <code>_</code>.</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>A failure going unnoticed (one kept in a variable still can; see
+                <a href="#dropped-errors">below</a>). See <a href="index.html#maybe">Maybe and Errors</a>.</td>
+            </tr>
+            <tr>
+              <td>A <code>match</code> covers every variant of its kind.</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>A value no case handles. See <a href="index.html#kinds">Kinds</a>.</td>
+            </tr>
+            <tr>
+              <td>A shared field holds nothing in a region, its first value is worked out before the program runs,
+                and shared fields whose first values name each other in a circle are refused.</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>A shared field pointing into freed memory, or read before it has a value. See
+                <a href="index.html#shared">Shared fields</a>.</td>
+            </tr>
+            <tr>
+              <td>A decorator's and a wrapper's values, worked out where the program starts, hold nothing in a region
+                and leave no task with <code>&lt;-</code>. A wrapper's are worked out after those of every task they may
+                call, a call of a task held as a value counting as a call of every task named as one in what can run there; a value that may
+                call its own task, and values whose tasks call each other in a circle, are refused.</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>A wrapper reading its value before it is set, which for a task value would call through a null
+                pointer, and a decorator's value skipping the decorators after it. See
+                <a href="index.html#decorators">Decorators</a>.</td>
+            </tr>
+            <tr>
+              <td>Code nests at most 100 levels deep, and a type given to a generic is at most 24 types deep and
+                1000 parts.</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>The compiler running out of stack or memory on a program instead of saying what is
+                wrong. See <a href="index.html#limits">Current Limits</a>.</td>
+            </tr>
+            <tr>
+              <td>An <code>int</code> never wraps: overflow, and division or remainder by zero, stop the program;
+                written with numbers alone, they are refused when compiling. A <code>unit</code> and a
+                <code>char</code> never wrap either: a result outside 0 to 255 stops the program, and
+                <code>unit(n)</code> and <code>char(n)</code> do the same for a number that doesn't fit.</td>
+              <td class="when"><span class="badge b-trapped">trapped</span></td>
+              <td>The undefined behavior C has for them, and a byte that quietly wraps around. See
+                <a href="index.html#int-limits">Numbers</a>, <a href="index.html#units">Units</a>, and
+                <a href="index.html#chars">Chars</a>.</td>
+            </tr>
+            <tr>
+              <td><code>int(x)</code> of a <code>float</code> that is <code>nan</code> or too large for an
+                <code>int</code> stops the program.</td>
+              <td class="when"><span class="badge b-trapped">trapped</span></td>
+              <td>A number that means nothing. See
+                <a href="index.html#conversions">Conversions</a>.</td>
+            </tr>
+            <tr>
+              <td>Every index and range of an array, a slice, or text is checked (a constant one when compiling),
+                a count below zero stops the program, and a part of text can't cut through a character.
+                <code>m[k]</code> on a key a map doesn't hold stops the program too, and <code>m[#k]</code> gives none.
+                <code>xs[#i]</code> and <code>t.at(i)</code> give <code>none</code> out of range instead, and a byte of text, <code>t[i]</code>,
+                is never a place, so text still never changes.</td>
+              <td class="when"><span class="badge b-trapped">trapped</span></td>
+              <td>Reading or writing outside a value, and text that isn't UTF-8. See
+                <a href="index.html#arrays">Arrays</a>, <a href="index.html#slices">Slices</a>,
+                <a href="index.html#safe-index">Safe index</a>, and <a href="index.html#text-parts">parts of text</a>.</td>
+            </tr>
+            <tr>
+              <td><code>add</code> and <code>del</code> check their index, and <code>del()</code> on an empty slice
+                stops the program.</td>
+              <td class="when"><span class="badge b-trapped">trapped</span></td>
+              <td>Changing a slice outside its items. See
+                <a href="index.html#slice-changes">Adding and taking out items</a>.</td>
+            </tr>
+            <tr>
+              <td>A <code>File</code> whose region closed it fails with <code>NotOpen</code> from every method,
+                never reaching a file opened since.</td>
+              <td class="when"><span class="badge b-trapped">trapped</span></td>
+              <td>Writing to a file the program didn't mean. See
+                <a href="std.html#file-regions">Regions and copies</a>.</td>
+            </tr>
+            <tr>
+              <td>Channel and actor payloads transfer lasting data or linear ownership (<code>own x</code>): values holding sender region memory (<code>text@r</code>, slices, regional shapes) are rejected, and moved bindings cannot be read again or moved twice (including in loops or across <code>select</code> arms).</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>Cross-thread use-after-free when the sender's region exits, and concurrent data races on shared channel/actor messages. See <a href="channels.html">Channels</a> and <a href="actors.html">Actors</a>.</td>
+            </tr>
+            <tr>
+              <td>Actor state is strictly encapsulated (external field access refused), and blocking <code>select</code> without <code>otherwise</code> is forbidden inside actor <code>on</code> handlers.</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>External races against actor state and worker-pool deadlock inside the M:N scheduler. See <a href="actors.html">Actors</a>.</td>
+            </tr>
+            <tr>
+              <td>Events declare explicit <code>alters(...)</code> contracts including transitive indirect mutations across chained events and call interceptors; unconditional event cycles are rejected (cycles require terminating <code>when</code> guards).</td>
+              <td class="when"><span class="badge b-checked">checked</span></td>
+              <td>Hidden action-at-a-distance mutations and infinite trigger recursion. See <a href="events.html">Events</a>.</td>
+            </tr>
+            <tr>
+              <td><code>&lt;&lt;- c</code> / <code>wait_and_receive(c)</code> on a closed, drained channel, and <code>select</code> when all channel arms are closed without <code>case none</code> or <code>otherwise</code>, stop the program with a message.</td>
+              <td class="when"><span class="badge b-trapped">trapped</span></td>
+              <td>Deadlocking forever or reading uninitialized memory from a closed channel. See <a href="channels.html">Channels</a>.</td>
+            </tr>
+            <tr>
+              <td>Running out of memory prints <code>vela: out of memory</code> and stops the program.</td>
+              <td class="when"><span class="badge b-trapped">trapped</span></td>
+              <td>Going on with memory that was never given. See
+                <a href="regions.html#guarantees">What regions guarantee</a>.</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
+    </section>
 
-      <section>
-        <h2 id="checked">What is checked</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Rule</th>
-                <th>When</th>
-                <th>What it prevents</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  A place a call changes is given once: two parameters that may
-                  change it (<code>flex&amp;</code> or <code>bind&amp;</code>),
-                  or one of those and a <code>fixed&amp;</code> or a plain
-                  parameter, never name one place, and nor do
-                  <code>&amp;xs[i]</code> and <code>&amp;xs[j]</code>, which
-                  may. A method that <code>alters</code> the value it is called
-                  on counts as changing it. Two slices count as two places even
-                  when they view the same items (see
-                  <a href="#slice-copies">below</a>).
-                </td>
-                <td class="when">
-                  <span class="badge b-checked">checked</span>
-                </td>
-                <td>
-                  A task changing a value through one parameter while it reads
-                  it through another. See
-                  <a href="index.html#parameters">Parameters</a>.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  A large plain parameter, <code>x: T</code>, is read where the
-                  caller keeps it only when nothing can change it while the task
-                  runs: a local variable, or a field or an array item of one,
-                  with no later argument that calls a task. Anything else is
-                  copied first.
-                </td>
-                <td class="when">
-                  <span class="badge b-checked">checked</span>
-                </td>
-                <td>
-                  A value given as a copy changing under the task. See
-                  <a href="index.html#large-values">Large values</a>.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  A reference names a place: never an item of a slice, which
-                  moves when the slice grows, a part taken of a value, a call's
-                  value, or a result. (The value an <code>alters</code> method
-                  is called on may be an item of a slice; see
-                  <a href="#method-on-a-slice-item">below</a>.)
-                </td>
-                <td class="when">
-                  <span class="badge b-checked">checked</span>
-                </td>
-                <td>
-                  A reference to memory that has moved, or to a value that is
-                  gone. See <a href="index.html#references">References</a>.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  A pointer always points to something (a missing one is a
-                  <code>maybe ^T</code>). A pointer, a slice, and text of a
-                  region (<code>text@r</code>) point into a region that outlives
-                  them: none is sent from a task, kept in a longer-lived
-                  variable, field, or shared field, or given to a parameter that
-                  could keep it, where its region would end first.
-                </td>
-                <td class="when">
-                  <span class="badge b-checked">checked</span>
-                </td>
-                <td>
-                  Null pointers, and pointers into memory that was freed. See
-                  <a href="regions.html#guarantees">What regions guarantee</a>
-                  and
-                  <a href="index.html#region-lifetime"
-                    >A region lives until its block closes</a
-                  >.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  A task value always holds a task (a missing one is a
-                  <code>maybe</code>), is called with the values its type takes,
-                  and its type says the regions of what it takes and sends, as a
-                  header does, so it holds nothing in any region and can go
-                  anywhere. A place or a region it takes is given at each call
-                  and checked there as at a named call: marked, given once where
-                  it changes, never an item of a slice, and a region the caller
-                  allocates in, where what it sends then lives. A task taking
-                  types never finds one of them in a region a task type takes,
-                  whose name is the type's own and says nothing of the caller's
-                  regions. A type group holding places gives them on as places,
-                  checked where the call giving them is, and never holds a
-                  region, which is named beside it. A method wrapping a method
-                  of every value alters the value exactly when the wrapped
-                  method does, so neither sees a value that never changes change
-                  under it.
-                </td>
-                <td class="when">
-                  <span class="badge b-checked">checked</span>
-                </td>
-                <td>
-                  Calling through a null or stray function pointer, or with the
-                  wrong values; a place changed through one parameter while read
-                  through another; a value sent in a region that ends first. See
-                  <a href="index.html#task-types-places">Places and regions</a>.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  A plain lambda takes nothing from the code around it, and one
-                  that keeps what it uses, <code>[@r]</code>, keeps copies in a
-                  block of <code>r</code>, which its type names, so neither
-                  reads a variable after the task that wrote it has ended, nor
-                  what it keeps after <code>r</code> is freed. It keeps no copy
-                  of a value of another region, and its copy of a slice never
-                  changes the slice's length. A variable it keeps as a place,
-                  <code>[flex&amp; count, @r]</code>, is one declared before
-                  <code>r</code>, in its block or one around it, so the lambda
-                  ends first.
-                </td>
-                <td class="when">
-                  <span class="badge b-checked">checked</span>
-                </td>
-                <td>
-                  A closure reading a dead stack frame, or memory its region
-                  freed. See <a href="index.html#lambdas">Lambdas</a> and
-                  <a href="index.html#kept-lambdas"
-                    >Lambdas that keep what they use</a
-                  >.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  A <code>[flex @r]</code> lambda, which changes what it keeps,
-                  is never copied: held in a <code>flex</code> variable, given
-                  as a place, or named by a reference.
-                </td>
-                <td class="when">
-                  <span class="badge b-checked">checked</span>
-                </td>
-                <td>
-                  Two copies changing one hidden block, each seeing the other's
-                  changes as its own (a shared mutable closure). See
-                  <a href="index.html#kept-lambdas"
-                    >Lambdas that keep what they use</a
-                  >.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  A tuple's items never change, neither assigned nor changed by
-                  a method that <code>alters</code> them, and hold nothing that
-                  changes through a pointer, a slice, or an array.
-                </td>
-                <td class="when">
-                  <span class="badge b-checked">checked</span>
-                </td>
-                <td>
-                  A value that looks unchangeable changing through another name.
-                  See <a href="index.html#tuples">Tuples</a>.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  Nothing is read before it is set: every binding has a value,
-                  every field of a literal is given or falls back on one, a
-                  named result is set on every path that reads or sends it, and
-                  a task that sends a value sends one on every path.
-                </td>
-                <td class="when">
-                  <span class="badge b-checked">checked</span>
-                </td>
-                <td>
-                  Reading memory that holds nothing yet. See
-                  <a href="index.html#tasks">Tasks</a>,
-                  <a href="index.html#field-defaults">field defaults</a>, and
-                  <a href="index.html#named-results">Named Results</a>.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  A <code>maybe</code> is opened before its value is used, and
-                  <code>==</code> compares it only with <code>none</code>.
-                </td>
-                <td class="when">
-                  <span class="badge b-checked">checked</span>
-                </td>
-                <td>
-                  Using a value that isn't there, and mistaking an empty value
-                  for one that holds something. See
-                  <a href="index.html#maybe">Maybe and Errors</a> and
-                  <a href="index.html#maybe-compare">comparing a maybe</a>.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  The error of a <code>T ~ E</code> isn't dropped by a call
-                  written as a statement, or bound to <code>_</code>.
-                </td>
-                <td class="when">
-                  <span class="badge b-checked">checked</span>
-                </td>
-                <td>
-                  A failure going unnoticed (one kept in a variable still can;
-                  see <a href="#dropped-errors">below</a>). See
-                  <a href="index.html#maybe">Maybe and Errors</a>.
-                </td>
-              </tr>
-              <tr>
-                <td>A <code>match</code> covers every variant of its kind.</td>
-                <td class="when">
-                  <span class="badge b-checked">checked</span>
-                </td>
-                <td>
-                  A value no case handles. See
-                  <a href="index.html#kinds">Kinds</a>.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  A shared field holds nothing in a region, its first value is
-                  worked out before the program runs, and shared fields whose
-                  first values name each other in a circle are refused.
-                </td>
-                <td class="when">
-                  <span class="badge b-checked">checked</span>
-                </td>
-                <td>
-                  A shared field pointing into freed memory, or read before it
-                  has a value. See
-                  <a href="index.html#shared">Shared fields</a>.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  A decorator's and a wrapper's values, worked out where the
-                  program starts, hold nothing in a region and leave no task
-                  with <code>&lt;-</code>. A wrapper's are worked out after
-                  those of every task they may call, a call of a task held as a
-                  value counting as a call of every task named as one in what
-                  can run there; a value that may call its own task, and values
-                  whose tasks call each other in a circle, are refused.
-                </td>
-                <td class="when">
-                  <span class="badge b-checked">checked</span>
-                </td>
-                <td>
-                  A wrapper reading its value before it is set, which for a task
-                  value would call through a null pointer, and a decorator's
-                  value skipping the decorators after it. See
-                  <a href="index.html#decorators">Decorators</a>.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  Code nests at most 100 levels deep, and a type given to a
-                  generic is at most 24 types deep and 1000 parts.
-                </td>
-                <td class="when">
-                  <span class="badge b-checked">checked</span>
-                </td>
-                <td>
-                  The compiler running out of stack or memory on a program
-                  instead of saying what is wrong. See
-                  <a href="index.html#limits">Current Limits</a>.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  An <code>int</code> never wraps: overflow, and division or
-                  remainder by zero, stop the program; written with numbers
-                  alone, they are refused when compiling. A
-                  <code>unit</code> and a <code>char</code> never wrap either: a
-                  result outside 0 to 255 stops the program, and
-                  <code>unit(n)</code> and <code>char(n)</code> do the same for
-                  a number that doesn't fit.
-                </td>
-                <td class="when">
-                  <span class="badge b-trapped">trapped</span>
-                </td>
-                <td>
-                  The undefined behavior C has for them, and a byte that quietly
-                  wraps around. See <a href="index.html#int-limits">Numbers</a>,
-                  <a href="index.html#units">Units</a>, and
-                  <a href="index.html#chars">Chars</a>.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  <code>int(x)</code> of a <code>float</code> that is
-                  <code>nan</code> or too large for an <code>int</code> stops
-                  the program.
-                </td>
-                <td class="when">
-                  <span class="badge b-trapped">trapped</span>
-                </td>
-                <td>
-                  A number that means nothing. See
-                  <a href="index.html#conversions">Conversions</a>.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  Every index and range of an array, a slice, or text is checked
-                  (a constant one when compiling), a count below zero stops the
-                  program, and a part of text can't cut through a character.
-                  <code>m[k]</code> on a key a map doesn't hold stops the
-                  program too, and <code>m[#k]</code> gives none.
-                  <code>xs[#i]</code> and <code>t.at(i)</code> give
-                  <code>none</code> out of range instead, and a byte of text,
-                  <code>t[i]</code>, is never a place, so text still never
-                  changes.
-                </td>
-                <td class="when">
-                  <span class="badge b-trapped">trapped</span>
-                </td>
-                <td>
-                  Reading or writing outside a value, and text that isn't UTF-8.
-                  See <a href="index.html#arrays">Arrays</a>,
-                  <a href="index.html#slices">Slices</a>,
-                  <a href="index.html#safe-index">Safe index</a>, and
-                  <a href="index.html#text-parts">parts of text</a>.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  <code>add</code> and <code>del</code> check their index, and
-                  <code>del()</code> on an empty slice stops the program.
-                </td>
-                <td class="when">
-                  <span class="badge b-trapped">trapped</span>
-                </td>
-                <td>
-                  Changing a slice outside its items. See
-                  <a href="index.html#slice-changes"
-                    >Adding and taking out items</a
-                  >.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  A <code>File</code> whose region closed it fails with
-                  <code>NotOpen</code> from every method, never reaching a file
-                  opened since.
-                </td>
-                <td class="when">
-                  <span class="badge b-trapped">trapped</span>
-                </td>
-                <td>
-                  Writing to a file the program didn't mean. See
-                  <a href="std.html#file-regions">Regions and copies</a>.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  Channel and actor payloads transfer lasting data or linear
-                  ownership (<code>own x</code>): values holding sender region
-                  memory (<code>text@r</code>, slices, regional shapes) are
-                  rejected, and moved bindings cannot be read again or moved
-                  twice (including in loops or across <code>select</code> arms).
-                </td>
-                <td class="when">
-                  <span class="badge b-checked">checked</span>
-                </td>
-                <td>
-                  Cross-thread use-after-free when the sender's region exits,
-                  and concurrent data races on shared channel/actor messages.
-                  See <a href="channels.html">Channels</a> and
-                  <a href="actors.html">Actors</a>.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  Actor state is strictly encapsulated (external field access
-                  refused), and blocking <code>select</code> without
-                  <code>otherwise</code> is forbidden inside actor
-                  <code>on</code> handlers.
-                </td>
-                <td class="when">
-                  <span class="badge b-checked">checked</span>
-                </td>
-                <td>
-                  External races against actor state and worker-pool deadlock
-                  inside the M:N scheduler. See
-                  <a href="actors.html">Actors</a>.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  Events declare explicit <code>alters(...)</code> contracts
-                  including transitive indirect mutations across chained events
-                  and call interceptors; unconditional event cycles are rejected
-                  (cycles require terminating <code>when</code> guards).
-                </td>
-                <td class="when">
-                  <span class="badge b-checked">checked</span>
-                </td>
-                <td>
-                  Hidden action-at-a-distance mutations and infinite trigger
-                  recursion. See <a href="events.html">Events</a>.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  <code>&lt;&lt;- c</code> / <code>wait_and_receive(c)</code> on
-                  a closed, drained channel, and <code>select</code> when all
-                  channel arms are closed without <code>case none</code> or
-                  <code>otherwise</code>, stop the program with a message.
-                </td>
-                <td class="when">
-                  <span class="badge b-trapped">trapped</span>
-                </td>
-                <td>
-                  Deadlocking forever or reading uninitialized memory from a
-                  closed channel. See <a href="channels.html">Channels</a>.
-                </td>
-              </tr>
-              <tr>
-                <td>
-                  Running out of memory prints
-                  <code>vela: out of memory</code> and stops the program.
-                </td>
-                <td class="when">
-                  <span class="badge b-trapped">trapped</span>
-                </td>
-                <td>
-                  Going on with memory that was never given. See
-                  <a href="regions.html#guarantees">What regions guarantee</a>.
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section>
-        <h2 id="concerns">Concerns: places two names share</h2>
-        <div class="entry" id="through-a-pointer">
-          <h3>
-            A reference parameter changed through a pointer
-            <span class="badge b-open">open</span>
-          </h3>
-          <p>
-            The rule that a call gives a place it changes once compares the
-            places written at the call. A pointer reaches a place the call
-            doesn't write, so a task given <code>&amp;p^</code> as a
-            <code>fixed&amp;</code> and <code>p</code> itself can change what
-            the reference reads:
-          </p>
-          <pre><code><span class="keyword">shape</span> Box
+    <section>
+      <h2 id="concerns">Concerns: places two names share</h2>
+      <div class="entry" id="through-a-pointer">
+        <h3>A reference parameter changed through a pointer <span class="badge b-open">open</span></h3>
+        <p>
+          The rule that a call gives a place it changes once compares the places written at the call. A pointer
+          reaches a place the call doesn't write, so a task given <code>&amp;p^</code> as a <code>fixed&amp;</code>
+          and <code>p</code> itself can change what the reference reads:
+        </p>
+        <pre><code><span class="keyword">shape</span> Box
     v: int
 <span class="keyword">fi</span>
 
@@ -850,11 +499,10 @@
     <span class="keyword">flex</span> p = <span class="keyword">new</span> Box(Box { v: 1 }) <span class="keyword">at</span> r
     f(&amp;p^, p)
 <span class="keyword">fi</span></code></pre>
-          <p>
-            Two pointers that hold one address slip past the same rule, since
-            the compiler can't tell they do:
-          </p>
-          <pre><code><span class="keyword">task</span> two(<span class="keyword">flex&amp;</span> a: int, <span class="keyword">flex&amp;</span> b: int)
+        <p>
+          Two pointers that hold one address slip past the same rule, since the compiler can't tell they do:
+        </p>
+        <pre><code><span class="keyword">task</span> two(<span class="keyword">flex&amp;</span> a: int, <span class="keyword">flex&amp;</span> b: int)
     a = 1
     b = 2
     show(a, <span class="string">" "</span>, b)                <span class="comment">; 2 2</span>
@@ -862,44 +510,30 @@
 
 <span class="keyword">flex</span> q = p
 two(&amp;p^.v, &amp;q^.v)</code></pre>
-          <p>
-            The value an <code>alters</code> method is called on is given the
-            same way, so <code>p^.set(p)</code>, where <code>set</code> writes
-            <code>q^.n = 2</code> through the pointer it is given, reads
-            <code>.n</code> as 2.
-          </p>
-          <dl>
-            <dt>Why it is hard</dt>
-            <dd>
-              Whether two pointers hold one address is known only when the
-              program runs. A rule written for the compiler has to be cautious:
-              it would refuse or warn about every call that gives a place behind
-              a pointer together with another pointer of that type, or into the
-              same region, most of which are fine.
-            </dd>
-            <dt>Ways it could go</dt>
-            <dd>
-              A warning where a call gives <code>&amp;p^</code> (or a part of
-              it) to a reference parameter and also gives a pointer of the same
-              type, or a place behind another pointer of it. Or, in a build for
-              finding mistakes, a check that the two addresses differ when the
-              call starts, trapping when they don't.
-            </dd>
-          </dl>
-        </div>
+        <p>
+          The value an <code>alters</code> method is called on is given the same way, so <code>p^.set(p)</code>, where
+          <code>set</code> writes <code>q^.n = 2</code> through the pointer it is given, reads <code>.n</code> as 2.
+        </p>
+        <dl>
+          <dt>Why it is hard</dt>
+          <dd>Whether two pointers hold one address is known only when the program runs. A rule written for the
+            compiler has to be cautious: it would refuse or warn about every call that gives a place behind a
+            pointer together with another pointer of that type, or into the same region, most of which are fine.</dd>
+          <dt>Ways it could go</dt>
+          <dd>A warning where a call gives <code>&amp;p^</code> (or a part of it) to a reference parameter and also
+            gives a pointer of the same type, or a place behind another pointer of it. Or, in a build for finding
+            mistakes, a check that the two addresses differ when the call starts, trapping when they don't.</dd>
+        </dl>
+      </div>
 
-        <div class="entry" id="shared-fields">
-          <h3>
-            A reference to a shared field the task changes
-            <span class="badge b-open">open</span>
-          </h3>
-          <p>
-            A shared field that changes (<code>shared flex</code>) is one place
-            for the whole program, and every task can reach it by name. A task
-            given it as a <code>fixed&amp;</code> reads it where it is, so its
-            own change to the field shows through the reference:
-          </p>
-          <pre><code><span class="keyword">shape</span> Tally
+      <div class="entry" id="shared-fields">
+        <h3>A reference to a shared field the task changes <span class="badge b-open">open</span></h3>
+        <p>
+          A shared field that changes (<code>shared flex</code>) is one place for the whole program, and every task
+          can reach it by name. A task given it as a <code>fixed&amp;</code> reads it where it is, so its own change
+          to the field shows through the reference:
+        </p>
+        <pre><code><span class="keyword">shape</span> Tally
     n: int
 
     <span class="keyword">alters</span> grow(<span class="keyword">flex</span> m: [int: Tally]@r)
@@ -920,70 +554,50 @@ two(&amp;p^.v, &amp;q^.v)</code></pre>
         m[k + 100] = v
     <span class="keyword">fi</span>
 <span class="keyword">fi</span></code></pre>
-          <p>
-            A plain parameter given a shared field is copied first, so it never
-            sees the change. A method called on a shared field is the same: in
-            <code>Tally.last.bump()</code>, a <code>bump</code> that sets
-            <code>Tally.last</code> to a new value reads the new one's fields
-            through <code>.this</code>.
-          </p>
-          <dl>
-            <dt>Why it is hard</dt>
-            <dd>
-              The change may come from a task the body calls, or one that task
-              calls, so the compiler would have to know every shared field each
-              task can change.
-            </dd>
-            <dt>Ways it could go</dt>
-            <dd>
-              The checker could learn, for each task, which shared fields it or
-              the tasks it calls may change, and refuse a call that gives one of
-              them to a reference parameter, as it refuses a place given twice.
-              A <code>shared read</code> field, which only its shape's methods
-              change, narrows where to look.
-            </dd>
-          </dl>
-        </div>
+        <p>
+          A plain parameter given a shared field is copied first, so it never sees the change. A method called on a
+          shared field is the same: in <code>Tally.last.bump()</code>, a <code>bump</code> that sets
+          <code>Tally.last</code> to a new value reads the new one's fields through <code>.this</code>.
+        </p>
+        <dl>
+          <dt>Why it is hard</dt>
+          <dd>The change may come from a task the body calls, or one that task calls, so the compiler would have to
+            know every shared field each task can change.</dd>
+          <dt>Ways it could go</dt>
+          <dd>The checker could learn, for each task, which shared fields it or the tasks it calls may change, and
+            refuse a call that gives one of them to a reference parameter, as it refuses a place given twice. A
+            <code>shared read</code> field, which only its shape's methods change, narrows where to look.</dd>
+        </dl>
+      </div>
 
-        <div class="entry" id="references-read-now">
-          <h3>
-            A reference reads the place as it is now
-            <span class="badge b-design">by design</span>
-          </h3>
-          <p>
-            <code>fixed&amp; y = &amp;x</code> can't change <code>x</code>, but
-            it reads <code>x</code> as it is each time it is read, and
-            <code>x</code> may change between two reads:
-          </p>
-          <pre><code><span class="keyword">flex</span> x = 1
+      <div class="entry" id="references-read-now">
+        <h3>A reference reads the place as it is now <span class="badge b-design">by design</span></h3>
+        <p>
+          <code>fixed&amp; y = &amp;x</code> can't change <code>x</code>, but it reads <code>x</code> as it is each
+          time it is read, and <code>x</code> may change between two reads:
+        </p>
+        <pre><code><span class="keyword">flex</span> x = 1
 <span class="keyword">fixed&amp;</span> y = &amp;x
 show(y)                            <span class="comment">; 1</span>
 x = 2
 show(y)                            <span class="comment">; 2</span></code></pre>
-          <p>
-            That is what a reference is for, and a
-            <code>fixed&amp;</code> parameter is the same inside the task. What
-            the word promises is that the reader doesn't change the place, not
-            that nothing does. A reader who needs the value to stay as it was
-            keeps a copy: <code>fixed v = y</code>, or a
-            <a href="index.html#fixed-parameters"><code>fixed x</code></a>
-            parameter.
-          </p>
-        </div>
+        <p>
+          That is what a reference is for, and a <code>fixed&amp;</code> parameter is the same inside the task.
+          What the word promises is that the reader doesn't change the place, not that nothing does. A reader who
+          needs the value to stay as it was keeps a copy: <code>fixed v = y</code>, or a
+          <a href="index.html#fixed-parameters"><code>fixed x</code></a> parameter.
+        </p>
+      </div>
 
-        <div class="entry" id="kept-places">
-          <h3>
-            A place a lambda keeps, given beside it
-            <span class="badge b-open">open</span>
-          </h3>
-          <p>
-            A call never gives one place twice where one of them changes it (see
-            <a href="index.html#task-types-places">Places and regions</a>). A
-            lambda that keeps a variable as a place,
-            <code>[flex&amp; count, @s]</code>, is a second name for it that the
-            call doesn't see, so it can be given beside the place itself:
-          </p>
-          <pre><code><span class="keyword">task</span> f(<span class="keyword">flex&amp;</span> x: int, g: [@s]() -&gt; nothing)
+      <div class="entry" id="kept-places">
+        <h3>A place a lambda keeps, given beside it <span class="badge b-open">open</span></h3>
+        <p>
+          A call never gives one place twice where one of them changes it (see
+          <a href="index.html#task-types-places">Places and regions</a>). A lambda that keeps a variable as a place,
+          <code>[flex&amp; count, @s]</code>, is a second name for it that the call doesn't see, so it can be given
+          beside the place itself:
+        </p>
+        <pre><code><span class="keyword">task</span> f(<span class="keyword">flex&amp;</span> x: int, g: [@s]() -&gt; nothing)
     g()                            <span class="comment">; changes x, through count</span>
     show(x)                        <span class="comment">; 5</span>
 <span class="keyword">fi</span>
@@ -994,48 +608,33 @@ show(y)                            <span class="comment">; 2</span></code></pre>
     <span class="keyword">fixed</span> g = [<span class="keyword">flex&amp;</span> count, @s]() -&gt; nothing count = 5 <span class="keyword">fi</span>
     f(&amp;count, g)
 <span class="keyword">fi</span></code></pre>
-          <p>
-            No memory is misused: the variable outlives the lambda, and no
-            reference names an item of a slice that could move. But
-            <code>x</code> changes under <code>f</code> while
-            <code>f</code> holds it, as a reference's place may (<a
-              href="#references-read-now"
-              >above</a
-            >). A call could refuse a lambda that keeps a place it is also
-            given, where the compiler sees which places a lambda keeps; one
-            handed on through a variable or a parameter hides it.
-          </p>
-        </div>
+        <p>
+          No memory is misused: the variable outlives the lambda, and no reference names an item of a slice that could
+          move. But <code>x</code> changes under <code>f</code> while <code>f</code> holds it, as a reference's place may
+          (<a href="#references-read-now">above</a>). A call could refuse a lambda that keeps a place it is also given,
+          where the compiler sees which places a lambda keeps; one handed on through a variable or a parameter hides it.
+        </p>
+      </div>
 
-        <div class="entry" id="chosen-passing">
-          <h3>
-            Where a plain parameter is
-            <span class="badge b-warned">warned</span>
-          </h3>
-          <p>
-            A plain parameter, <code>x: T</code>, is a copy, or for a value
-            larger than 64 bytes, the caller's own place. Its value is the same
-            either way, but what reads where the value is sees the difference:
-            <code>&amp;x</code>, and <code>==</code> on a shape, an array, or a
-            tuple, which compare by where the value is. Such a read is a
-            <a href="index.html#warnings">warning</a> that says which way the
-            compiler went; <code>fixed x</code> and
-            <code>fixed&amp; x</code> say which is meant.
-          </p>
-        </div>
+      <div class="entry" id="chosen-passing">
+        <h3>Where a plain parameter is <span class="badge b-warned">warned</span></h3>
+        <p>
+          A plain parameter, <code>x: T</code>, is a copy, or for a value larger than 64 bytes, the caller's own
+          place. Its value is the same either way, but what reads where the value is sees the difference:
+          <code>&amp;x</code>, and <code>==</code> on a shape, an array, or a tuple, which compare by where the
+          value is. Such a read is a <a href="index.html#warnings">warning</a> that says which way the compiler went;
+          <code>fixed x</code> and <code>fixed&amp; x</code> say which is meant.
+        </p>
+      </div>
 
-        <div class="entry" id="method-on-a-slice-item">
-          <h3>
-            A method on an item of a slice that grows
-            <span class="badge b-open">open</span>
-          </h3>
-          <p>
-            An <code>alters</code> method called on an item of a slice changes
-            the item where it is. If the method makes the slice grow, through a
-            pointer to what holds it, the items move to a new block, and the
-            method's own change goes to the old one:
-          </p>
-          <pre><code><span class="keyword">shape</span> Bag
+      <div class="entry" id="method-on-a-slice-item">
+        <h3>A method on an item of a slice that grows <span class="badge b-open">open</span></h3>
+        <p>
+          An <code>alters</code> method called on an item of a slice changes the item where it is. If the method makes
+          the slice grow, through a pointer to what holds it, the items move to a new block, and the method's own
+          change goes to the old one:
+        </p>
+        <pre><code><span class="keyword">shape</span> Bag
     items: [Item]
 <span class="keyword">fi</span>
 
@@ -1055,49 +654,33 @@ show(y)                            <span class="comment">; 2</span></code></pre>
     b^.items[0].poke(b, r)
     show(b^.items[0].n, <span class="string">" "</span>, b^.items.len)   <span class="comment">; 1 3, not 9 3</span>
 <span class="keyword">fi</span></code></pre>
-          <p>
-            No memory is misused, since the old block stays in the region until
-            it is freed, but the change is lost. The same item given to a task
-            as <code>&amp;b^.items[0]</code> is refused, since a reference never
-            names an item of a slice; the value a method is called on isn't held
-            to that rule.
-          </p>
-          <dl>
-            <dt>Why it is hard</dt>
-            <dd>
-              The slice grows through a pointer, which the rule that a place is
-              given once can't follow, and refusing every
-              <code>alters</code> call on an item of a slice would refuse the
-              common case, a method that touches only its own item.
-            </dd>
-            <dt>Ways it could go</dt>
-            <dd>
-              Refuse an <code>alters</code> call on an item of a slice when the
-              call also gives a pointer or region through which that slice could
-              be reached. Or have the method work on a copy of the item and
-              write it back to its index when the call ends. Or read the item
-              through the slice and its index at each use of <code>.this</code>.
-            </dd>
-          </dl>
-        </div>
+        <p>
+          No memory is misused, since the old block stays in the region until it is freed, but the change is lost. The
+          same item given to a task as <code>&amp;b^.items[0]</code> is refused, since a reference never names an item
+          of a slice; the value a method is called on isn't held to that rule.
+        </p>
+        <dl>
+          <dt>Why it is hard</dt>
+          <dd>The slice grows through a pointer, which the rule that a place is given once can't follow, and refusing
+            every <code>alters</code> call on an item of a slice would refuse the common case, a method that touches
+            only its own item.</dd>
+          <dt>Ways it could go</dt>
+          <dd>Refuse an <code>alters</code> call on an item of a slice when the call also gives a pointer or region
+            through which that slice could be reached. Or have the method work on a copy of the item and write it
+            back to its index when the call ends. Or read the item through the slice and its index at each use of
+            <code>.this</code>.</dd>
+        </dl>
+      </div>
 
-        <div class="entry" id="map-values">
-          <h3>
-            A value in a map, while the map changes
-            <span class="badge b-open">open</span>
-          </h3>
-          <p>
-            A map's values are in its table, which moves when the map grows and
-            is packed again in place when most of its keys were taken out. So a
-            reference never names a value in a map (<code
-              >flex&amp; v = &amp;m[k]</code
-            >
-            is refused, as for a slice's item), and a slice never points into
-            one (<code>m[k][0..2]</code> is refused for an array value, whose
-            part would come to point at another key's value). Two uses aren't
-            held to that rule, and see the table as it was:
-          </p>
-          <pre><code><span class="keyword">shape</span> Tally
+      <div class="entry" id="map-values">
+        <h3>A value in a map, while the map changes <span class="badge b-open">open</span></h3>
+        <p>
+          A map's values are in its table, which moves when the map grows and is packed again in place when most of
+          its keys were taken out. So a reference never names a value in a map (<code>flex&amp; v = &amp;m[k]</code> is
+          refused, as for a slice's item), and a slice never points into one (<code>m[k][0..2]</code> is refused
+          for an array value, whose part would come to point at another key's value). Two uses aren't held to that rule, and see the table as it was:
+        </p>
+        <pre><code><span class="keyword">shape</span> Tally
     n: int
 
     <span class="keyword">alters</span> grow(<span class="keyword">flex</span> m: [text: Tally]@r)
@@ -1115,71 +698,51 @@ show(y)                            <span class="comment">; 2</span></code></pre>
         m[k + <span class="string">"!"</span> <span class="keyword">at</span> r] = v
     <span class="keyword">fi</span>
 <span class="keyword">fi</span></code></pre>
-          <p>
-            The first is the slice case above (<a href="#method-on-a-slice-item"
-              >a method on an item of a slice that grows</a
-            >): the method's change can be lost. The second is a loop through a
-            map that takes keys out and adds others: when the table is packed in
-            place during the loop, an entry can move under it, so it may see one
-            twice or skip one. No memory is misused either way, since a table
-            stays in its region until the region ends.
-          </p>
-          <dl>
-            <dt>Why it is hard</dt>
-            <dd>
-              As for a slice, the map changes through a name the rule that a
-              place is given once can't follow. And a loop that sees each entry
-              once while the map changes needs the table to wait until it ends.
-            </dd>
-            <dt>Ways it could go</dt>
-            <dd>
-              The ways listed for a slice's item. For the loop, packing a table
-              only by growing it into new room while a loop goes through it, or
-              refusing <code>m[k] = v</code> and <code>m.del(k)</code> on the
-              map a loop goes through, as long as it can be told apart.
-            </dd>
-          </dl>
-        </div>
+        <p>
+          The first is the slice case above (<a href="#method-on-a-slice-item">a method on an item of a slice that
+          grows</a>): the method's change can be lost. The second is a loop through a map that takes keys out and adds
+          others: when the table is packed in place during the loop, an entry can move under it, so it may see one twice
+          or skip one. No memory is misused either way, since a table stays in its region until the region ends.
+        </p>
+        <dl>
+          <dt>Why it is hard</dt>
+          <dd>As for a slice, the map changes through a name the rule that a place is given once can't follow. And a
+            loop that sees each entry once while the map changes needs the table to wait until it ends.</dd>
+          <dt>Ways it could go</dt>
+          <dd>The ways listed for a slice's item. For the loop, packing a table only by growing it into new room while a
+            loop goes through it, or refusing <code>m[k] = v</code> and <code>m.del(k)</code> on the map a loop goes
+            through, as long as it can be told apart.</dd>
+        </dl>
+      </div>
 
-        <div class="entry" id="map-copies">
-          <h3>
-            Copies of a map are one map
-            <span class="badge b-design">by design</span>
-          </h3>
-          <p>
-            A map value is a handle to its table, so every copy of it, a
-            variable, a field, an argument, names the same map, and a key one of
-            them adds is there for all:
-          </p>
-          <pre><code><span class="keyword">flex</span> a = [<span class="string">"x"</span>: 1] <span class="keyword">at</span> r
+      <div class="entry" id="map-copies">
+        <h3>Copies of a map are one map <span class="badge b-design">by design</span></h3>
+        <p>
+          A map value is a handle to its table, so every copy of it, a variable, a field, an argument, names the same
+          map, and a key one of them adds is there for all:
+        </p>
+        <pre><code><span class="keyword">flex</span> a = [<span class="string">"x"</span>: 1] <span class="keyword">at</span> r
 <span class="keyword">flex</span> b = a
 b[<span class="string">"y"</span>] = 2
 show(a.len, <span class="string">" "</span>, a == b)                 <span class="comment">; 2 true</span>
 <span class="keyword">flex</span> c = a.copy() <span class="keyword">at</span> r                <span class="comment">; a map of its own</span></code></pre>
-          <p>
-            This is what Go does, and what copying a slice does for its items.
-            Copying every key and value at each assignment would hide a cost
-            that grows with the map; <code>.copy()</code> says when one is
-            wanted, and <code>==</code> says whether two names are the same map.
-          </p>
-        </div>
+        <p>
+          This is what Go does, and what copying a slice does for its items. Copying every key and value at each
+          assignment would hide a cost that grows with the map; <code>.copy()</code> says when one is wanted, and
+          <code>==</code> says whether two names are the same map.
+        </p>
+      </div>
 
-        <div class="entry" id="slice-copies">
-          <h3>
-            A copy of a slice shares its items
-            <span class="badge b-design">by design</span>
-          </h3>
-          <p>
-            A slice is a view of items in a region, a
-            <a href="index.html#whole-twofold-place">twofold</a> value, so a
-            copy of it, a <code>fixed</code> of it, or a parameter given it,
-            sees the same items, and a write through one is seen through all.
-            Nothing is written through a <code>fixed</code> name or a plain
-            parameter, at any depth, but a <code>flex</code> one that shares the
-            items may write them, and the <code>fixed</code> one sees the
-            change:
-          </p>
-          <pre><code><span class="keyword">task</span> change(<span class="keyword">flex</span> xs: [int]@r)
+      <div class="entry" id="slice-copies">
+        <h3>A copy of a slice shares its items <span class="badge b-design">by design</span></h3>
+        <p>
+          A slice is a view of items in a region, a <a href="index.html#whole-twofold-place">twofold</a> value, so a copy
+          of it, a <code>fixed</code> of it, or a parameter given
+          it, sees the same items, and a write through one is seen through all. Nothing is written through a
+          <code>fixed</code> name or a plain parameter, at any depth, but a <code>flex</code> one that shares the
+          items may write them, and the <code>fixed</code> one sees the change:
+        </p>
+        <pre><code><span class="keyword">task</span> change(<span class="keyword">flex</span> xs: [int]@r)
     xs[0] = 99
 <span class="keyword">fi</span>
 
@@ -1190,117 +753,82 @@ show(a.len, <span class="string">" "</span>, a == b)                 <span class
     change(xs)
     show(seen[0])                      <span class="comment">; 99</span>
 <span class="keyword">fi</span></code></pre>
-          <p>
-            For the same reason, keeping a copy in a variable doesn't separate a
-            slice given twice to a call that changes it:
-            <code>flex ys = xs</code> and then
-            <code>f(&amp;xs, &amp;ys)</code> gives two views of the same items.
-            <code>xs.copy() at r</code> makes items of its own. A
-            <code>flex</code> copy that adds or takes out items stays linked or
-            not by where its items happen to be: an <code>add</code> that needs
-            more room copies the items to a block of its own, after which writes
-            are no longer seen, while one that finds room, and a
-            <code>del</code>, keep the two on the same items (see
-            <a href="index.html#slices">Copies and parts</a>), and the compiler
-            warns where a task leans on it (see
-            <a href="#slice-views">below</a>). A <code>bind</code> slice never
-            adds or takes out items, so its copies stay on the same items, and a
-            task taking one as <code>bind</code> goes where a task type says
-            <code>flex</code>.
-          </p>
-          <dl>
-            <dt>Ways it could go</dt>
-            <dd>
-              The given-twice message could suggest
-              <code>.copy() at r</code> when the place is a slice, and two
-              slices coming from the same variable could count as one place.
-            </dd>
-          </dl>
-        </div>
+        <p>
+          For the same reason, keeping a copy in a variable doesn't separate a slice given twice to a call that
+          changes it: <code>flex ys = xs</code> and then <code>f(&amp;xs, &amp;ys)</code> gives two views of the same
+          items. <code>xs.copy() at r</code> makes items of its own. A <code>flex</code> copy that adds or takes out
+          items stays linked or not by where its items happen to be: an <code>add</code> that needs more room copies
+          the items to a block of its own, after which writes are no longer seen, while one that finds room, and a
+          <code>del</code>, keep the two on the same items (see
+          <a href="index.html#slices">Copies and parts</a>), and the compiler warns where a task leans on it (see
+          <a href="#slice-views">below</a>). A <code>bind</code> slice never adds or takes out items,
+          so its copies stay on the same items, and a task taking one as <code>bind</code> goes where a task type says
+          <code>flex</code>.
+        </p>
+        <dl>
+          <dt>Ways it could go</dt>
+          <dd>The given-twice message could suggest <code>.copy() at r</code> when the place is a slice, and two
+            slices coming from the same variable could count as one place.</dd>
+        </dl>
+      </div>
 
-        <div class="entry" id="bind-lambdas">
-          <h3>
-            A <code>[bind @r]</code> lambda changes only what copies share
-            <span class="badge b-checked">checked</span>
-          </h3>
-          <p>
-            A <code>[bind @r]</code> lambda changes only what every copy of it
-            shares: the items of a slice it keeps a copy of, a map, what a
-            pointer points to. Its own copy of anything else, a shape's field or
-            an array's item, it only reads, and the checker refuses a write
-            there, pointing to <code>[flex @r]</code>. So a copy of the lambda
-            changes nothing another copy wouldn't see anyway, and it is copied
-            freely: held in a field, given as a value, bound with
-            <code>fixed</code>. Calling one changes what it shares, so it is
-            called only through a <code>flex</code> or <code>bind</code> name,
-            as a slice's items change only through one, and it never keeps a
-            copy of what a fixed name owns (the author's decision, 2026-11-11;
-            until then it was held as a <code>[flex @r]</code> lambda is).
-          </p>
-          <dl>
-            <dt>What it costs</dt>
-            <dd>
-              A lambda that changes a field of its own copy of a shape is a
-              <code>[flex @r]</code> one, held in one variable and never copied,
-              where it used to be a <code>[bind @r]</code> one.
-            </dd>
-          </dl>
-        </div>
+      <div class="entry" id="bind-lambdas">
+        <h3>A <code>[bind @r]</code> lambda changes only what copies share <span class="badge b-checked">checked</span></h3>
+        <p>
+          A <code>[bind @r]</code> lambda changes only what every copy of it shares: the items of a slice it keeps a
+          copy of, a map, what a pointer points to. Its own copy of anything else, a shape's field or an array's item,
+          it only reads, and the checker refuses a write there, pointing to <code>[flex @r]</code>. So a copy of the
+          lambda changes nothing another copy wouldn't see anyway, and it is copied freely: held in a field, given as a
+          value, bound with <code>fixed</code>. Calling one changes what it shares, so it is called only through a
+          <code>flex</code> or <code>bind</code> name, as a slice's items change only through one, and it never keeps a
+          copy of what a fixed name owns (the author's decision, 2026-11-11; until then it was held as a
+          <code>[flex @r]</code> lambda is).
+        </p>
+        <dl>
+          <dt>What it costs</dt>
+          <dd>A lambda that changes a field of its own copy of a shape is a <code>[flex @r]</code> one, held in one
+            variable and never copied, where it used to be a <code>[bind @r]</code> one.</dd>
+        </dl>
+      </div>
 
-        <div class="entry" id="slice-views">
-          <h3>
-            A view after its slice changes
-            <span class="badge b-design">by design</span>
-            <span class="badge b-warned">warned</span>
-          </h3>
-          <p>
-            A part of a slice, <code>xs[a..b]</code>, is a view of the items
-            where they were when it was taken. After <code>del</code> the items
-            move under it, and it may read one past the slice's new length;
-            after a growth that moves the items, it keeps viewing the old block:
-          </p>
-          <pre><code><span class="keyword">region</span> r
+      <div class="entry" id="slice-views">
+        <h3>A view after its slice changes <span class="badge b-design">by design</span> <span class="badge b-warned">warned</span></h3>
+        <p>
+          A part of a slice, <code>xs[a..b]</code>, is a view of the items where they were when it was taken. After
+          <code>del</code> the items move under it, and it may read one past the slice's new length; after a growth
+          that moves the items, it keeps viewing the old block:
+        </p>
+        <pre><code><span class="keyword">region</span> r
 <span class="keyword">flex</span> xs = <span class="keyword">new</span> [int]([1, 2, 3, 4]) <span class="keyword">at</span> r
 <span class="keyword">fixed</span> v = xs[2..4]
 xs.del(0)
 show(v[0], <span class="string">" "</span>, v[1])                  <span class="comment">; 4 4: the items moved under v</span></code></pre>
-          <p>
-            <code>each v in xs</code> is the same: it goes through the items
-            where they were when it started, as many as there were, so an item
-            deleted during the loop is still read.
-            <code>each v in &amp;xs</code> goes through <code>xs</code> as it is
-            at each pass instead (see <a href="index.html#arrays">Arrays</a>).
-          </p>
-          <p>
-            The compiler warns where a task does this: a copy or part used after
-            a <code>del</code> on the slice it was made of, an item written
-            through either after an <code>add</code>, and an <code>add</code> or
-            <code>del</code> on a <code>flex</code> slice parameter, once in
-            each task for each case (<code>--repeat-warnings</code> shows every
-            place; see <a href="index.html#slice-warnings">Warnings</a>).
-          </p>
-          <dl>
-            <dt>Ways it could go</dt>
-            <dd>
-              The warning follows copies made in one task by a binding or an
-              assignment; it could follow slices in fields, given to calls, or
-              kept by lambdas, and a loop's next pass.
-            </dd>
-          </dl>
-        </div>
+        <p>
+          <code>each v in xs</code> is the same: it goes through the items where they were when it started, as many as
+          there were, so an item deleted during the loop is still read. <code>each v in &amp;xs</code> goes through
+          <code>xs</code> as it is at each pass instead (see <a href="index.html#arrays">Arrays</a>).
+        </p>
+        <p>
+          The compiler warns where a task does this: a copy or part used after a <code>del</code> on the slice it was
+          made of, an item written through either after an <code>add</code>, and an <code>add</code> or
+          <code>del</code> on a <code>flex</code> slice parameter, once in each task for each case
+          (<code>--repeat-warnings</code> shows every place; see <a href="index.html#slice-warnings">Warnings</a>).
+        </p>
+        <dl>
+          <dt>Ways it could go</dt>
+          <dd>The warning follows copies made in one task by a binding or an assignment; it could follow slices in
+            fields, given to calls, or kept by lambdas, and a loop's next pass.</dd>
+        </dl>
+      </div>
 
-        <div class="entry" id="file-copies">
-          <h3>
-            A copy of a File names the same open file
-            <span class="badge b-design">by design</span>
-          </h3>
-          <p>
-            A <code>File</code> is a value, and its open file belongs to the
-            region it was opened in, so a copy names the same open file. Closing
-            one closes it for both, and the other finds out only when a method
-            of its own runs:
-          </p>
-          <pre><code><span class="keyword">include</span> std/files {File, FileMode}
+      <div class="entry" id="file-copies">
+        <h3>A copy of a File names the same open file <span class="badge b-design">by design</span></h3>
+        <p>
+          A <code>File</code> is a value, and its open file belongs to the region it was opened in, so a copy names the
+          same open file. Closing one closes it for both, and the other finds out only when a method of its own
+          runs:
+        </p>
+        <pre><code><span class="keyword">include</span> std/files {File, FileMode}
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r
@@ -1317,375 +845,221 @@ show(v[0], <span class="string">" "</span>, v[1])                  <span class="
     }
     show(b)                            <span class="comment">; fa.txt (open): what b last saw</span>
 <span class="keyword">fi</span></code></pre>
-          <p>
-            Each open file has a number that changes when it closes, so no copy
-            ever reaches a file opened since (see
-            <a href="std.html#file-regions">Regions and copies</a>). Only the
-            <code>state</code> a copy shows is behind.
-          </p>
-        </div>
-
-        <div class="entry" id="threads">
-          <h3>
-            Threads, Concurrency &amp; Data Races
-            <span class="badge b-checked">Handled</span>
-          </h3>
-          <p>
-            Concurrency in Vela is built around share-nothing isolation rather
-            than unlocked shared-memory pointers:
-            <strong>bounded channels</strong> (<a href="channels.html"
-              ><code>Chan[own T]</code></a
-            >), <strong>isolated actors</strong> (<a href="actors.html"
-              ><code>actor</code></a
-            >
-            on an M:N scheduler),
-            <strong>multi-channel <code>select</code></strong
-            >, and <strong>alters-checked events</strong> (<a href="events.html"
-              ><code>event</code></a
-            >). Pointers, references (<code>flex&amp;</code>), and regional
-            values cannot cross threads directly; full details of Vela's 4-layer
-            race defense follow below.
-          </p>
-        </div>
-      </section>
-
-      <section id="data-races">
-        <h2>Data-Race &amp; Alters Safety</h2>
         <p>
-          In systems programming, data races and unexpected mutation cascades
-          cause memory corruption, intermittent deadlocks, and silent state
-          divergence. Vela eliminates them at compile time through four
-          cooperating architectural layers &mdash;
-          <em>"safety through static structure, not defensive runtime locks"</em
-          >.
+          Each open file has a number that changes when it closes, so no copy ever reaches a file opened since (see
+          <a href="std.html#file-regions">Regions and copies</a>). Only the <code>state</code> a copy shows is behind.
         </p>
+      </div>
 
-        <h3>Layer 1: Linear Ownership Transfer (<code>own T</code>)</h3>
+      <div class="entry" id="threads">
+        <h3>Threads, Concurrency &amp; Data Races <span class="badge b-checked">Handled</span></h3>
         <p>
-          In Vela, cross-task communication over
-          <code>Chan[own T]</code> requires transferring ownership (either via
-          <code>dispatch(q, own p)</code> / <code>own p -&gt;&gt; q</code>, or
-          in a <code>select</code> arm):
+          Concurrency in Vela is built around share-nothing isolation rather than unlocked shared-memory pointers:
+          <strong>bounded channels</strong> (<a href="channels.html"><code>Chan[own T]</code></a>), <strong>isolated actors</strong> (<a href="actors.html"><code>actor</code></a> on an M:N scheduler),
+          <strong>multi-channel <code>select</code></strong>, and <strong>alters-checked events</strong> (<a href="events.html"><code>event</code></a>).
+          Pointers, references (<code>flex&amp;</code>), and regional values cannot cross threads directly; full details of Vela's 4-layer race defense follow below.
         </p>
-        <pre><code><span class="keyword">fixed</span> p = Packet { id: 101, payload: data }
+      </div>
+    </section>
+
+    <section id="data-races">
+      <h2>Data-Race &amp; Alters Safety</h2>
+      <p>
+        In systems programming, data races and unexpected mutation cascades cause memory corruption, intermittent deadlocks, and silent state divergence.
+        Vela eliminates them at compile time through four cooperating architectural layers &mdash; <em>"safety through static structure, not defensive runtime locks"</em>.
+      </p>
+
+      <h3>Layer 1: Linear Ownership Transfer (<code>own T</code>)</h3>
+      <p>
+        In Vela, cross-task communication over <code>Chan[own T]</code> requires transferring ownership (either via <code>dispatch(q, own p)</code> / <code>own p -&gt;&gt; q</code>, or in a <code>select</code> arm):
+      </p>
+      <pre><code><span class="keyword">fixed</span> p = Packet { id: 101, payload: data }
 <span class="keyword">own</span> p -&gt;&gt; q
 <span class="comment">; 'p' is now invalidated! Any subsequent read or move of 'p' is a compile-time error.</span></code></pre>
-        <p>
-          Regional memory (<code>text@r</code>, slices, regional shapes) cannot
-          be dispatched across threads because the sender's region could close
-          before the receiver reads it.
-        </p>
+      <p>
+        Regional memory (<code>text@r</code>, slices, regional shapes) cannot be dispatched across threads because the sender's region could close before the receiver reads it.
+      </p>
 
-        <h3>Layer 2: Actor Isolation &amp; The Share-Nothing Model</h3>
-        <p>
-          An <code>actor</code> completely encapsulates its fields &mdash;
-          reading or mutating them from outside is refused at compile time, and
-          the runtime schedules each actor's incoming mailbox sequentially
-          without user-written locks.
-        </p>
+      <h3>Layer 2: Actor Isolation &amp; The Share-Nothing Model</h3>
+      <p>
+        An <code>actor</code> completely encapsulates its fields &mdash; reading or mutating them from outside is refused at compile time, and the runtime schedules each actor's incoming mailbox sequentially without user-written locks.
+      </p>
 
-        <h3>Layer 3: The Alters Contract &amp; Transitive Indirect Alters</h3>
-        <p>
-          Every <code>event</code> that modifies variables or fields must
-          declare an explicit <code>alters(...)</code> contract, including
-          transitive effects across triggered events and call edges:
-        </p>
-        <pre><code><span class="keyword">alters</span>(.shield, .alive) <span class="keyword">event</span> absorb <span class="keyword">on</span> .hp <span class="keyword">when</span> .shield &gt; 0
+      <h3>Layer 3: The Alters Contract &amp; Transitive Indirect Alters</h3>
+      <p>
+        Every <code>event</code> that modifies variables or fields must declare an explicit <code>alters(...)</code> contract, including transitive effects across triggered events and call edges:
+      </p>
+      <pre><code><span class="keyword">alters</span>(.shield, .alive) <span class="keyword">event</span> absorb <span class="keyword">on</span> .hp <span class="keyword">when</span> .shield &gt; 0
     .shield -= 5
 <span class="keyword">fi</span></code></pre>
 
-        <h3>Layer 4: Terminating Guarded Cycle Policy</h3>
+      <h3>Layer 4: Terminating Guarded Cycle Policy</h3>
+      <p>
+        Vela builds the directed trigger and call-edge graph at compile time: <strong>unconditional cycles are rejected immediately</strong>, and cyclic dependencies are accepted only when participating events are guarded by terminating <code>when</code> conditions.
+      </p>
+
+      <h3>Known Concurrency &amp; Mutation Hazards</h3>
+      <div class="hazard-card">
+        <h4><span class="badge b-checked">checked</span> Cross-Task Pointer Escapes</h4>
+        <p>Channel payloads, actor messages, and <code>spawn</code> arguments are restricted to lasting values or moved <code>own</code> data. Regional <code>^T@r</code> pointers and <code>text@r</code> cannot cross thread boundaries (zero-copy <code>own region</code> transfer remains planned for later).</p>
+      </div>
+      <div class="hazard-card">
+        <h4><span class="badge b-design">by design</span> Dynamic Event Attachment (<code>.listen()</code> vs <code>auto</code>)</h4>
+        <p>Non-shared shape events opt in per instance via <code>.listen(...)</code> unless marked <code>auto</code>. The compiler verifies event names passed to <code>.listen()</code> and emits a deterministic bitmask filter.</p>
+      </div>
+      <div class="hazard-card">
+        <h4><span class="badge b-warned">warned</span> Slice Reallocation &amp; Shared Field Mutations</h4>
+        <p>The place-given-once rule prevents direct aliasing races; compiler warnings catch slice growth invalidating local copies/views, and <code>shared flex</code> writes must obey <code>alters</code> rules in event hooks.</p>
+      </div>
+      <div class="hazard-card">
+        <h4><span class="badge b-design">by design</span> Synchronous Hook Re-Entrancy</h4>
+        <p>Event hooks run synchronously on the mutating thread. For heavy I/O or multi-step background work, emit an actor message (<code>Msg(...) -&gt;&gt; actor_handle</code>) instead of blocking inside the hook.</p>
+      </div>
+
+      <h3>Concurrency Best-Practices Checklist</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Pattern</th><th>Recommended Approach</th><th>Anti-Pattern to Avoid</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Concurrent State</strong></td><td>Use <code>actor</code> with private fields and message handlers.</td><td>Global shared mutable state behind ad-hoc locks.</td></tr>
+            <tr><td><strong>Data Handoff</strong></td><td>Transfer ownership with <code>own data -&gt;&gt; chan</code> or <code>dispatch(chan, own data)</code>.</td><td>Trying to pass local regional references across threads.</td></tr>
+            <tr><td><strong>Multiplexing</strong></td><td>Use <code>select ... case ... otherwise ... fi</code> (required non-blocking inside actors).</td><td>Busy-polling multiple channels in tight loops.</td></tr>
+            <tr><td><strong>Reactive Hooks</strong></td><td>Use <code>event on .field</code> with explicit <code>alters(...)</code> and terminating <code>when</code> guards.</td><td>Blocking I/O inside synchronous event handlers or unguarded cyclic triggers.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="running">Concerns: running</h2>
+
+      <div class="entry" id="dropped-errors">
+        <h3>An error kept in a variable that is never read <span class="badge b-open">open</span></h3>
         <p>
-          Vela builds the directed trigger and call-edge graph at compile time:
-          <strong>unconditional cycles are rejected immediately</strong>, and
-          cyclic dependencies are accepted only when participating events are
-          guarded by terminating <code>when</code> conditions.
+          A call written as a statement can't drop the error a <code>T ~ E</code> may hold, and neither can binding it to
+          <code>_</code>. Binding it to a name that is never read does:
         </p>
-
-        <h3>Known Concurrency &amp; Mutation Hazards</h3>
-        <div class="hazard-card">
-          <h4>
-            <span class="badge b-checked">checked</span> Cross-Task Pointer
-            Escapes
-          </h4>
-          <p>
-            Channel payloads, actor messages, and <code>spawn</code> arguments
-            are restricted to lasting values or moved <code>own</code> data.
-            Regional <code>^T@r</code> pointers and <code>text@r</code> cannot
-            cross thread boundaries (zero-copy <code>own region</code> transfer
-            remains planned for later).
-          </p>
-        </div>
-        <div class="hazard-card">
-          <h4>
-            <span class="badge b-design">by design</span> Dynamic Event
-            Attachment (<code>.listen()</code> vs <code>auto</code>)
-          </h4>
-          <p>
-            Non-shared shape events opt in per instance via
-            <code>.listen(...)</code> unless marked <code>auto</code>. The
-            compiler verifies event names passed to <code>.listen()</code> and
-            emits a deterministic bitmask filter.
-          </p>
-        </div>
-        <div class="hazard-card">
-          <h4>
-            <span class="badge b-warned">warned</span> Slice Reallocation &amp;
-            Shared Field Mutations
-          </h4>
-          <p>
-            The place-given-once rule prevents direct aliasing races; compiler
-            warnings catch slice growth invalidating local copies/views, and
-            <code>shared flex</code> writes must obey <code>alters</code> rules
-            in event hooks.
-          </p>
-        </div>
-        <div class="hazard-card">
-          <h4>
-            <span class="badge b-design">by design</span> Synchronous Hook
-            Re-Entrancy
-          </h4>
-          <p>
-            Event hooks run synchronously on the mutating thread. For heavy I/O
-            or multi-step background work, emit an actor message (<code
-              >Msg(...) -&gt;&gt; actor_handle</code
-            >) instead of blocking inside the hook.
-          </p>
-        </div>
-
-        <h3>Concurrency Best-Practices Checklist</h3>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Pattern</th>
-                <th>Recommended Approach</th>
-                <th>Anti-Pattern to Avoid</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td><strong>Concurrent State</strong></td>
-                <td>
-                  Use <code>actor</code> with private fields and message
-                  handlers.
-                </td>
-                <td>Global shared mutable state behind ad-hoc locks.</td>
-              </tr>
-              <tr>
-                <td><strong>Data Handoff</strong></td>
-                <td>
-                  Transfer ownership with
-                  <code>own data -&gt;&gt; chan</code> or
-                  <code>dispatch(chan, own data)</code>.
-                </td>
-                <td>
-                  Trying to pass local regional references across threads.
-                </td>
-              </tr>
-              <tr>
-                <td><strong>Multiplexing</strong></td>
-                <td>
-                  Use
-                  <code>select ... case ... otherwise ... fi</code> (required
-                  non-blocking inside actors).
-                </td>
-                <td>Busy-polling multiple channels in tight loops.</td>
-              </tr>
-              <tr>
-                <td><strong>Reactive Hooks</strong></td>
-                <td>
-                  Use <code>event on .field</code> with explicit
-                  <code>alters(...)</code> and terminating
-                  <code>when</code> guards.
-                </td>
-                <td>
-                  Blocking I/O inside synchronous event handlers or unguarded
-                  cyclic triggers.
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section>
-        <h2 id="running">Concerns: running</h2>
-
-        <div class="entry" id="dropped-errors">
-          <h3>
-            An error kept in a variable that is never read
-            <span class="badge b-open">open</span>
-          </h3>
-          <p>
-            A call written as a statement can't drop the error a
-            <code>T ~ E</code> may hold, and neither can binding it to
-            <code>_</code>. Binding it to a name that is never read does:
-          </p>
-          <pre><code><span class="keyword">task</span> main()
+        <pre><code><span class="keyword">task</span> main()
     <span class="keyword">fixed</span> x = int(<span class="string">"oops"</span>)
     show(<span class="string">"went on"</span>)                    <span class="comment">; went on: nothing read the ParseError</span>
 <span class="keyword">fi</span></code></pre>
-          <p>
-            So does a <code>flex</code> given a new value before the old one was
-            read, and one of several results bound by name,
-            <code>fixed a, b = int("7"), int("x")</code>.
-          </p>
-          <dl>
-            <dt>Why it is hard</dt>
-            <dd>
-              Telling that a value is never read needs to follow every path
-              through the block: a <code>match</code>, an <code>is</code>, or a
-              plan B on any of them reads it.
-            </dd>
-            <dt>Ways it could go</dt>
-            <dd>
-              An error for a <code>T ~ E</code> variable that no path reads
-              before it ends or is replaced. Or a warning for every variable
-              never read, which would catch this and more.
-            </dd>
-          </dl>
-        </div>
+        <p>
+          So does a <code>flex</code> given a new value before the old one was read, and one of several results bound
+          by name, <code>fixed a, b = int("7"), int("x")</code>.
+        </p>
+        <dl>
+          <dt>Why it is hard</dt>
+          <dd>Telling that a value is never read needs to follow every path through the block: a <code>match</code>,
+            an <code>is</code>, or a plan B on any of them reads it.</dd>
+          <dt>Ways it could go</dt>
+          <dd>An error for a <code>T ~ E</code> variable that no path reads before it ends or is replaced. Or a
+            warning for every variable never read, which would catch this and more.</dd>
+        </dl>
+      </div>
 
-        <div class="entry" id="stack">
-          <h3>Running out of stack <span class="badge b-open">open</span></h3>
-          <p>
-            A task that calls itself without end, or an array too large for the
-            stack, stops the program with the system's own crash and no
-            <code>vela:</code> message:
-          </p>
-          <pre><code><span class="keyword">task</span> f(n: int) -&gt; int
+      <div class="entry" id="stack">
+        <h3>Running out of stack <span class="badge b-open">open</span></h3>
+        <p>
+          A task that calls itself without end, or an array too large for the stack, stops the program with the
+          system's own crash and no <code>vela:</code> message:
+        </p>
+        <pre><code><span class="keyword">task</span> f(n: int) -&gt; int
     &lt;- f(n + 1) + 1
 <span class="keyword">fi</span>
 
 <span class="keyword">task</span> main()
     show(f(0))                         <span class="comment">; Segmentation fault, exit 139</span>
 <span class="keyword">fi</span></code></pre>
-          <p>
-            An array held by value lives on the C stack, so
-            <code>flex big = [1#20000000]</code> crashes the same way, as does a
-            <code>new</code> of a very large array, whose value is made on the
-            stack before it is copied.
-          </p>
-          <dl>
-            <dt>Why it is hard</dt>
-            <dd>
-              How deep a program calls is known only when it runs, and the
-              stack's size is the system's. The checker allows an array of up to
-              1 TiB.
-            </dd>
-            <dt>Ways it could go</dt>
-            <dd>
-              A limit on the size of an array held by value, pointing to a slice
-              for more. <code>new</code> filling the array where it goes, rather
-              than copying one made on the stack. A handler for the crash that
-              prints <code>vela: out of stack</code>. A count of the call depth
-              in a build for finding mistakes.
-            </dd>
-          </dl>
-        </div>
+        <p>
+          An array held by value lives on the C stack, so <code>flex big = [1#20000000]</code> crashes the same way,
+          as does a <code>new</code> of a very large array, whose value is made on the stack before it is copied.
+        </p>
+        <dl>
+          <dt>Why it is hard</dt>
+          <dd>How deep a program calls is known only when it runs, and the stack's size is the system's. The checker
+            allows an array of up to 1 TiB.</dd>
+          <dt>Ways it could go</dt>
+          <dd>A limit on the size of an array held by value, pointing to a slice for more. <code>new</code> filling
+            the array where it goes, rather than copying one made on the stack. A handler for the crash that prints
+            <code>vela: out of stack</code>. A count of the call depth in a build for finding mistakes.</dd>
+        </dl>
+      </div>
 
-        <div class="entry" id="temporaries">
-          <h3>
-            A value made for one line lasts as long as its region
-            <span class="badge b-open">open</span>
-          </h3>
-          <p>
-            A region frees its memory all at once, when it ends. A value made in
-            it only to be shown or passed, and never kept, holds its memory
-            until then too:
-          </p>
-          <pre><code><span class="keyword">task</span> main()
+      <div class="entry" id="temporaries">
+        <h3>A value made for one line lasts as long as its region <span class="badge b-open">open</span></h3>
+        <p>
+          A region frees its memory all at once, when it ends. A value made in it only to be shown or passed, and
+          never kept, holds its memory until then too:
+        </p>
+        <pre><code><span class="keyword">task</span> main()
     <span class="keyword">region</span> r
     <span class="keyword">each</span> i <span class="keyword">in</span> 0..1000000
         show([i, i + 1, ...] <span class="keyword">at</span> r)       <span class="comment">; a million slices in r, freed when main ends</span>
     <span class="keyword">fi</span>
 <span class="keyword">fi</span></code></pre>
-          <p>
-            Nothing is read after it is freed, so this is memory held longer
-            than needed, never memory misused. A region made inside the loop
-            (<code>region pass default</code>) frees each pass's values as it
-            ends, which is how to write this today.
-          </p>
-          <dl>
-            <dt>Why it is hard</dt>
-            <dd>
-              An arena frees everything it holds at once, not one value. And a
-              value given to a task that takes <code>[int]@r</code> may be kept
-              by the task in something else in <code>r</code>, so only the
-              compiler's own uses (<code>show</code>, a comparison) are known to
-              keep nothing.
-            </dd>
-            <dt>Ways it could go</dt>
-            <dd>
-              A value only shown or compared going in a hidden region freed when
-              its line ends, as the text <code>show</code> builds for a value's
-              own <code>str</code> already does. Giving the space back when the
-              value is the last thing the region made, by moving the arena's end
-              back. A warning for a value made in a loop into a region the loop
-              doesn't declare.
-            </dd>
-          </dl>
-        </div>
+        <p>
+          Nothing is read after it is freed, so this is memory held longer than needed, never memory misused. A
+          region made inside the loop (<code>region pass default</code>) frees each pass's values as it ends, which
+          is how to write this today.
+        </p>
+        <dl>
+          <dt>Why it is hard</dt>
+          <dd>An arena frees everything it holds at once, not one value. And a value given to a task that takes
+            <code>[int]@r</code> may be kept by the task in something else in <code>r</code>, so only the compiler's
+            own uses (<code>show</code>, a comparison) are known to keep nothing.</dd>
+          <dt>Ways it could go</dt>
+          <dd>A value only shown or compared going in a hidden region freed when its line ends, as the text
+            <code>show</code> builds for a value's own <code>str</code> already does. Giving the space back when the
+            value is the last thing the region made, by moving the arena's end back. A warning for a value made in a
+            loop into a region the loop doesn't declare.</dd>
+        </dl>
+      </div>
 
-        <div class="entry" id="which-trap">
-          <h3>
-            Which of two stops comes first
-            <span class="badge b-design">by design</span>
-          </h3>
-          <p>
-            Calls, plan Bs, slice changes, and reading input run left to right,
-            but plain operators don't promise an order, so when two parts of one
-            expression would each stop the program, which one stops it isn't
-            defined:
-          </p>
-          <pre><code><span class="keyword">flex</span> xs = [1, 2]
+      <div class="entry" id="which-trap">
+        <h3>Which of two stops comes first <span class="badge b-design">by design</span></h3>
+        <p>
+          Calls, plan Bs, slice changes, and reading input run left to right, but plain operators don't promise an
+          order, so when two parts of one expression would each stop the program, which one stops it isn't
+          defined:
+        </p>
+        <pre><code><span class="keyword">flex</span> xs = [1, 2]
 <span class="keyword">flex</span> i = 5
 <span class="keyword">flex</span> n = 9223372036854775807
 show(xs[i] + (n + 1))                  <span class="comment">; vela: integer overflow at 5:21 in task 'main', not the index</span></code></pre>
-          <p>
-            Either way the program stops, with a message saying where. Ordering
-            every part that may stop the program would take the C compiler's
-            freedom to arrange arithmetic (see
-            <a href="index.html#limits">Current Limits</a>).
-          </p>
-        </div>
-
-        <div class="entry" id="nan">
-          <h3>
-            nan compares with nothing
-            <span class="badge b-design">by design</span>
-          </h3>
-          <p>
-            A <code>float</code> that is <code>nan</code> (as
-            <code>0.0 / 0.0</code> gives) is neither equal, similar, smaller,
-            nor larger than anything, itself included, as in C and every
-            language following IEEE 754:
-          </p>
-          <pre><code><span class="keyword">fixed</span> nan = 0.0 / 0.0
-show(nan == nan, <span class="string">" "</span>, nan ~= nan, <span class="string">" "</span>, nan &lt; 1.0, <span class="string">" "</span>, nan &gt;= 1.0)   <span class="comment">; false false false false</span></code></pre>
-          <p>
-            So <code>~=</code> isn't always true of a value and itself, and the
-            largest of a list holding <code>nan</code> depends on its order.
-            <code>int(nan)</code> stops the program.
-          </p>
-        </div>
-      </section>
-
-      <section>
-        <h2 id="how">Adding to this page</h2>
         <p>
-          An entry shows the smallest program that has the concern, says what
-          happens today, and, for an open one, why neither the compiler nor the
-          running program catches it and ways it could. When a concern comes to
-          be checked, it moves to the table above, marked for when it is caught,
-          with a link to where the guide explains the rule.
+          Either way the program stops, with a message saying where. Ordering every part that may stop the program
+          would take the C compiler's freedom to arrange arithmetic (see <a href="index.html#limits">Current Limits</a>).
         </p>
-      </section>
-    </main>
+      </div>
 
-    <footer>
-      <p>Vela — safe where it can check, and clear about where it can't yet.</p>
-    </footer>
-  </body>
+      <div class="entry" id="nan">
+        <h3>nan compares with nothing <span class="badge b-design">by design</span></h3>
+        <p>
+          A <code>float</code> that is <code>nan</code> (as <code>0.0 / 0.0</code> gives) is neither equal, similar,
+          smaller, nor larger than anything, itself included, as in C and every language following IEEE 754:
+        </p>
+        <pre><code><span class="keyword">fixed</span> nan = 0.0 / 0.0
+show(nan == nan, <span class="string">" "</span>, nan ~= nan, <span class="string">" "</span>, nan &lt; 1.0, <span class="string">" "</span>, nan &gt;= 1.0)   <span class="comment">; false false false false</span></code></pre>
+        <p>
+          So <code>~=</code> isn't always true of a value and itself, and the largest of a list holding <code>nan</code>
+          depends on its order. <code>int(nan)</code> stops the program.
+        </p>
+      </div>
+    </section>
+
+    <section>
+      <h2 id="how">Adding to this page</h2>
+      <p>
+        An entry shows the smallest program that has the concern, says what happens today, and, for an open one,
+        why neither the compiler nor the running program catches it and ways it could. When a concern comes to be
+        checked, it moves to the table above, marked for when it is caught, with a link to where the guide explains
+        the rule.
+      </p>
+    </section>
+  </main>
+
+  <footer>
+    <p>Vela — safe where it can check, and clear about where it can't yet.</p>
+  </footer>
+</body>
 </html>
