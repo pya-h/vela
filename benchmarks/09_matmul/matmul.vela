@@ -1,0 +1,39 @@
+; Dense matrix multiplication (N=1000, 1 billion inner operations).
+; Tests CPU L1/L2/L3 cache misses, memory bandwidth, strided access, and loop vectorization.
+
+task matmul(n: int) -> int
+    region r
+    fixed size = n * n
+    flex a = new [float]([0.0 # size]) at r
+    flex b = new [float]([0.0 # size]) at r
+    flex c = new [float]([0.0 # size]) at r
+
+    each i in 0..n
+        fixed in_offset = i * n
+        each j in 0..n
+            a[in_offset + j] = float((i * 3 + j) % 100) / 10.0
+            b[in_offset + j] = float((i + j * 7) % 100) / 10.0
+        fi
+    fi
+
+    each i in 0..n
+        fixed in_offset = i * n
+        each k in 0..n
+            fixed a_val = a[in_offset + k]
+            fixed kn_offset = k * n
+            each j in 0..n
+                c[in_offset + j] += a_val * b[kn_offset + j]
+            fi
+        fi
+    fi
+
+    flex trace = 0.0
+    each i in 0..n
+        trace += c[i * n + i]
+    fi
+    <- int(trace)
+fi
+
+task main()
+    show(matmul(1000))
+fi

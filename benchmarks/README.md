@@ -1,6 +1,6 @@
 # Vela Performance & Comparison Benchmarks
 
-This directory contains 7 canonical & real-world benchmark tasks comparing **Vela** against **C**, **Rust**, **Go**, and **Zig**.
+This directory contains 9 canonical & real-world benchmark tasks comparing **Vela** against **C**, **Rust**, **Go**, and **Zig**.
 
 ## Benchmark Tasks
 
@@ -25,6 +25,12 @@ This directory contains 7 canonical & real-world benchmark tasks comparing **Vel
 7. **`07_web_server` (Concurrent HTTP Web Server)**
    * Minimal concurrent HTTP/1.1 servers (`/health` and `/json`) backed by 4 worker threads, benchmarked by a native C multi-threaded load generator (`benchmarks/tools/http_load.c`).
    * Compares Vela's `std/web` concurrent server stack against Go's `net/http` and multi-threaded Rust, C, and Zig TCP HTTP servers across throughput (req/s), P95 latency, and Peak RSS under load.
+8. **`08_nbody` (Vector Math & Symplectic Integration)**
+   * Symplectic numerical integration of 5 celestial bodies (Sun, Jupiter, Saturn, Uranus, Neptune) over 5,000,000 time steps.
+   * Tests pure double-precision floating-point throughput, vector arithmetic, AoS memory layout, and compiler math optimizations without heap allocation.
+9. **`09_matmul` (Memory Bandwidth & Cache Locality)**
+   * Dense double-precision matrix multiplication $N=1000$ (1,000,000,000 inner operations) with cache-friendly $i, k, j$ traversal.
+   * Tests L1/L2/L3 cache misses, contiguous stride memory bandwidth, and auto-vectorization across 24 MB of matrix buffers.
 
 ## Methodology
 
@@ -36,17 +42,19 @@ This directory contains 7 canonical & real-world benchmark tasks comparing **Vel
 ## How to Run
 
 ```bash
-# Run all 7 benchmarks across all 5 languages (default: 7 timed runs, 2 warmups)
+# Run all 9 benchmarks across all 5 languages (default: 7 timed runs, 2 warmups)
 ./benchmarks/run.sh
 
 # Run a specific benchmark
+./benchmarks/run.sh --filter nbody
+./benchmarks/run.sh --filter matmul
 ./benchmarks/run.sh --filter web
 
 # Clean build cache and run with custom iterations
-./benchmarks/run.sh --clean --runs 10 --warmup 3
+./benchmarks/run.sh --clean --runs 7 --warmup 2
 ```
 
 ## Generated Reports
 
 - **Markdown Summary**: [`benchmarks/RESULTS.md`](./RESULTS.md)
-- **Interactive Web App Dashboard**: Open [`benchmarks/RESULTS.html`](./RESULTS.html) in your browser for interactive charts, radar profile comparisons, metric switchers, and full metric tables.
+- **Interactive Web App Dashboard**: Open [`benchmarks/RESULTS.html`](./RESULTS.html) in your browser for interactive charts, 8-axis radar profile comparisons, metric switchers, full metric tables, and live core algorithm code previews with language tabs (`[GO]`, `[VELA]`, `[RUST]`, `[ZIG]`, `[C]`).

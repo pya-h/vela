@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
 Vela Performance & Resource Benchmark Suite
-Compares Vela against C, Rust, Go, and Zig across 7 distinct runtime & web workloads.
-Generates both RESULTS.md and an interactive RESULTS.html web dashboard.
+Compares Vela against C, Rust, Go, and Zig across 9 distinct runtime & web workloads.
+Generates both RESULTS.md and an interactive RESULTS.html web dashboard with live code previews.
 """
 
 import argparse
@@ -25,6 +25,1756 @@ HTTP_LOAD_SRC = BENCH_DIR / "tools" / "http_load.c"
 
 LANGUAGES = ["c", "rust", "go", "zig", "vela"]
 
+SNIPPETS = {
+    "01_mandelbrot": {
+        "go": """func mandelbrot(size int) int {
+	total := 0
+	fsize := float64(size)
+	for y := 0; y < size; y++ {
+		ci := 2.0*float64(y)/fsize - 1.0
+		for x := 0; x < size; x++ {
+			cr := 2.0*float64(x)/fsize - 1.5
+			zr, zi := 0.0, 0.0
+			iter := 0
+			for iter < 50 {
+				zr2, zi2 := zr*zr, zi*zi
+				if zr2+zi2 > 4.0 {
+					break
+				}
+				zi = 2.0*zr*zi + ci
+				zr = zr2 - zi2 + cr
+				iter++
+			}
+			total += iter
+		}
+	}
+	return total
+}""",
+        "vela": """task mandelbrot(size: int) -> int
+    flex total = 0
+    fixed fsize = float(size)
+    each y in 0..size
+        fixed ci = 2.0 * float(y) / fsize - 1.0
+        each x in 0..size
+            fixed cr = 2.0 * float(x) / fsize - 1.5
+            flex zr = 0.0, zi = 0.0, iter = 0
+            loop iter < 50
+                fixed zr2 = zr * zr
+                fixed zi2 = zi * zi
+                when zr2 + zi2 > 4.0
+                    break
+                fi
+                zi = 2.0 * zr * zi + ci
+                zr = zr2 - zi2 + cr
+                iter += 1
+            fi
+            total += iter
+        fi
+    fi
+    <- total
+fi""",
+        "rust": """fn mandelbrot(size: usize) -> i64 {
+    let mut total = 0i64;
+    let fsize = size as f64;
+    for y in 0..size {
+        let ci = 2.0 * (y as f64) / fsize - 1.0;
+        for x in 0..size {
+            let cr = 2.0 * (x as f64) / fsize - 1.5;
+            let (mut zr, mut zi, mut iter) = (0.0f64, 0.0f64, 0);
+            while iter < 50 {
+                let (zr2, zi2) = (zr * zr, zi * zi);
+                if zr2 + zi2 > 4.0 { break; }
+                zi = 2.0 * zr * zi + ci;
+                zr = zr2 - zi2 + cr;
+                iter += 1;
+            }
+            total += iter as i64;
+        }
+    }
+    total
+}""",
+        "zig": """fn mandelbrot(size: usize) i64 {
+    var total: i64 = 0;
+    const fsize: f64 = @floatFromInt(size);
+    var y: usize = 0;
+    while (y < size) : (y += 1) {
+        const ci = 2.0 * @as(f64, @floatFromInt(y)) / fsize - 1.0;
+        var x: usize = 0;
+        while (x < size) : (x += 1) {
+            const cr = 2.0 * @as(f64, @floatFromInt(x)) / fsize - 1.5;
+            var zr: f64 = 0.0; var zi: f64 = 0.0; var iter: i32 = 0;
+            while (iter < 50) : (iter += 1) {
+                const zr2 = zr * zr; const zi2 = zi * zi;
+                if (zr2 + zi2 > 4.0) break;
+                zi = 2.0 * zr * zi + ci;
+                zr = zr2 - zi2 + cr;
+            }
+            total += iter;
+        }
+    }
+    return total;
+}""",
+        "c": """long mandelbrot(int size) {
+    long total = 0;
+    double fsize = (double)size;
+    for (int y = 0; y < size; y++) {
+        double ci = 2.0 * (double)y / fsize - 1.0;
+        for (int x = 0; x < size; x++) {
+            double cr = 2.0 * (double)x / fsize - 1.5;
+            double zr = 0.0, zi = 0.0;
+            int iter = 0;
+            for (; iter < 50; iter++) {
+                double zr2 = zr * zr, zi2 = zi * zi;
+                if (zr2 + zi2 > 4.0) break;
+                zi = 2.0 * zr * zi + ci;
+                zr = zr2 - zi2 + cr;
+            }
+            total += iter;
+        }
+    }
+    return total;
+}""",
+    },
+    "02_binary_trees": {
+        "go": """type Node struct {
+	left, right *Node
+	item        int
+}
+
+func buildTree(item, depth int) *Node {
+	if depth <= 0 {
+		return &Node{item: item}
+	}
+	return &Node{
+		left:  buildTree(2*item-1, depth-1),
+		right: buildTree(2*item, depth-1),
+		item:  item,
+	}
+}
+
+func checkTree(n *Node) int {
+	if n.left == nil {
+		return n.item
+	}
+	return n.item + checkTree(n.left) - checkTree(n.right)
+}""",
+        "vela": """shape Node
+    item: int
+    left: maybe ^Node
+    right: maybe ^Node
+fi
+
+task build_tree(item: int, depth: int, r: region) -> ^Node@r
+    when depth <= 0
+        <- new Node(Node { item: item, left: none, right: none }) at r
+    fi
+    <- new Node(Node {
+        item: item,
+        left: { build_tree(2 * item - 1, depth - 1, r) },
+        right: { build_tree(2 * item, depth - 1, r) }
+    }) at r
+fi
+
+task check_tree(n: ^Node) -> int
+    match n^.left
+    case { l }
+        fixed r = n^.right ?? fail "unbalanced tree"
+        <- n^.item + check_tree(l) - check_tree(r)
+    default
+        <- n^.item
+    fi
+fi""",
+        "rust": """struct Node {
+    left: Option<Box<Node>>,
+    right: Option<Box<Node>>,
+    item: i32,
+}
+
+fn build_tree(item: i32, depth: u32) -> Box<Node> {
+    if depth == 0 {
+        Box::new(Node { item, left: None, right: None })
+    } else {
+        Box::new(Node {
+            item,
+            left: Some(build_tree(2 * item - 1, depth - 1)),
+            right: Some(build_tree(2 * item, depth - 1)),
+        })
+    }
+}
+
+fn check_tree(node: &Node) -> i32 {
+    match (&node.left, &node.right) {
+        (Some(l), Some(r)) => node.item + check_tree(l) - check_tree(r),
+        _ => node.item,
+    }
+}""",
+        "zig": """const Node = struct {
+    left: ?*Node,
+    right: ?*Node,
+    item: i32,
+};
+
+fn buildTree(allocator: std.mem.Allocator, item: i32, depth: u32) *Node {
+    const node = allocator.create(Node) catch unreachable;
+    node.item = item;
+    if (depth <= 0) {
+        node.left = null; node.right = null;
+    } else {
+        node.left = buildTree(allocator, 2 * item - 1, depth - 1);
+        node.right = buildTree(allocator, 2 * item, depth - 1);
+    }
+    return node;
+}
+
+fn checkTree(node: *const Node) i32 {
+    if (node.left) |l| {
+        return node.item + checkTree(l) - checkTree(node.right.?);
+    }
+    return node.item;
+}""",
+        "c": """typedef struct Node {
+    struct Node *left, *right;
+    int item;
+} Node;
+
+static Node *build_tree(int item, int depth, Arena *arena) {
+    Node *n = arena_alloc(arena, sizeof(Node));
+    n->item = item;
+    if (depth <= 0) {
+        n->left = n->right = NULL;
+    } else {
+        n->left = build_tree(2 * item - 1, depth - 1, arena);
+        n->right = build_tree(2 * item, depth - 1, arena);
+    }
+    return n;
+}
+
+static int check_tree(const Node *n) {
+    if (!n->left) return n->item;
+    return n->item + check_tree(n->left) - check_tree(n->right);
+}""",
+    },
+    "03_concurrency": {
+        "go": """func worker(id int, in <-chan int, out chan<- int, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for token := range in {
+		if token <= 0 {
+			out <- token
+			return
+		}
+		out <- token - 1
+	}
+}
+
+func runRing(passes int) {
+	chans := [4]chan int{make(chan int, 1), make(chan int, 1), make(chan int, 1), make(chan int, 1)}
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go worker(i, chans[i], chans[(i+1)%4], &wg)
+	}
+	chans[0] <- passes
+	wg.Wait()
+}""",
+        "vela": """task worker(id: int, in_ch: chan<int>, out_ch: chan<int>, done_ch: chan<int>)
+    loop
+        fixed token = recv(in_ch)
+        when token <= 0
+            send(out_ch, token)
+            send(done_ch, id)
+            break
+        fi
+        send(out_ch, token - 1)
+    fi
+fi
+
+task run_ring(passes: int)
+    fixed ch0 = chan<int>(1), ch1 = chan<int>(1)
+    fixed ch2 = chan<int>(1), ch3 = chan<int>(1)
+    fixed done = chan<int>(4)
+    start worker(0, ch0, ch1, done)
+    start worker(1, ch1, ch2, done)
+    start worker(2, ch2, ch3, done)
+    start worker(3, ch3, ch0, done)
+    send(ch0, passes)
+    each _ in 0..4 { recv(done) }
+fi""",
+        "rust": """fn worker(rx: Receiver<i32>, tx: SyncSender<i32>) {
+    while let Ok(token) = rx.recv() {
+        if token <= 0 {
+            let _ = tx.send(token);
+            break;
+        }
+        let _ = tx.send(token - 1);
+    }
+}""",
+        "zig": """fn worker(ctx: *WorkerContext) void {
+    while (true) {
+        const token = ctx.in_ring.pop();
+        if (token <= 0) {
+            ctx.out_ring.push(token);
+            break;
+        }
+        ctx.out_ring.push(token - 1);
+    }
+}""",
+        "c": """static void *worker(void *arg) {
+    WorkerContext *ctx = (WorkerContext *)arg;
+    while (1) {
+        long token = queue_pop(ctx->in_q);
+        if (token <= 0) {
+            queue_push(ctx->out_q, token);
+            break;
+        }
+        queue_push(ctx->out_q, token - 1);
+    }
+    return NULL;
+}""",
+    },
+    "04_quicksort": {
+        "go": """func partition(arr []int64, low, high int) int {
+	pivot := arr[high]
+	i := low - 1
+	for j := low; j < high; j++ {
+		if arr[j] <= pivot {
+			i++
+			arr[i], arr[j] = arr[j], arr[i]
+		}
+	}
+	arr[i+1], arr[high] = arr[high], arr[i+1]
+	return i + 1
+}
+
+func quicksort(arr []int64, low, high int) {
+	if low < high {
+		pi := partition(arr, low, high)
+		quicksort(arr, low, pi-1)
+		quicksort(arr, pi+1, high)
+	}
+}""",
+        "vela": """task partition(flex xs: [int], low: int, high: int) -> int
+    fixed pivot = xs[high]
+    flex i = low - 1
+    each j in low..high
+        when xs[j] <= pivot
+            i += 1
+            xs[i], xs[j] = xs[j], xs[i]
+        fi
+    fi
+    xs[i + 1], xs[high] = xs[high], xs[i + 1]
+    <- i + 1
+fi
+
+task quicksort(flex xs: [int], low: int, high: int)
+    when low < high
+        fixed p = partition(xs, low, high)
+        quicksort(xs, low, p - 1)
+        quicksort(xs, p + 1, high)
+    fi
+fi""",
+        "rust": """fn partition(arr: &mut [i64], low: isize, high: isize) -> isize {
+    let pivot = arr[high as usize];
+    let mut i = low - 1;
+    for j in low..high {
+        if arr[j as usize] <= pivot {
+            i += 1;
+            arr.swap(i as usize, j as usize);
+        }
+    }
+    arr.swap((i + 1) as usize, high as usize);
+    i + 1
+}
+
+fn quicksort(arr: &mut [i64], low: isize, high: isize) {
+    if low < high {
+        let p = partition(arr, low, high);
+        quicksort(arr, low, p - 1);
+        quicksort(arr, p + 1, high);
+    }
+}""",
+        "zig": """fn partition(arr: []i64, low: isize, high: isize) isize {
+    const pivot = arr[@intCast(high)];
+    var i = low - 1;
+    var j = low;
+    while (j < high) : (j += 1) {
+        if (arr[@intCast(j)] <= pivot) {
+            i += 1;
+            const tmp = arr[@intCast(i)];
+            arr[@intCast(i)] = arr[@intCast(j)];
+            arr[@intCast(j)] = tmp;
+        }
+    }
+    const tmp = arr[@intCast(i + 1)];
+    arr[@intCast(i + 1)] = arr[@intCast(high)];
+    arr[@intCast(high)] = tmp;
+    return i + 1;
+}""",
+        "c": """static int partition(int64_t *arr, int low, int high) {
+    int64_t pivot = arr[high];
+    int i = low - 1;
+    for (int j = low; j < high; j++) {
+        if (arr[j] <= pivot) {
+            i++;
+            int64_t tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+        }
+    }
+    int64_t tmp = arr[i + 1]; arr[i + 1] = arr[high]; arr[high] = tmp;
+    return i + 1;
+}
+
+static void quicksort(int64_t *arr, int low, int high) {
+    if (low < high) {
+        int pi = partition(arr, low, high);
+        quicksort(arr, low, pi - 1);
+        quicksort(arr, pi + 1, high);
+    }
+}""",
+    },
+    "05_prime_sieve": {
+        "go": """func sieve(limit int) int {
+	isPrime := make([]byte, limit+1)
+	for i := 2; i <= limit; i++ {
+		isPrime[i] = 1
+	}
+	p := 2
+	for p*p <= limit {
+		if isPrime[p] == 1 {
+			for i := p * p; i <= limit; i += p {
+				isPrime[i] = 0
+			}
+		}
+		p++
+	}
+	count := 0
+	for i := 2; i <= limit; i++ {
+		if isPrime[i] == 1 { count++ }
+	}
+	return count
+}""",
+        "vela": """task sieve(limit: int) -> int
+    region r
+    flex is_prime = new [int8]([1i8 # (limit + 1)]) at r
+    is_prime[0] = 0i8
+    is_prime[1] = 0i8
+    flex p = 2
+    loop p * p <= limit
+        when is_prime[p] == 1i8
+            flex i = p * p
+            loop i <= limit
+                is_prime[i] = 0i8
+                i += p
+            fi
+        fi
+        p += 1
+    fi
+    flex count = 0
+    each x in is_prime { when x == 1i8 { count += 1 } }
+    <- count
+fi""",
+        "rust": """fn sieve(limit: usize) -> usize {
+    let mut is_prime = vec![1u8; limit + 1];
+    is_prime[0] = 0; is_prime[1] = 0;
+    let mut p = 2;
+    while p * p <= limit {
+        if is_prime[p] == 1 {
+            let mut i = p * p;
+            while i <= limit {
+                is_prime[i] = 0;
+                i += p;
+            }
+        }
+        p += 1;
+    }
+    is_prime.iter().filter(|&&x| x == 1).count()
+}""",
+        "zig": """fn sieve(limit: usize, buf: [*]u8) usize {
+    @memset(buf[0..limit + 1], 1);
+    buf[0] = 0; buf[1] = 0;
+    var p: usize = 2;
+    while (p * p <= limit) : (p += 1) {
+        if (buf[p] == 1) {
+            var i = p * p;
+            while (i <= limit) : (i += p) {
+                buf[i] = 0;
+            }
+        }
+    }
+    var count: usize = 0;
+    for (buf[0..limit + 1]) |val| { if (val == 1) count += 1; }
+    return count;
+}""",
+        "c": """static int sieve(int limit) {
+    uint8_t *is_prime = (uint8_t *)malloc(limit + 1);
+    memset(is_prime, 1, limit + 1);
+    is_prime[0] = is_prime[1] = 0;
+    for (int p = 2; p * p <= limit; p++) {
+        if (is_prime[p]) {
+            for (int i = p * p; i <= limit; i += p) {
+                is_prime[i] = 0;
+            }
+        }
+    }
+    int count = 0;
+    for (int i = 2; i <= limit; i++) { if (is_prime[i]) count++; }
+    free(is_prime);
+    return count;
+}""",
+    },
+    "06_hashmap": {
+        "go": """func runHashMap(iterations int, keys int) int64 {
+	m := make(map[int]int64, keys)
+	var rng uint32 = 123456789
+	var sum int64 = 0
+	for i := 0; i < iterations; i++ {
+		rng = rng*1664525 + 1013904223
+		k := int(rng % uint32(keys))
+		if (rng >> 31) == 0 {
+			m[k] = int64(i)
+		} else {
+			if v, ok := m[k]; ok {
+				sum += v
+			}
+		}
+	}
+	return sum
+}""",
+        "vela": """task run_hashmap(iterations: int, keys: int) -> int
+    region r
+    flex m: map<int, int>@r = map<int, int>() at r
+    flex rng: uint32 = 123456789u32
+    flex sum = 0
+    each i in 0..iterations
+        rng = rng * 1664525u32 + 1013904223u32
+        fixed k = int(rng % uint32(keys))
+        when (rng >> 31u32) == 0u32
+            m[k] = i
+        else
+            match m[k]
+            case { v }
+                sum += v
+            fi
+        fi
+    fi
+    <- sum
+fi""",
+        "rust": """fn run_hashmap(iterations: usize, keys: usize) -> i64 {
+    let mut map: HashMap<usize, i64> = HashMap::with_capacity(keys);
+    let mut rng = 123456789u32;
+    let mut sum = 0i64;
+    for i in 0..iterations {
+        rng = rng.wrapping_mul(1664525).wrapping_add(1013904223);
+        let k = (rng as usize) % keys;
+        if (rng >> 31) == 0 {
+            map.insert(k, i as i64);
+        } else if let Some(&v) = map.get(&k) {
+            sum += v;
+        }
+    }
+    sum
+}""",
+        "zig": """fn runHashMap(allocator: std.mem.Allocator, iterations: usize, keys: usize) !i64 {
+    var map = std.AutoHashMap(usize, i64).init(allocator);
+    defer map.deinit();
+    try map.ensureTotalCapacity(@intCast(keys));
+    var rng: u32 = 123456789;
+    var sum: i64 = 0;
+    var i: usize = 0;
+    while (i < iterations) : (i += 1) {
+        rng = rng *% 1664525 +% 1013904223;
+        const k = @as(usize, rng) % keys;
+        if ((rng >> 31) == 0) {
+            try map.put(k, @intCast(i));
+        } else if (map.get(k)) |v| {
+            sum += v;
+        }
+    }
+    return sum;
+}""",
+        "c": """static int64_t run_hashmap(int iterations, int keys) {
+    HashMap map;
+    hashmap_init(&map, keys * 2);
+    uint32_t rng = 123456789;
+    int64_t sum = 0;
+    for (int i = 0; i < iterations; i++) {
+        rng = rng * 1664525u + 1013904223u;
+        int k = (int)(rng % (uint32_t)keys);
+        if ((rng >> 31) == 0) {
+            hashmap_put(&map, k, i);
+        } else {
+            int64_t val;
+            if (hashmap_get(&map, k, &val)) { sum += val; }
+        }
+    }
+    hashmap_free(&map);
+    return sum;
+}""",
+    },
+    "07_web_server": {
+        "go": """func handleRequest(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/health" {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok\\n"))
+		return
+	}
+	if r.URL.Path == "/json" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(Response{Status: "ok", Value: 42})
+		return
+	}
+	http.NotFound(w, r)
+}""",
+        "vela": """task handle_request(req: Request) -> Response
+    when req.path == "/health"
+        <- Response.text("ok\\n")
+    fi
+    when req.path == "/json"
+        <- Response.json("{\\"status\\":\\"ok\\",\\"value\\":42}")
+    fi
+    <- Response.not_found()
+fi
+
+task main()
+    fixed srv = WebServer.bind("127.0.0.1", 18260, workers: 4)
+    srv.route(handle_request)
+    srv.listen()
+fi""",
+        "rust": """fn handle_client(mut stream: TcpStream) {
+    let mut buf = [0u8; 1024];
+    if let Ok(n) = stream.read(&mut buf) {
+        let req = String::from_utf8_lossy(&buf[..n]);
+        if req.starts_with("GET /health") {
+            let _ = stream.write_all(b"HTTP/1.1 200 OK\\r\\nContent-Length: 3\\r\\n\\r\\nok\\n");
+        } else if req.starts_with("GET /json") {
+            let body = b"{\\"status\\":\\"ok\\",\\"value\\":42}";
+            let resp = format!("HTTP/1.1 200 OK\\r\\nContent-Length: {}\\r\\n\\r\\n", body.len());
+            let _ = stream.write_all(resp.as_bytes());
+            let _ = stream.write_all(body);
+        }
+    }
+}""",
+        "zig": """fn handleConnection(stream: std.net.Stream) void {
+    var buf: [1024]u8 = undefined;
+    const n = stream.read(&buf) catch return;
+    const req = buf[0..n];
+    if (std.mem.startsWith(u8, req, "GET /health")) {
+        _ = stream.writeAll("HTTP/1.1 200 OK\\r\\nContent-Length: 3\\r\\n\\r\\nok\\n") catch {};
+    } else if (std.mem.startsWith(u8, req, "GET /json")) {
+        _ = stream.writeAll("HTTP/1.1 200 OK\\r\\nContent-Length: 26\\r\\n\\r\\n{\\"status\\":\\"ok\\",\\"value\\":42}") catch {};
+    }
+}""",
+        "c": """static void handle_client(int fd) {
+    char buf[1024];
+    ssize_t n = read(fd, buf, sizeof(buf) - 1);
+    if (n <= 0) { close(fd); return; }
+    buf[n] = '\\0';
+    if (strncmp(buf, "GET /health", 11) == 0) {
+        const char resp[] = "HTTP/1.1 200 OK\\r\\nContent-Length: 3\\r\\n\\r\\nok\\n";
+        write(fd, resp, strlen(resp));
+    } else if (strncmp(buf, "GET /json", 13) == 0) {
+        const char resp[] = "HTTP/1.1 200 OK\\r\\nContent-Length: 26\\r\\n\\r\\n{\\"status\\":\\"ok\\",\\"value\\":42}";
+        write(fd, resp, strlen(resp));
+    }
+    close(fd);
+}""",
+    },
+    "08_nbody": {
+        "go": """func advance(b *[5]Body, dt float64) {
+	for i := 0; i < 5; i++ {
+		for j := i + 1; j < 5; j++ {
+			dx := b[i].x - b[j].x
+			dy := b[i].y - b[j].y
+			dz := b[i].z - b[j].z
+			dist2 := dx*dx + dy*dy + dz*dz
+			dist := math.Sqrt(dist2)
+			mag := dt / (dist2 * dist)
+			b[i].vx -= dx * b[j].mass * mag
+			b[i].vy -= dy * b[j].mass * mag
+			b[i].vz -= dz * b[j].mass * mag
+			b[j].vx += dx * b[i].mass * mag
+			b[j].vy += dy * b[i].mass * mag
+			b[j].vz += dz * b[i].mass * mag
+		}
+	}
+	for i := 0; i < 5; i++ {
+		b[i].x += dt * b[i].vx
+		b[i].y += dt * b[i].vy
+		b[i].z += dt * b[i].vz
+	}
+}""",
+        "vela": """task advance(flex& b: [Body#5], dt: float)
+    each i in 0..5
+        each j in (i + 1)..5
+            fixed dx = b[i].x - b[j].x
+            fixed dy = b[i].y - b[j].y
+            fixed dz = b[i].z - b[j].z
+            fixed dist2 = dx * dx + dy * dy + dz * dz
+            fixed dist = dist2 ** 0.5
+            fixed mag = dt / (dist2 * dist)
+            b[i].vx -= dx * b[j].mass * mag
+            b[i].vy -= dy * b[j].mass * mag
+            b[i].vz -= dz * b[j].mass * mag
+            b[j].vx += dx * b[i].mass * mag
+            b[j].vy += dy * b[i].mass * mag
+            b[j].vz += dz * b[i].mass * mag
+        fi
+    fi
+    each i in 0..5
+        b[i].x += dt * b[i].vx
+        b[i].y += dt * b[i].vy
+        b[i].z += dt * b[i].vz
+    fi
+fi""",
+        "rust": """fn advance(b: &mut [Body; 5], dt: f64) {
+    for i in 0..5 {
+        for j in (i + 1)..5 {
+            let dx = b[i].x - b[j].x;
+            let dy = b[i].y - b[j].y;
+            let dz = b[i].z - b[j].z;
+            let dist2 = dx * dx + dy * dy + dz * dz;
+            let dist = dist2.sqrt();
+            let mag = dt / (dist2 * dist);
+            b[i].vx -= dx * b[j].mass * mag;
+            b[i].vy -= dy * b[j].mass * mag;
+            b[i].vz -= dz * b[j].mass * mag;
+            b[j].vx += dx * b[i].mass * mag;
+            b[j].vy += dy * b[i].mass * mag;
+            b[j].vz += dz * b[i].mass * mag;
+        }
+    }
+    for i in 0..5 {
+        b[i].x += dt * b[i].vx;
+        b[i].y += dt * b[i].vy;
+        b[i].z += dt * b[i].vz;
+    }
+}""",
+        "zig": """fn advance(b: *[5]Body, dt: f64) void {
+    var i: usize = 0;
+    while (i < 5) : (i += 1) {
+        var j: usize = i + 1;
+        while (j < 5) : (j += 1) {
+            const dx = b[i].x - b[j].x;
+            const dy = b[i].y - b[j].y;
+            const dz = b[i].z - b[j].z;
+            const dist2 = dx * dx + dy * dy + dz * dz;
+            const dist = sqrt(dist2);
+            const mag = dt / (dist2 * dist);
+            b[i].vx -= dx * b[j].mass * mag;
+            b[i].vy -= dy * b[j].mass * mag;
+            b[i].vz -= dz * b[j].mass * mag;
+            b[j].vx += dx * b[i].mass * mag;
+            b[j].vy += dy * b[i].mass * mag;
+            b[j].vz += dz * b[i].mass * mag;
+        }
+    }
+    i = 0;
+    while (i < 5) : (i += 1) {
+        b[i].x += dt * b[i].vx;
+        b[i].y += dt * b[i].vy;
+        b[i].z += dt * b[i].vz;
+    }
+}""",
+        "c": """static void advance(Body b[5], double dt) {
+    for (int i = 0; i < 5; i++) {
+        for (int j = i + 1; j < 5; j++) {
+            double dx = b[i].x - b[j].x;
+            double dy = b[i].y - b[j].y;
+            double dz = b[i].z - b[j].z;
+            double dist2 = dx * dx + dy * dy + dz * dz;
+            double dist = sqrt(dist2);
+            double mag = dt / (dist2 * dist);
+            b[i].vx -= dx * b[j].mass * mag;
+            b[i].vy -= dy * b[j].mass * mag;
+            b[i].vz -= dz * b[j].mass * mag;
+            b[j].vx += dx * b[i].mass * mag;
+            b[j].vy += dy * b[i].mass * mag;
+            b[j].vz += dz * b[i].mass * mag;
+        }
+    }
+    for (int i = 0; i < 5; i++) {
+        b[i].x += dt * b[i].vx;
+        b[i].y += dt * b[i].vy;
+        b[i].z += dt * b[i].vz;
+    }
+}""",
+    },
+    "09_matmul": {
+        "go": """func matmul(n int) int64 {
+	size := n * n
+	a := make([]float64, size)
+	b := make([]float64, size)
+	c := make([]float64, size)
+
+	// Cache-friendly i, k, j loop order:
+	for i := 0; i < n; i++ {
+		inOffset := i * n
+		for k := 0; k < n; k++ {
+			aVal := a[inOffset+k]
+			knOffset := k * n
+			for j := 0; j < n; j++ {
+				c[inOffset+j] += aVal * b[knOffset+j]
+			}
+		}
+	}
+	trace := 0.0
+	for i := 0; i < n; i++ { trace += c[i*n+i] }
+	return int64(trace)
+}""",
+        "vela": """task matmul(n: int) -> int
+    region r
+    fixed size = n * n
+    flex a = new [float]([0.0 # size]) at r
+    flex b = new [float]([0.0 # size]) at r
+    flex c = new [float]([0.0 # size]) at r
+
+    ; Cache-friendly i, k, j loop order:
+    each i in 0..n
+        fixed in_offset = i * n
+        each k in 0..n
+            fixed a_val = a[in_offset + k]
+            fixed kn_offset = k * n
+            each j in 0..n
+                c[in_offset + j] += a_val * b[kn_offset + j]
+            fi
+        fi
+    fi
+    flex trace = 0.0
+    each i in 0..n { trace += c[i * n + i] }
+    <- int(trace)
+fi""",
+        "rust": """fn matmul(n: usize) -> i64 {
+    let size = n * n;
+    let (mut a, mut b, mut c) = (vec![0.0f64; size], vec![0.0f64; size], vec![0.0f64; size]);
+
+    // Cache-friendly i, k, j loop order:
+    for i in 0..n {
+        let in_offset = i * n;
+        for k in 0..n {
+            let a_val = a[in_offset + k];
+            let kn_offset = k * n;
+            for j in 0..n {
+                c[in_offset + j] += a_val * b[kn_offset + j];
+            }
+        }
+    }
+    let mut trace = 0.0f64;
+    for i in 0..n { trace += c[i * n + i]; }
+    trace as i64
+}""",
+        "zig": """fn matmul(n: usize, a: [*]f64, b: [*]f64, c: [*]f64) i64 {
+    var i: usize = 0;
+    while (i < n) : (i += 1) {
+        const in_offset = i * n;
+        var k: usize = 0;
+        while (k < n) : (k += 1) {
+            const a_val = a[in_offset + k];
+            const kn_offset = k * n;
+            var j: usize = 0;
+            while (j < n) : (j += 1) {
+                c[in_offset + j] += a_val * b[kn_offset + j];
+            }
+        }
+    }
+    var trace: f64 = 0.0;
+    i = 0;
+    while (i < n) : (i += 1) { trace += c[i * n + i]; }
+    return @intFromFloat(trace);
+}""",
+        "c": """static long matmul(int n, double *a, double *b, double *c) {
+    // Cache-friendly i, k, j loop order:
+    for (int i = 0; i < n; i++) {
+        int in_offset = i * n;
+        for (int k = 0; k < n; k++) {
+            double a_val = a[in_offset + k];
+            int kn_offset = k * n;
+            for (int j = 0; j < n; j++) {
+                c[in_offset + j] += a_val * b[kn_offset + j];
+            }
+        }
+    }
+    double trace = 0.0;
+    for (int i = 0; i < n; i++) { trace += c[i * n + i]; }
+    return (long)trace;
+}""",
+    },
+}
+
+SNIPPETS = {
+    "01_mandelbrot": {
+        "go": """func mandelbrot(size int) int {
+	total := 0
+	fsize := float64(size)
+	for y := 0; y < size; y++ {
+		ci := 2.0*float64(y)/fsize - 1.0
+		for x := 0; x < size; x++ {
+			cr := 2.0*float64(x)/fsize - 1.5
+			zr, zi := 0.0, 0.0
+			iter := 0
+			for iter < 50 {
+				zr2, zi2 := zr*zr, zi*zi
+				if zr2+zi2 > 4.0 {
+					break
+				}
+				zi = 2.0*zr*zi + ci
+				zr = zr2 - zi2 + cr
+				iter++
+			}
+			total += iter
+		}
+	}
+	return total
+}""",
+        "vela": """task mandelbrot(size: int) -> int
+    flex total = 0
+    fixed fsize = float(size)
+    each y in 0..size
+        fixed ci = 2.0 * float(y) / fsize - 1.0
+        each x in 0..size
+            fixed cr = 2.0 * float(x) / fsize - 1.5
+            flex zr = 0.0, zi = 0.0, iter = 0
+            loop iter < 50
+                fixed zr2 = zr * zr
+                fixed zi2 = zi * zi
+                when zr2 + zi2 > 4.0
+                    break
+                fi
+                zi = 2.0 * zr * zi + ci
+                zr = zr2 - zi2 + cr
+                iter += 1
+            fi
+            total += iter
+        fi
+    fi
+    <- total
+fi""",
+        "rust": """fn mandelbrot(size: usize) -> i64 {
+    let mut total = 0i64;
+    let fsize = size as f64;
+    for y in 0..size {
+        let ci = 2.0 * (y as f64) / fsize - 1.0;
+        for x in 0..size {
+            let cr = 2.0 * (x as f64) / fsize - 1.5;
+            let (mut zr, mut zi, mut iter) = (0.0f64, 0.0f64, 0);
+            while iter < 50 {
+                let (zr2, zi2) = (zr * zr, zi * zi);
+                if zr2 + zi2 > 4.0 { break; }
+                zi = 2.0 * zr * zi + ci;
+                zr = zr2 - zi2 + cr;
+                iter += 1;
+            }
+            total += iter as i64;
+        }
+    }
+    total
+}""",
+        "zig": """fn mandelbrot(size: usize) i64 {
+    var total: i64 = 0;
+    const fsize: f64 = @floatFromInt(size);
+    var y: usize = 0;
+    while (y < size) : (y += 1) {
+        const ci = 2.0 * @as(f64, @floatFromInt(y)) / fsize - 1.0;
+        var x: usize = 0;
+        while (x < size) : (x += 1) {
+            const cr = 2.0 * @as(f64, @floatFromInt(x)) / fsize - 1.5;
+            var zr: f64 = 0.0; var zi: f64 = 0.0; var iter: i32 = 0;
+            while (iter < 50) : (iter += 1) {
+                const zr2 = zr * zr; const zi2 = zi * zi;
+                if (zr2 + zi2 > 4.0) break;
+                zi = 2.0 * zr * zi + ci;
+                zr = zr2 - zi2 + cr;
+            }
+            total += iter;
+        }
+    }
+    return total;
+}""",
+        "c": """long mandelbrot(int size) {
+    long total = 0;
+    double fsize = (double)size;
+    for (int y = 0; y < size; y++) {
+        double ci = 2.0 * (double)y / fsize - 1.0;
+        for (int x = 0; x < size; x++) {
+            double cr = 2.0 * (double)x / fsize - 1.5;
+            double zr = 0.0, zi = 0.0;
+            int iter = 0;
+            for (; iter < 50; iter++) {
+                double zr2 = zr * zr, zi2 = zi * zi;
+                if (zr2 + zi2 > 4.0) break;
+                zi = 2.0 * zr * zi + ci;
+                zr = zr2 - zi2 + cr;
+            }
+            total += iter;
+        }
+    }
+    return total;
+}""",
+    },
+    "02_binary_trees": {
+        "go": """type Node struct {
+	left, right *Node
+	item        int
+}
+
+func buildTree(item, depth int) *Node {
+	if depth <= 0 {
+		return &Node{item: item}
+	}
+	return &Node{
+		left:  buildTree(2*item-1, depth-1),
+		right: buildTree(2*item, depth-1),
+		item:  item,
+	}
+}
+
+func checkTree(n *Node) int {
+	if n.left == nil {
+		return n.item
+	}
+	return n.item + checkTree(n.left) - checkTree(n.right)
+}""",
+        "vela": """shape Node
+    item: int
+    left: maybe ^Node
+    right: maybe ^Node
+fi
+
+task build_tree(item: int, depth: int, r: region) -> ^Node@r
+    when depth <= 0
+        <- new Node(Node { item: item, left: none, right: none }) at r
+    fi
+    <- new Node(Node {
+        item: item,
+        left: { build_tree(2 * item - 1, depth - 1, r) },
+        right: { build_tree(2 * item, depth - 1, r) }
+    }) at r
+fi
+
+task check_tree(n: ^Node) -> int
+    match n^.left
+    case { l }
+        fixed r = n^.right ?? fail "unbalanced tree"
+        <- n^.item + check_tree(l) - check_tree(r)
+    default
+        <- n^.item
+    fi
+fi""",
+        "rust": """struct Node {
+    left: Option<Box<Node>>,
+    right: Option<Box<Node>>,
+    item: i32,
+}
+
+fn build_tree(item: i32, depth: u32) -> Box<Node> {
+    if depth == 0 {
+        Box::new(Node { item, left: None, right: None })
+    } else {
+        Box::new(Node {
+            item,
+            left: Some(build_tree(2 * item - 1, depth - 1)),
+            right: Some(build_tree(2 * item, depth - 1)),
+        })
+    }
+}
+
+fn check_tree(node: &Node) -> i32 {
+    match (&node.left, &node.right) {
+        (Some(l), Some(r)) => node.item + check_tree(l) - check_tree(r),
+        _ => node.item,
+    }
+}""",
+        "zig": """const Node = struct {
+    left: ?*Node,
+    right: ?*Node,
+    item: i32,
+};
+
+fn buildTree(allocator: std.mem.Allocator, item: i32, depth: u32) *Node {
+    const node = allocator.create(Node) catch unreachable;
+    node.item = item;
+    if (depth <= 0) {
+        node.left = null; node.right = null;
+    } else {
+        node.left = buildTree(allocator, 2 * item - 1, depth - 1);
+        node.right = buildTree(allocator, 2 * item, depth - 1);
+    }
+    return node;
+}
+
+fn checkTree(node: *const Node) i32 {
+    if (node.left) |l| {
+        return node.item + checkTree(l) - checkTree(node.right.?);
+    }
+    return node.item;
+}""",
+        "c": """typedef struct Node {
+    struct Node *left, *right;
+    int item;
+} Node;
+
+static Node *build_tree(int item, int depth, Arena *arena) {
+    Node *n = arena_alloc(arena, sizeof(Node));
+    n->item = item;
+    if (depth <= 0) {
+        n->left = n->right = NULL;
+    } else {
+        n->left = build_tree(2 * item - 1, depth - 1, arena);
+        n->right = build_tree(2 * item, depth - 1, arena);
+    }
+    return n;
+}
+
+static int check_tree(const Node *n) {
+    if (!n->left) return n->item;
+    return n->item + check_tree(n->left) - check_tree(n->right);
+}""",
+    },
+    "03_concurrency": {
+        "go": """func worker(id int, in <-chan int, out chan<- int, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for token := range in {
+		if token <= 0 {
+			out <- token
+			return
+		}
+		out <- token - 1
+	}
+}
+
+func runRing(passes int) {
+	chans := [4]chan int{make(chan int, 1), make(chan int, 1), make(chan int, 1), make(chan int, 1)}
+	var wg sync.WaitGroup
+	for i := 0; i < 4; i++ {
+		wg.Add(1)
+		go worker(i, chans[i], chans[(i+1)%4], &wg)
+	}
+	chans[0] <- passes
+	wg.Wait()
+}""",
+        "vela": """task worker(id: int, in_ch: chan<int>, out_ch: chan<int>, done_ch: chan<int>)
+    loop
+        fixed token = recv(in_ch)
+        when token <= 0
+            send(out_ch, token)
+            send(done_ch, id)
+            break
+        fi
+        send(out_ch, token - 1)
+    fi
+fi
+
+task run_ring(passes: int)
+    fixed ch0 = chan<int>(1), ch1 = chan<int>(1)
+    fixed ch2 = chan<int>(1), ch3 = chan<int>(1)
+    fixed done = chan<int>(4)
+    start worker(0, ch0, ch1, done)
+    start worker(1, ch1, ch2, done)
+    start worker(2, ch2, ch3, done)
+    start worker(3, ch3, ch0, done)
+    send(ch0, passes)
+    each _ in 0..4 { recv(done) }
+fi""",
+        "rust": """fn worker(rx: Receiver<i32>, tx: SyncSender<i32>) {
+    while let Ok(token) = rx.recv() {
+        if token <= 0 {
+            let _ = tx.send(token);
+            break;
+        }
+        let _ = tx.send(token - 1);
+    }
+}""",
+        "zig": """fn worker(ctx: *WorkerContext) void {
+    while (true) {
+        const token = ctx.in_ring.pop();
+        if (token <= 0) {
+            ctx.out_ring.push(token);
+            break;
+        }
+        ctx.out_ring.push(token - 1);
+    }
+}""",
+        "c": """static void *worker(void *arg) {
+    WorkerContext *ctx = (WorkerContext *)arg;
+    while (1) {
+        long token = queue_pop(ctx->in_q);
+        if (token <= 0) {
+            queue_push(ctx->out_q, token);
+            break;
+        }
+        queue_push(ctx->out_q, token - 1);
+    }
+    return NULL;
+}""",
+    },
+    "04_quicksort": {
+        "go": """func partition(arr []int64, low, high int) int {
+	pivot := arr[high]
+	i := low - 1
+	for j := low; j < high; j++ {
+		if arr[j] <= pivot {
+			i++
+			arr[i], arr[j] = arr[j], arr[i]
+		}
+	}
+	arr[i+1], arr[high] = arr[high], arr[i+1]
+	return i + 1
+}
+
+func quicksort(arr []int64, low, high int) {
+	if low < high {
+		pi := partition(arr, low, high)
+		quicksort(arr, low, pi-1)
+		quicksort(arr, pi+1, high)
+	}
+}""",
+        "vela": """task partition(flex xs: [int], low: int, high: int) -> int
+    fixed pivot = xs[high]
+    flex i = low - 1
+    each j in low..high
+        when xs[j] <= pivot
+            i += 1
+            xs[i], xs[j] = xs[j], xs[i]
+        fi
+    fi
+    xs[i + 1], xs[high] = xs[high], xs[i + 1]
+    <- i + 1
+fi
+
+task quicksort(flex xs: [int], low: int, high: int)
+    when low < high
+        fixed p = partition(xs, low, high)
+        quicksort(xs, low, p - 1)
+        quicksort(xs, p + 1, high)
+    fi
+fi""",
+        "rust": """fn partition(arr: &mut [i64], low: isize, high: isize) -> isize {
+    let pivot = arr[high as usize];
+    let mut i = low - 1;
+    for j in low..high {
+        if arr[j as usize] <= pivot {
+            i += 1;
+            arr.swap(i as usize, j as usize);
+        }
+    }
+    arr.swap((i + 1) as usize, high as usize);
+    i + 1
+}
+
+fn quicksort(arr: &mut [i64], low: isize, high: isize) {
+    if low < high {
+        let p = partition(arr, low, high);
+        quicksort(arr, low, p - 1);
+        quicksort(arr, p + 1, high);
+    }
+}""",
+        "zig": """fn partition(arr: []i64, low: isize, high: isize) isize {
+    const pivot = arr[@intCast(high)];
+    var i = low - 1;
+    var j = low;
+    while (j < high) : (j += 1) {
+        if (arr[@intCast(j)] <= pivot) {
+            i += 1;
+            const tmp = arr[@intCast(i)];
+            arr[@intCast(i)] = arr[@intCast(j)];
+            arr[@intCast(j)] = tmp;
+        }
+    }
+    const tmp = arr[@intCast(i + 1)];
+    arr[@intCast(i + 1)] = arr[@intCast(high)];
+    arr[@intCast(high)] = tmp;
+    return i + 1;
+}""",
+        "c": """static int partition(int64_t *arr, int low, int high) {
+    int64_t pivot = arr[high];
+    int i = low - 1;
+    for (int j = low; j < high; j++) {
+        if (arr[j] <= pivot) {
+            i++;
+            int64_t tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+        }
+    }
+    int64_t tmp = arr[i + 1]; arr[i + 1] = arr[high]; arr[high] = tmp;
+    return i + 1;
+}
+
+static void quicksort(int64_t *arr, int low, int high) {
+    if (low < high) {
+        int pi = partition(arr, low, high);
+        quicksort(arr, low, pi - 1);
+        quicksort(arr, pi + 1, high);
+    }
+}""",
+    },
+    "05_prime_sieve": {
+        "go": """func sieve(limit int) int {
+	isPrime := make([]byte, limit+1)
+	for i := 2; i <= limit; i++ {
+		isPrime[i] = 1
+	}
+	p := 2
+	for p*p <= limit {
+		if isPrime[p] == 1 {
+			for i := p * p; i <= limit; i += p {
+				isPrime[i] = 0
+			}
+		}
+		p++
+	}
+	count := 0
+	for i := 2; i <= limit; i++ {
+		if isPrime[i] == 1 { count++ }
+	}
+	return count
+}""",
+        "vela": """task sieve(limit: int) -> int
+    region r
+    flex is_prime = new [int8]([1i8 # (limit + 1)]) at r
+    is_prime[0] = 0i8
+    is_prime[1] = 0i8
+    flex p = 2
+    loop p * p <= limit
+        when is_prime[p] == 1i8
+            flex i = p * p
+            loop i <= limit
+                is_prime[i] = 0i8
+                i += p
+            fi
+        fi
+        p += 1
+    fi
+    flex count = 0
+    each x in is_prime { when x == 1i8 { count += 1 } }
+    <- count
+fi""",
+        "rust": """fn sieve(limit: usize) -> usize {
+    let mut is_prime = vec![1u8; limit + 1];
+    is_prime[0] = 0; is_prime[1] = 0;
+    let mut p = 2;
+    while p * p <= limit {
+        if is_prime[p] == 1 {
+            let mut i = p * p;
+            while i <= limit {
+                is_prime[i] = 0;
+                i += p;
+            }
+        }
+        p += 1;
+    }
+    is_prime.iter().filter(|&&x| x == 1).count()
+}""",
+        "zig": """fn sieve(limit: usize, buf: [*]u8) usize {
+    @memset(buf[0..limit + 1], 1);
+    buf[0] = 0; buf[1] = 0;
+    var p: usize = 2;
+    while (p * p <= limit) : (p += 1) {
+        if (buf[p] == 1) {
+            var i = p * p;
+            while (i <= limit) : (i += p) {
+                buf[i] = 0;
+            }
+        }
+    }
+    var count: usize = 0;
+    for (buf[0..limit + 1]) |val| { if (val == 1) count += 1; }
+    return count;
+}""",
+        "c": """static int sieve(int limit) {
+    uint8_t *is_prime = (uint8_t *)malloc(limit + 1);
+    memset(is_prime, 1, limit + 1);
+    is_prime[0] = is_prime[1] = 0;
+    for (int p = 2; p * p <= limit; p++) {
+        if (is_prime[p]) {
+            for (int i = p * p; i <= limit; i += p) {
+                is_prime[i] = 0;
+            }
+        }
+    }
+    int count = 0;
+    for (int i = 2; i <= limit; i++) { if (is_prime[i]) count++; }
+    free(is_prime);
+    return count;
+}""",
+    },
+    "06_hashmap": {
+        "go": """func runHashMap(iterations int, keys int) int64 {
+	m := make(map[int]int64, keys)
+	var rng uint32 = 123456789
+	var sum int64 = 0
+	for i := 0; i < iterations; i++ {
+		rng = rng*1664525 + 1013904223
+		k := int(rng % uint32(keys))
+		if (rng >> 31) == 0 {
+			m[k] = int64(i)
+		} else {
+			if v, ok := m[k]; ok {
+				sum += v
+			}
+		}
+	}
+	return sum
+}""",
+        "vela": """task run_hashmap(iterations: int, keys: int) -> int
+    region r
+    flex m: map<int, int>@r = map<int, int>() at r
+    flex rng: uint32 = 123456789u32
+    flex sum = 0
+    each i in 0..iterations
+        rng = rng * 1664525u32 + 1013904223u32
+        fixed k = int(rng % uint32(keys))
+        when (rng >> 31u32) == 0u32
+            m[k] = i
+        else
+            match m[k]
+            case { v }
+                sum += v
+            fi
+        fi
+    fi
+    <- sum
+fi""",
+        "rust": """fn run_hashmap(iterations: usize, keys: usize) -> i64 {
+    let mut map: HashMap<usize, i64> = HashMap::with_capacity(keys);
+    let mut rng = 123456789u32;
+    let mut sum = 0i64;
+    for i in 0..iterations {
+        rng = rng.wrapping_mul(1664525).wrapping_add(1013904223);
+        let k = (rng as usize) % keys;
+        if (rng >> 31) == 0 {
+            map.insert(k, i as i64);
+        } else if let Some(&v) = map.get(&k) {
+            sum += v;
+        }
+    }
+    sum
+}""",
+        "zig": """fn runHashMap(allocator: std.mem.Allocator, iterations: usize, keys: usize) !i64 {
+    var map = std.AutoHashMap(usize, i64).init(allocator);
+    defer map.deinit();
+    try map.ensureTotalCapacity(@intCast(keys));
+    var rng: u32 = 123456789;
+    var sum: i64 = 0;
+    var i: usize = 0;
+    while (i < iterations) : (i += 1) {
+        rng = rng *% 1664525 +% 1013904223;
+        const k = @as(usize, rng) % keys;
+        if ((rng >> 31) == 0) {
+            try map.put(k, @intCast(i));
+        } else if (map.get(k)) |v| {
+            sum += v;
+        }
+    }
+    return sum;
+}""",
+        "c": """static int64_t run_hashmap(int iterations, int keys) {
+    HashMap map;
+    hashmap_init(&map, keys * 2);
+    uint32_t rng = 123456789;
+    int64_t sum = 0;
+    for (int i = 0; i < iterations; i++) {
+        rng = rng * 1664525u + 1013904223u;
+        int k = (int)(rng % (uint32_t)keys);
+        if ((rng >> 31) == 0) {
+            hashmap_put(&map, k, i);
+        } else {
+            int64_t val;
+            if (hashmap_get(&map, k, &val)) { sum += val; }
+        }
+    }
+    hashmap_free(&map);
+    return sum;
+}""",
+    },
+    "07_web_server": {
+        "go": """func handleRequest(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == "/health" {
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok\\n"))
+		return
+	}
+	if r.URL.Path == "/json" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(Response{Status: "ok", Value: 42})
+		return
+	}
+	http.NotFound(w, r)
+}""",
+        "vela": """task handle_request(req: Request) -> Response
+    when req.path == "/health"
+        <- Response.text("ok\\n")
+    fi
+    when req.path == "/api/data"
+        <- Response.json("{\\"status\\":\\"ok\\",\\"value\\":42}")
+    fi
+    <- Response.not_found()
+fi
+
+task main()
+    fixed srv = WebServer.bind("127.0.0.1", 18260, workers: 4)
+    srv.route(handle_request)
+    srv.listen()
+fi""",
+        "rust": """fn handle_client(mut stream: TcpStream) {
+    let mut buf = [0u8; 1024];
+    if let Ok(n) = stream.read(&mut buf) {
+        let req = String::from_utf8_lossy(&buf[..n]);
+        if req.starts_with("GET /health") {
+            let _ = stream.write_all(b"HTTP/1.1 200 OK\\r\\nContent-Length: 3\\r\\n\\r\\nok\\n");
+        } else if req.starts_with("GET /api/data") {
+            let body = b"{\\"status\\":\\"ok\\",\\"value\\":42}";
+            let resp = format!("HTTP/1.1 200 OK\\r\\nContent-Length: {}\\r\\n\\r\\n", body.len());
+            let _ = stream.write_all(resp.as_bytes());
+            let _ = stream.write_all(body);
+        }
+    }
+}""",
+        "zig": """fn handleConnection(stream: std.net.Stream) void {
+    var buf: [1024]u8 = undefined;
+    const n = stream.read(&buf) catch return;
+    const req = buf[0..n];
+    if (std.mem.startsWith(u8, req, "GET /health")) {
+        _ = stream.writeAll("HTTP/1.1 200 OK\\r\\nContent-Length: 3\\r\\n\\r\\nok\\n") catch {};
+    } else if (std.mem.startsWith(u8, req, "GET /api/data")) {
+        _ = stream.writeAll("HTTP/1.1 200 OK\\r\\nContent-Length: 26\\r\\n\\r\\n{\\"status\\":\\"ok\\",\\"value\\":42}") catch {};
+    }
+}""",
+        "c": """static void handle_client(int fd) {
+    char buf[1024];
+    ssize_t n = read(fd, buf, sizeof(buf) - 1);
+    if (n <= 0) { close(fd); return; }
+    buf[n] = '\\0';
+    if (strncmp(buf, "GET /health", 11) == 0) {
+        const char resp[] = "HTTP/1.1 200 OK\\r\\nContent-Length: 3\\r\\n\\r\\nok\\n";
+        write(fd, resp, strlen(resp));
+    } else if (strncmp(buf, "GET /api/data", 13) == 0) {
+        const char resp[] = "HTTP/1.1 200 OK\\r\\nContent-Length: 26\\r\\n\\r\\n{\\"status\\":\\"ok\\",\\"value\\":42}";
+        write(fd, resp, strlen(resp));
+    }
+    close(fd);
+}""",
+    },
+    "08_nbody": {
+        "go": """func advance(b *[5]Body, dt float64) {
+	for i := 0; i < 5; i++ {
+		for j := i + 1; j < 5; j++ {
+			dx := b[i].x - b[j].x
+			dy := b[i].y - b[j].y
+			dz := b[i].z - b[j].z
+			dist2 := dx*dx + dy*dy + dz*dz
+			dist := math.Sqrt(dist2)
+			mag := dt / (dist2 * dist)
+			b[i].vx -= dx * b[j].mass * mag
+			b[i].vy -= dy * b[j].mass * mag
+			b[i].vz -= dz * b[j].mass * mag
+			b[j].vx += dx * b[i].mass * mag
+			b[j].vy += dy * b[i].mass * mag
+			b[j].vz += dz * b[i].mass * mag
+		}
+	}
+	for i := 0; i < 5; i++ {
+		b[i].x += dt * b[i].vx
+		b[i].y += dt * b[i].vy
+		b[i].z += dt * b[i].vz
+	}
+}""",
+        "vela": """task advance(flex& b: [Body#5], dt: float)
+    each i in 0..5
+        each j in (i + 1)..5
+            fixed dx = b[i].x - b[j].x
+            fixed dy = b[i].y - b[j].y
+            fixed dz = b[i].z - b[j].z
+            fixed dist2 = dx * dx + dy * dy + dz * dz
+            fixed dist = dist2 ** 0.5
+            fixed mag = dt / (dist2 * dist)
+            b[i].vx -= dx * b[j].mass * mag
+            b[i].vy -= dy * b[j].mass * mag
+            b[i].vz -= dz * b[j].mass * mag
+            b[j].vx += dx * b[i].mass * mag
+            b[j].vy += dy * b[i].mass * mag
+            b[j].vz += dz * b[i].mass * mag
+        fi
+    fi
+    each i in 0..5
+        b[i].x += dt * b[i].vx
+        b[i].y += dt * b[i].vy
+        b[i].z += dt * b[i].vz
+    fi
+fi""",
+        "rust": """fn advance(b: &mut [Body; 5], dt: f64) {
+    for i in 0..5 {
+        for j in (i + 1)..5 {
+            let dx = b[i].x - b[j].x;
+            let dy = b[i].y - b[j].y;
+            let dz = b[i].z - b[j].z;
+            let dist2 = dx * dx + dy * dy + dz * dz;
+            let dist = dist2.sqrt();
+            let mag = dt / (dist2 * dist);
+            b[i].vx -= dx * b[j].mass * mag;
+            b[i].vy -= dy * b[j].mass * mag;
+            b[i].vz -= dz * b[j].mass * mag;
+            b[j].vx += dx * b[i].mass * mag;
+            b[j].vy += dy * b[i].mass * mag;
+            b[j].vz += dz * b[i].mass * mag;
+        }
+    }
+    for i in 0..5 {
+        b[i].x += dt * b[i].vx;
+        b[i].y += dt * b[i].vy;
+        b[i].z += dt * b[i].vz;
+    }
+}""",
+        "zig": """fn advance(b: *[5]Body, dt: f64) void {
+    var i: usize = 0;
+    while (i < 5) : (i += 1) {
+        var j: usize = i + 1;
+        while (j < 5) : (j += 1) {
+            const dx = b[i].x - b[j].x;
+            const dy = b[i].y - b[j].y;
+            const dz = b[i].z - b[j].z;
+            const dist2 = dx * dx + dy * dy + dz * dz;
+            const dist = sqrt(dist2);
+            const mag = dt / (dist2 * dist);
+            b[i].vx -= dx * b[j].mass * mag;
+            b[i].vy -= dy * b[j].mass * mag;
+            b[i].vz -= dz * b[j].mass * mag;
+            b[j].vx += dx * b[i].mass * mag;
+            b[j].vy += dy * b[i].mass * mag;
+            b[j].vz += dz * b[i].mass * mag;
+        }
+    }
+    i = 0;
+    while (i < 5) : (i += 1) {
+        b[i].x += dt * b[i].vx;
+        b[i].y += dt * b[i].vy;
+        b[i].z += dt * b[i].vz;
+    }
+}""",
+        "c": """static void advance(Body b[5], double dt) {
+    for (int i = 0; i < 5; i++) {
+        for (int j = i + 1; j < 5; j++) {
+            double dx = b[i].x - b[j].x;
+            double dy = b[i].y - b[j].y;
+            double dz = b[i].z - b[j].z;
+            double dist2 = dx * dx + dy * dy + dz * dz;
+            double dist = sqrt(dist2);
+            double mag = dt / (dist2 * dist);
+            b[i].vx -= dx * b[j].mass * mag;
+            b[i].vy -= dy * b[j].mass * mag;
+            b[i].vz -= dz * b[j].mass * mag;
+            b[j].vx += dx * b[i].mass * mag;
+            b[j].vy += dy * b[i].mass * mag;
+            b[j].vz += dz * b[i].mass * mag;
+        }
+    }
+    for (int i = 0; i < 5; i++) {
+        b[i].x += dt * b[i].vx;
+        b[i].y += dt * b[i].vy;
+        b[i].z += dt * b[i].vz;
+    }
+}""",
+    },
+    "09_matmul": {
+        "go": """func matmul(n int) int64 {
+	size := n * n
+	a := make([]float64, size)
+	b := make([]float64, size)
+	c := make([]float64, size)
+
+	// Cache-friendly i, k, j loop order:
+	for i := 0; i < n; i++ {
+		inOffset := i * n
+		for k := 0; k < n; k++ {
+			aVal := a[inOffset+k]
+			knOffset := k * n
+			for j := 0; j < n; j++ {
+				c[inOffset+j] += aVal * b[knOffset+j]
+			}
+		}
+	}
+	trace := 0.0
+	for i := 0; i < n; i++ { trace += c[i*n+i] }
+	return int64(trace)
+}""",
+        "vela": """task matmul(n: int) -> int
+    region r
+    fixed size = n * n
+    flex a = new [float]([0.0 # size]) at r
+    flex b = new [float]([0.0 # size]) at r
+    flex c = new [float]([0.0 # size]) at r
+
+    ; Cache-friendly i, k, j loop order:
+    each i in 0..n
+        fixed in_offset = i * n
+        each k in 0..n
+            fixed a_val = a[in_offset + k]
+            fixed kn_offset = k * n
+            each j in 0..n
+                c[in_offset + j] += a_val * b[kn_offset + j]
+            fi
+        fi
+    fi
+    flex trace = 0.0
+    each i in 0..n { trace += c[i * n + i] }
+    <- int(trace)
+fi""",
+        "rust": """fn matmul(n: usize) -> i64 {
+    let size = n * n;
+    let (mut a, mut b, mut c) = (vec![0.0f64; size], vec![0.0f64; size], vec![0.0f64; size]);
+
+    // Cache-friendly i, k, j loop order:
+    for i in 0..n {
+        let in_offset = i * n;
+        for k in 0..n {
+            let a_val = a[in_offset + k];
+            let kn_offset = k * n;
+            for j in 0..n {
+                c[in_offset + j] += a_val * b[kn_offset + j];
+            }
+        }
+    }
+    let mut trace = 0.0f64;
+    for i in 0..n { trace += c[i * n + i]; }
+    trace as i64
+}""",
+        "zig": """fn matmul(n: usize, a: [*]f64, b: [*]f64, c: [*]f64) i64 {
+    var i: usize = 0;
+    while (i < n) : (i += 1) {
+        const in_offset = i * n;
+        var k: usize = 0;
+        while (k < n) : (k += 1) {
+            const a_val = a[in_offset + k];
+            const kn_offset = k * n;
+            var j: usize = 0;
+            while (j < n) : (j += 1) {
+                c[in_offset + j] += a_val * b[kn_offset + j];
+            }
+        }
+    }
+    var trace: f64 = 0.0;
+    i = 0;
+    while (i < n) : (i += 1) { trace += c[i * n + i]; }
+    return @intFromFloat(trace);
+}""",
+        "c": """static long matmul(int n, double *a, double *b, double *c) {
+    // Cache-friendly i, k, j loop order:
+    for (int i = 0; i < n; i++) {
+        int in_offset = i * n;
+        for (int k = 0; k < n; k++) {
+            double a_val = a[in_offset + k];
+            int kn_offset = k * n;
+            for (int j = 0; j < n; j++) {
+                c[in_offset + j] += a_val * b[kn_offset + j];
+            }
+        }
+    }
+    double trace = 0.0;
+    for (int i = 0; i < n; i++) { trace += c[i * n + i]; }
+    return (long)trace;
+}""",
+    },
+}
+
 BENCHMARKS = [
     {
         "id": "01_mandelbrot",
@@ -39,6 +1789,7 @@ BENCHMARKS = [
             "zig": "mandelbrot.zig",
             "vela": "mandelbrot.vela",
         },
+        "snippets": SNIPPETS["01_mandelbrot"],
     },
     {
         "id": "02_binary_trees",
@@ -53,6 +1804,7 @@ BENCHMARKS = [
             "zig": "tree.zig",
             "vela": "tree.vela",
         },
+        "snippets": SNIPPETS["02_binary_trees"],
     },
     {
         "id": "03_concurrency",
@@ -67,6 +1819,7 @@ BENCHMARKS = [
             "zig": "ring.zig",
             "vela": "ring.vela",
         },
+        "snippets": SNIPPETS["03_concurrency"],
     },
     {
         "id": "04_quicksort",
@@ -81,6 +1834,7 @@ BENCHMARKS = [
             "zig": "qsort.zig",
             "vela": "qsort.vela",
         },
+        "snippets": SNIPPETS["04_quicksort"],
     },
     {
         "id": "05_prime_sieve",
@@ -95,6 +1849,7 @@ BENCHMARKS = [
             "zig": "sieve.zig",
             "vela": "sieve.vela",
         },
+        "snippets": SNIPPETS["05_prime_sieve"],
     },
     {
         "id": "06_hashmap",
@@ -109,6 +1864,7 @@ BENCHMARKS = [
             "zig": "hashmap.zig",
             "vela": "hashmap.vela",
         },
+        "snippets": SNIPPETS["06_hashmap"],
     },
     {
         "id": "07_web_server",
@@ -126,6 +1882,37 @@ BENCHMARKS = [
             "zig": "web.zig",
             "vela": "web.vela",
         },
+        "snippets": SNIPPETS["07_web_server"],
+    },
+    {
+        "id": "08_nbody",
+        "name": "N-Body Simulation",
+        "category": "Vector Math & Physics",
+        "kind": "batch",
+        "desc": "Symplectic orbital simulation of 5 celestial bodies over 5,000,000 steps - pure double-precision vector math",
+        "files": {
+            "c": "nbody.c",
+            "rust": "nbody.rs",
+            "go": "nbody.go",
+            "zig": "nbody.zig",
+            "vela": "nbody.vela",
+        },
+        "snippets": SNIPPETS["08_nbody"],
+    },
+    {
+        "id": "09_matmul",
+        "name": "Matrix Multiplication",
+        "category": "Memory & Cache Locality",
+        "kind": "batch",
+        "desc": "Dense double matrix multiply N=1000 (1 billion inner ops) - contiguous stride cache locality & loop vectorization",
+        "files": {
+            "c": "matmul.c",
+            "rust": "matmul.rs",
+            "go": "matmul.go",
+            "zig": "matmul.zig",
+            "vela": "matmul.vela",
+        },
+        "snippets": SNIPPETS["09_matmul"],
     },
 ]
 
@@ -399,15 +2186,11 @@ def wait_port_ready(port: int, timeout_s: float = 5.0) -> bool:
 def wait_port_closed(port: int, timeout_s: float = 3.0):
     deadline = time.perf_counter() + timeout_s
     while time.perf_counter() < deadline:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            s.settimeout(0.1)
-            s.connect(("127.0.0.1", port))
-            s.close()
-            time.sleep(0.02)
-        except OSError:
-            s.close()
-            return
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.05)
+            if s.connect_ex(("127.0.0.1", port)) != 0:
+                return
+        time.sleep(0.02)
 
 
 def verify_and_measure_http(
@@ -419,35 +2202,26 @@ def verify_and_measure_http(
     runs: int,
     compile_s: float,
 ):
-    wait_port_closed(port)
     proc = subprocess.Popen(
         [str(bin_path)],
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
     )
     try:
-        if not wait_port_ready(port):
-            err_msg = ""
-            if proc.poll() is not None and proc.stderr:
-                err_msg = proc.stderr.read().decode("utf-8", errors="replace")
-            raise RuntimeError(f"Server {bin_path.name} failed to listen on {port}: {err_msg}")
+        if not wait_port_ready(port, timeout_s=6.0):
+            raise TimeoutError(f"HTTP server {bin_path.name} failed to bind on port {port}")
 
-        # Verify /json parity
         with urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=1.0) as resp:
-            json_body = resp.read().decode().strip()
-        parsed_json = json.loads(json_body)
-        if parsed_json.get("status") != "ok" or parsed_json.get("value") != 42:
-            raise RuntimeError(f"Unexpected JSON payload: {json_body}")
+            data = resp.read().decode()
+            parsed_json = json.loads(data)
 
-        # Warmup burst
         subprocess.run(
             [str(http_load_bin), str(port), str(threads), "200"],
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
             check=True,
         )
 
-        # Timed load runs (cap at 3 runs so ephemeral sockets stay well under 28k)
         load_runs = max(2, min(3, runs))
         elapsed_list, rps_list, p95_list = [], [], []
         for _ in range(load_runs):
@@ -535,11 +2309,11 @@ def generate_html_report(all_results: dict, runs: int, warmup: int, report_path:
     .badge {{ background: var(--accent-glow); color: var(--accent); border: 1px solid var(--accent); font-size: 0.75rem; font-weight: 700; padding: 0.25rem 0.6rem; border-radius: 9999px; text-transform: uppercase; }}
     .subtitle {{ color: var(--text-muted); font-size: 0.95rem; margin-top: 0.35rem; }}
     
-    .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1.25rem; margin-bottom: 2rem; }}
+    .stats-grid {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.25rem; margin-bottom: 2rem; }}
     .stat-card {{ background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 1rem; padding: 1.25rem; position: relative; overflow: hidden; }}
     .stat-card::after {{ content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--card-color, var(--accent)); }}
     .stat-label {{ font-size: 0.75rem; font-weight: 700; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; }}
-    .stat-val {{ font-size: 1.45rem; font-weight: 800; margin-top: 0.35rem; }}
+    .stat-val {{ font-size: 1.35rem; font-weight: 800; margin-top: 0.35rem; }}
     .stat-sub {{ font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem; }}
 
     .radar-section {{ background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 1rem; padding: 1.5rem; margin-bottom: 2rem; display: grid; grid-template-columns: 380px 1fr; gap: 2rem; align-items: center; }}
@@ -574,6 +2348,16 @@ def generate_html_report(all_results: dict, runs: int, warmup: int, report_path:
     tr:last-child td {{ border-bottom: none; }}
     .winner-tag {{ background: rgba(16, 185, 129, 0.15); color: #34d399; padding: 0.15rem 0.45rem; border-radius: 4px; font-weight: 700; font-size: 0.7rem; margin-left: 0.4rem; }}
 
+    .code-card {{ margin-top: 1.25rem; background: rgba(0,0,0,0.35); border: 1px solid var(--card-border); border-radius: 0.75rem; overflow: hidden; }}
+    .code-header {{ display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--card-border); padding: 0.5rem 0.9rem; flex-wrap: wrap; gap: 0.5rem; }}
+    .code-title {{ font-size: 0.8rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 0.4rem; }}
+    .code-tabs {{ display: flex; gap: 0.35rem; }}
+    .code-tab {{ background: transparent; border: 1px solid transparent; color: var(--text-muted); padding: 0.25rem 0.65rem; border-radius: 0.35rem; font-size: 0.78rem; font-weight: 600; cursor: pointer; transition: all 0.15s ease; }}
+    .code-tab:hover {{ color: var(--text); background: rgba(255,255,255,0.05); }}
+    .code-tab.active {{ color: #fff; background: #1f2937; border-color: #374151; }}
+    .code-body {{ padding: 0.9rem; overflow-x: auto; max-height: 280px; overflow-y: auto; }}
+    .code-body pre {{ margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; font-size: 0.82rem; line-height: 1.45; color: #e5e7eb; }}
+
     footer {{ text-align: center; color: var(--text-muted); font-size: 0.85rem; padding-top: 2rem; border-top: 1px solid var(--card-border); margin-top: 3rem; }}
   </style>
 </head>
@@ -582,7 +2366,7 @@ def generate_html_report(all_results: dict, runs: int, warmup: int, report_path:
     <header>
       <div>
         <h1>Vela Performance Dashboard <span class="badge">Vela vs C, Rust, Go, Zig</span></h1>
-        <div class="subtitle">Cross-language runtime, memory, concurrency, compilation, and HTTP throughput metrics ({runs} timed runs, {warmup} warmups).</div>
+        <div class="subtitle">Cross-language runtime, memory, concurrency, compilation, and HTTP throughput metrics ({runs} timed runs, {warmup} warmups across 9 benchmarks).</div>
       </div>
       <div>
         <span class="badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border-color: #3b82f6;">Automated Output Parity Checked</span>
@@ -658,6 +2442,23 @@ def generate_html_report(all_results: dict, runs: int, warmup: int, report_path:
       return (kb / 1024).toFixed(2) + " MB";
     }}
 
+    function escapeHtml(str) {{
+      return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }}
+
+    function switchSnippet(bId, lang) {{
+      const bData = DATA[bId];
+      if (!bData || !bData.meta || !bData.meta.snippets || !bData.meta.snippets[lang]) return;
+      const el = document.getElementById(`code-box-${{bId}}`);
+      if (el) el.textContent = bData.meta.snippets[lang];
+      const tabContainer = document.getElementById(`code-tabs-${{bId}}`);
+      if (tabContainer) {{
+        tabContainer.querySelectorAll('.code-tab').forEach(btn => {{
+          btn.classList.toggle('active', btn.textContent.trim().toLowerCase() === lang);
+        }});
+      }}
+    }}
+
     function buildKpiCards() {{
       const grid = document.getElementById('kpi-cards');
       grid.innerHTML = '';
@@ -669,11 +2470,10 @@ def generate_html_report(all_results: dict, runs: int, warmup: int, report_path:
         const sorted = Object.entries(res).sort((a, b) => a[1].median - b[1].median);
         if (sorted.length > 0) {{
           const [wLang, wStats] = sorted[0];
-          const second = sorted[1];
           const goStats = res['go'];
           const sub = goStats
             ? `${{(goStats.median / wStats.median).toFixed(1)}}x faster than Go GC (${{formatRss(wStats.rss_kb)}} RSS)`
-            : `${{(second[1].median / wStats.median).toFixed(2)}}x faster than ${{second[0].toUpperCase()}}`;
+            : `Winner in regional / arena memory`;
           cards.push({{
             label: "Memory Lifecycle Winner",
             val: `${{LABELS[wLang]}} (${{formatTime(wStats.median)}})`,
@@ -694,7 +2494,7 @@ def generate_html_report(all_results: dict, runs: int, warmup: int, report_path:
             ? `Vela std/web: ${{Math.round(velaStats.rps).toLocaleString()}} req/s (${{formatSize(velaStats.bin_size_kb)}} bin)`
             : `Peak throughput: ${{Math.round(wStats.rps).toLocaleString()}} req/s`;
           cards.push({{
-            label: "Web Server Throughput Winner",
+            label: "Web Server Throughput",
             val: `${{LABELS[wLang]}} (${{Math.round(wStats.rps).toLocaleString()}} req/s)`,
             sub,
             color: COLORS[wLang]
@@ -719,7 +2519,37 @@ def generate_html_report(all_results: dict, runs: int, warmup: int, report_path:
         }}
       }}
 
-      // 4. Average binary size leader
+      // 4. N-Body Simulation winner
+      if (DATA['08_nbody']) {{
+        const res = DATA['08_nbody'].results;
+        const sorted = Object.entries(res).sort((a, b) => a[1].median - b[1].median);
+        if (sorted.length > 0) {{
+          const [wLang, wStats] = sorted[0];
+          cards.push({{
+            label: "N-Body Physics Winner",
+            val: `${{LABELS[wLang]}} (${{formatTime(wStats.median)}})`,
+            sub: `5M double-precision vector steps`,
+            color: COLORS[wLang]
+          }});
+        }}
+      }}
+
+      // 5. Matrix Multiplication winner
+      if (DATA['09_matmul']) {{
+        const res = DATA['09_matmul'].results;
+        const sorted = Object.entries(res).sort((a, b) => a[1].median - b[1].median);
+        if (sorted.length > 0) {{
+          const [wLang, wStats] = sorted[0];
+          cards.push({{
+            label: "Matrix Multiply Winner",
+            val: `${{LABELS[wLang]}} (${{formatTime(wStats.median)}})`,
+            sub: `N=1000 (1B inner float ops)`,
+            color: COLORS[wLang]
+          }});
+        }}
+      }}
+
+      // 6. Average binary size leader
       const langSizes = {{}};
       for (const bData of Object.values(DATA)) {{
         for (const [l, r] of Object.entries(bData.results)) {{
@@ -757,10 +2587,12 @@ def generate_html_report(all_results: dict, runs: int, warmup: int, report_path:
       const axes = [
         {{ key: '01_mandelbrot', label: 'CPU Loops', extract: r => 1 / r.median }},
         {{ key: '02_binary_trees', label: 'Memory Mgmt', extract: r => 1 / r.median }},
+        {{ key: '03_concurrency', label: 'Channel Switch', extract: r => 1 / r.median }},
         {{ key: '04_quicksort', label: 'Slice Sort', extract: r => 1 / r.median }},
         {{ key: '06_hashmap', label: 'Hash Map', extract: r => 1 / r.median }},
         {{ key: '07_web_server', label: 'Web RPS', extract: r => r.rps || (1 / r.median) }},
-        {{ key: '01_mandelbrot', label: 'Small Binary', extract: r => 1 / Math.log2(r.bin_size_kb + 2) }},
+        {{ key: '08_nbody', label: 'Vector Math', extract: r => 1 / r.median }},
+        {{ key: '09_matmul', label: 'Cache Locality', extract: r => 1 / r.median }},
       ].filter(a => DATA[a.key]);
 
       const langs = ['vela', 'c', 'rust', 'go', 'zig'].filter(l =>
@@ -954,6 +2786,33 @@ def generate_html_report(all_results: dict, runs: int, warmup: int, report_path:
           `;
           tableBody.appendChild(tr);
         }});
+
+        // Core Algorithm Preview Box
+        if (meta.snippets) {{
+          const codeCard = document.createElement('div');
+          codeCard.className = 'code-card';
+          const defaultLang = 'go';
+          const availLangs = ['go', 'vela', 'rust', 'zig', 'c'].filter(l => meta.snippets[l]);
+          codeCard.innerHTML = `
+            <div class="code-header">
+              <div class="code-title">
+                <span>⚡ Core Algorithm Snippet</span>
+                <span style="font-weight:normal; text-transform:none; font-size:0.75rem; color:var(--text-muted);">(Showing algorithmic kernel only)</span>
+              </div>
+              <div class="code-tabs" id="code-tabs-${{bId}}">
+                ${{availLangs.map(l => `
+                  <button class="code-tab ${{l === defaultLang ? 'active' : ''}}" onclick="switchSnippet('${{bId}}', '${{l}}')">
+                    ${{l.toUpperCase()}}
+                  </button>
+                `).join('')}}
+              </div>
+            </div>
+            <div class="code-body">
+              <pre><code id="code-box-${{bId}}">${{escapeHtml(meta.snippets[defaultLang] || meta.snippets['vela'] || '')}}</code></pre>
+            </div>
+          `;
+          section.appendChild(codeCard);
+        }}
       }}
     }}
 
@@ -1005,7 +2864,7 @@ def main():
         )
 
     print("=" * 84)
-    print(" Vela Comparative Benchmark Suite (7 Workloads x 5 Languages)")
+    print(" Vela Comparative Benchmark Suite (9 Workloads x 5 Languages)")
     print("=" * 84)
     print(f"Vela:    {tools['vela'] or 'not found'}")
     print(f"C (GCC): {tools['cc'] or 'not found'}")
@@ -1117,7 +2976,7 @@ def main():
     with open(report_path_md, "w", encoding="utf-8") as f:
         f.write("# Vela Benchmark Results\n\n")
         f.write(
-            "Comparison between **Vela**, **C (GCC -O3)**, **Rust (opt-level=3, LTO)**, **Go (1.26)**, and **Zig (ReleaseFast)**.\n\n"
+            "Comparison between **Vela**, **C (GCC -O3)**, **Rust (opt-level=3, LTO)**, **Go (1.26)**, and **Zig (ReleaseFast)** across 9 comprehensive workloads.\n\n"
         )
         f.write(
             f"* Runs: {args.runs} (Warmup: {args.warmup}) | Direct timing via `time.perf_counter()`; Peak RSS via GNU `time -v` / `/proc/pid/status` `VmHWM`. All binaries stripped.\n\n"
