@@ -33,6 +33,7 @@ interface LspRange {
 }
 
 interface LspMessage {
+    jsonrpc?: string;
     id?: number;
     method?: string;
     params?: unknown;
@@ -232,7 +233,7 @@ class StdioLspClient {
                 resolve: (v) => resolve(v as T),
                 reject
             });
-            const msg: LspMessage = { jsonrpc: '2.0' as unknown as undefined, id, method, params };
+            const msg: LspMessage = { jsonrpc: '2.0', id, method, params };
             this.trace('client -> server', msg);
             this.send({ jsonrpc: '2.0', id, method, params });
         });
@@ -325,6 +326,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
     const client = new StdioLspClient(output);
     lspClient = client;
+    context.subscriptions.push(client.onDidChangeSemanticTokensEmitter);
     await client.start();
 
     context.subscriptions.push(
@@ -332,7 +334,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     );
     context.subscriptions.push(
         vscode.workspace.onDidChangeTextDocument((e) => {
-            if (!client.ready || e.document.languageId !== 'vela') return;
+            if (!client.ready || e.document.languageId !== 'vela' || e.contentChanges.length === 0) return;
             client.sendNotification('textDocument/didChange', {
                 textDocument: {
                     uri: e.document.uri.toString(),

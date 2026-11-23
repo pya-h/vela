@@ -305,6 +305,7 @@ async function activate(context) {
     context.subscriptions.push(output);
 
     lspClient = new StdioLspClient(output);
+    context.subscriptions.push(lspClient.diagnosticCollection, lspClient.onDidChangeSemanticTokensEmitter);
     await lspClient.start();
 
     context.subscriptions.push(
@@ -312,7 +313,7 @@ async function activate(context) {
     );
     context.subscriptions.push(
         vscode.workspace.onDidChangeTextDocument((e) => {
-            if (!lspClient.ready || e.document.languageId !== 'vela') return;
+            if (!lspClient.ready || e.document.languageId !== 'vela' || e.contentChanges.length === 0) return;
             lspClient.sendNotification('textDocument/didChange', {
                 textDocument: {
                     uri: e.document.uri.toString(),

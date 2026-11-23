@@ -1516,8 +1516,38 @@ priv task put_response(client: Socket, resp: Response@r, keep_alive: bool, r: re
     put_bytes(client, wire)
 fi
 
+; Reads from a non-blocking socket, waiting until readable (or timeout) on WouldBlock.
+priv task read_chunk_blocking(client: Socket, max_bytes: int, timeout_ms: int, r: region default) -> text@r ~ SocketError
+    fixed deadline = time_ms() + timeout_ms
+    endless
+        fixed now = time_ms()
+        when cancelled() or now >= deadline
+            <- fail SocketError.Timeout
+        fi
+        fixed rem = deadline - now
+        fixed wait = when rem > 100 100 else rem fi
+        fixed ready = client.poll(1, wait) { failure pe
+            <- fail pe
+        }
+        when ready == 0
+            continue
+        fi
+        fixed chunk = client.read(max_bytes, r) { failure err
+            fixed is_wb = match err
+            case SocketError.WouldBlock = true
+            case _ = false
+            fi
+            when is_wb
+                continue
+            fi
+            <- fail err
+        }
+        <- chunk
+    fi
+fi
+
 task read_http_request(client: Socket, max_body: int, r: region default) -> text@r ~ WebError
-    flex chunk = client.read(4096, r) { failure e
+    flex chunk = read_chunk_blocking(client, 4096, 5000, r) { failure e
         <- fail WebError.BadRequest("failed reading from client")
     }
     when chunk.len == 0
@@ -1526,7 +1556,7 @@ task read_http_request(client: Socket, max_body: int, r: region default) -> text
     fixed hdr_end = text_find(chunk, "\r\n\r\n", 0)
     when hdr_end < 0
         endless
-            fixed more = client.read(4096, r) { "" }
+            fixed more = read_chunk_blocking(client, 4096, 5000, r) { "" }
             when more.len == 0
                 break
             fi
@@ -1552,7 +1582,7 @@ task read_http_request(client: Socket, max_body: int, r: region default) -> text
                 <- fail WebError.PayloadTooLarge
             fi
             loop chunk.len - body_start - 4 < content_len
-                fixed more = client.read(4096, r) { "" }
+                fixed more = read_chunk_blocking(client, 4096, 5000, r) { "" }
                 when more.len == 0
                     break
                 fi
