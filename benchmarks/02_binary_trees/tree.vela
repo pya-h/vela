@@ -1,0 +1,54 @@
+kind Tree
+    Leaf(value: int)
+    Branch(left: ^Tree, right: ^Tree)
+fi
+
+task build(depth: int, seed: int, r: region) -> Tree@r
+    when depth == 0
+        <- Leaf(seed % 10)
+    fi
+    fixed left = new Tree(build(depth - 1, seed * 3 + 1) at r) at r
+    fixed right = new Tree(build(depth - 1, seed * 7 + 2) at r) at r
+    <- Branch(left, right)
+fi
+
+task total(t: Tree@r) -> int
+    <- match t
+    case Leaf value = value
+    case Branch left right = total(left^) + total(right^)
+    fi
+fi
+
+task main()
+    region long_lived
+    fixed max_depth = 16
+    fixed stretch_depth = max_depth + 1
+
+    region stretch
+    fixed stretch_tree = build(stretch_depth, 0) at stretch
+    show("stretch tree of depth ", stretch_depth, " check: ", total(stretch_tree))
+
+    fixed long_tree = build(max_depth, 0) at long_lived
+
+    flex depth = 4
+    loop depth <= max_depth
+        flex iterations = 1
+        flex shift = max_depth - depth + 4
+        loop shift > 0
+            iterations *= 2
+            shift -= 1
+        fi
+        flex sum = 0
+        flex i = 0
+        loop i < iterations
+            region pass
+            fixed t = build(depth, i) at pass
+            sum += total(t)
+            i += 1
+        fi
+        show(iterations, " trees of depth ", depth, " check: ", sum)
+        depth += 2
+    fi
+
+    show("long lived tree of depth ", max_depth, " check: ", total(long_tree))
+fi

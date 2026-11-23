@@ -1,0 +1,11 @@
+task fib(n: int) -> int
+    when n < 2
+        <- n
+    else
+        <- fib(n - 1) + fib(n - 2)
+    fi
+fi
+
+task main()
+    show(fib(40))
+fi

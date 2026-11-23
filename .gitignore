@@ -15,3 +15,6 @@ a.out
 # VS Code extension: build artifacts and local packages
 /editors/vscode/node_modules
 /editors/vscode/*.vsix
+# Benchmark suite build outputs
+/benchmarks/build
+

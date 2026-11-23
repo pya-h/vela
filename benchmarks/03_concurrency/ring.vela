@@ -1,0 +1,34 @@
+task worker(id: int, in_ch: Chan[int], out_ch: Chan[int]) -> int
+    endless
+        fixed token = in_ch.wait_and_receive()
+        when token == 0
+            0 ->> out_ch
+            <- id
+        fi
+        (token - 1) ->> out_ch
+    fi
+    <- id
+fi
+
+task main()
+    region r default
+    fixed passes = 100000
+    fixed ch0 = chan_new<int>(1)
+    fixed ch1 = chan_new<int>(1)
+    fixed ch2 = chan_new<int>(1)
+    fixed ch3 = chan_new<int>(1)
+
+    fixed c0 = rush worker(0, ch0, ch1)
+    fixed c1 = rush worker(1, ch1, ch2)
+    fixed c2 = rush worker(2, ch2, ch3)
+    fixed c3 = rush worker(3, ch3, ch0)
+
+    passes ->> ch0
+
+    fixed r0 = <<- c0
+    fixed r1 = <<- c1
+    fixed r2 = <<- c2
+    fixed r3 = <<- c3
+
+    show("ring completed ", passes, " passes: ", r0, " ", r1, " ", r2, " ", r3)
+fi
