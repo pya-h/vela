@@ -1,4 +1,4 @@
-const std = @import("std");
+extern "c" fn printf(format: [*:0]const u8, ...) c_int;
 
 fn mandelbrot(size: i64) i64 {
     var total: i64 = 0;
@@ -25,7 +25,6 @@ fn mandelbrot(size: i64) i64 {
     return total;
 }
 
-pub fn main() !void {
-    const stdout = std.io.getStdOut().writer();
-    try stdout.print("{d}\n", .{mandelbrot(2000)});
+pub fn main() void {
+    _ = printf("%ld\n", mandelbrot(2000));
 }

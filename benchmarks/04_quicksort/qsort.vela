@@ -1,0 +1,39 @@
+task quicksort(flex items: [int]@r, low: int, high: int)
+    when low < high
+        fixed pivot = items[high]
+        flex i = low - 1
+        flex j = low
+        loop j < high
+            when items[j] <= pivot
+                i += 1
+                items[i], items[j] = items[j], items[i]
+            fi
+            j += 1
+        fi
+        items[i + 1], items[high] = items[high], items[i + 1]
+        fixed pi = i + 1
+        quicksort(items, low, pi - 1)
+        quicksort(items, pi + 1, high)
+    fi
+fi
+
+task main()
+    region r default
+    fixed n = 1000000
+    flex arr = new [int]([0#n]) at r
+    flex seed = 123456789
+    each idx in 0..n
+        seed = (seed * 1103515245 + 12345) % 2147483648
+        arr[idx] = seed
+    fi
+
+    quicksort(arr, 0, n - 1)
+
+    flex checksum = 0
+    flex k = 0
+    loop k < n
+        checksum += arr[k]
+        k += 1000
+    fi
+    show("sorted ", n, " elements, checksum: ", checksum)
+fi

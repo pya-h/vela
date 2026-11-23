@@ -1,0 +1,30 @@
+task count_primes(limit: int) -> int
+    region r default
+    flex is_prime = new [bool]([true#limit]) at r
+    is_prime[0] = false
+    is_prime[1] = false
+
+    flex p = 2
+    loop p * p < limit
+        when is_prime[p]
+            flex multiple = p * p
+            loop multiple < limit
+                is_prime[multiple] = false
+                multiple += p
+            fi
+        fi
+        p += 1
+    fi
+
+    flex count = 0
+    each idx in 0..limit
+        when is_prime[idx]
+            count += 1
+        fi
+    fi
+    <- count
+fi
+
+task main()
+    show("primes count: ", count_primes(10000000))
+fi

@@ -1,4 +1,5 @@
 const std = @import("std");
+extern "c" fn printf(format: [*:0]const u8, ...) c_int;
 
 const Tree = union(enum) {
     leaf: i64,
@@ -34,13 +35,12 @@ fn stretchCheck(parent: std.mem.Allocator, stretch_depth: i32) !i64 {
 }
 
 pub fn main() !void {
-    const base_alloc = std.heap.page_allocator;
-    const stdout = std.io.getStdOut().writer();
+    const base_alloc = std.heap.c_allocator;
     const max_depth: i32 = 16;
     const stretch_depth = max_depth + 1;
 
     const stretch_sum = try stretchCheck(base_alloc, stretch_depth);
-    try stdout.print("stretch tree of depth {d} check: {d}\n", .{ stretch_depth, stretch_sum });
+    _ = printf("stretch tree of depth %d check: %ld\n", stretch_depth, stretch_sum);
 
     var long_arena = std.heap.ArenaAllocator.init(base_alloc);
     defer long_arena.deinit();
@@ -59,8 +59,8 @@ pub fn main() !void {
             const t = try build(pass_arena.allocator(), depth, i);
             sum += total(t);
         }
-        try stdout.print("{d} trees of depth {d} check: {d}\n", .{ iterations, depth, sum });
+        _ = printf("%ld trees of depth %d check: %ld\n", iterations, depth, sum);
     }
 
-    try stdout.print("long lived tree of depth {d} check: {d}\n", .{ max_depth, total(long_tree) });
+    _ = printf("long lived tree of depth %d check: %ld\n", max_depth, total(long_tree));
 }
