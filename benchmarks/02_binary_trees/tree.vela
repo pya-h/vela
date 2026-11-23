@@ -19,15 +19,19 @@ task total(t: Tree@r) -> int
     fi
 fi
 
+task stretch_check(stretch_depth: int) -> int
+    region stretch
+    fixed stretch_tree = build(stretch_depth, 0) at stretch
+    <- total(stretch_tree)
+fi
+
 task main()
-    region long_lived
     fixed max_depth = 16
     fixed stretch_depth = max_depth + 1
 
-    region stretch
-    fixed stretch_tree = build(stretch_depth, 0) at stretch
-    show("stretch tree of depth ", stretch_depth, " check: ", total(stretch_tree))
+    show("stretch tree of depth ", stretch_depth, " check: ", stretch_check(stretch_depth))
 
+    region long_lived
     fixed long_tree = build(max_depth, 0) at long_lived
 
     flex depth = 4

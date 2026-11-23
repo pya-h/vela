@@ -19,6 +19,12 @@ static void chan_init(chan_t *c) {
     pthread_cond_init(&c->not_full, NULL);
 }
 
+static void chan_destroy(chan_t *c) {
+    pthread_mutex_destroy(&c->lock);
+    pthread_cond_destroy(&c->not_empty);
+    pthread_cond_destroy(&c->not_full);
+}
+
 static void chan_send(chan_t *c, int64_t val) {
     pthread_mutex_lock(&c->lock);
     while (c->has_item) {
@@ -81,6 +87,9 @@ int main(void) {
     void *res[4];
     for (int i = 0; i < 4; i++) {
         pthread_join(th[i], &res[i]);
+    }
+    for (int i = 0; i < 4; i++) {
+        chan_destroy(&ch[i]);
     }
 
     printf("ring completed %ld passes: %ld %ld %ld %ld\n",

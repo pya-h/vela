@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Vela Performance & Resource Benchmark Suite
-Compares Vela against C, Rust, and Go across CPU compute, memory allocation, and concurrency.
+Compares Vela against C, Rust, Go, and Zig across CPU compute, memory allocation, and concurrency.
 """
 
 import argparse
@@ -18,26 +18,30 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 BENCH_DIR = ROOT_DIR / "benchmarks"
 BUILD_DIR = BENCH_DIR / "build"
 
+LANGUAGES = ["c", "rust", "go", "zig", "vela"]
+
 BENCHMARKS = [
     {
-        "id": "01_fibonacci",
-        "name": "Fibonacci (CPU / Recursion)",
-        "desc": "Recursive fib(40) - pure call stack overhead and integer arithmetic",
+        "id": "01_mandelbrot",
+        "name": "Mandelbrot (CPU / Tight Loops)",
+        "desc": "2000x2000 Mandelbrot escape sum (50 max iterations) - floating-point and loop codegen",
         "files": {
-            "c": "fib.c",
-            "rust": "fib.rs",
-            "go": "fib.go",
-            "vela": "fib.vela",
+            "c": "mandelbrot.c",
+            "rust": "mandelbrot.rs",
+            "go": "mandelbrot.go",
+            "zig": "mandelbrot.zig",
+            "vela": "mandelbrot.vela",
         },
     },
     {
         "id": "02_binary_trees",
-        "name": "Binary Trees (Memory / Regions vs GC)",
-        "desc": "Allocating and traversing millions of nodes across short-lived tree passes",
+        "name": "Binary Trees (Memory / Regions vs GC vs RAII)",
+        "desc": "Allocating and traversing millions of nodes across short-lived tree passes (depth 16)",
         "files": {
             "c": "tree.c",
             "rust": "tree.rs",
             "go": "tree.go",
+            "zig": "tree.zig",
             "vela": "tree.vela",
         },
     },
@@ -49,6 +53,7 @@ BENCHMARKS = [
             "c": "ring.c",
             "rust": "ring.rs",
             "go": "ring.go",
+            "zig": "ring.zig",
             "vela": "ring.vela",
         },
     },
@@ -69,7 +74,7 @@ def find_binary(name: str, candidates: list[str]) -> str:
     return ""
 
 
-def resolve_toolchains():
+def resolve_toolchains() -> dict[str, str]:
     vela = find_binary(
         "VELA",
         [
@@ -97,38 +102,43 @@ def resolve_toolchains():
         ],
     )
     go = find_binary("GO", ["/usr/local/go/bin/go", "go"])
+    zig = find_binary("ZIG", ["zig", "/usr/local/zig/zig"])
     cc = find_binary("CC", ["gcc", "clang", "cc"])
     gnu_time = find_binary("TIME", ["/usr/bin/time", "time"])
-    hyperfine = shutil.which("hyperfine")
+    hyperfine = shutil.which("hyperfine") or ""
 
     return {
         "vela": vela,
         "rustc": rustc,
         "go": go,
+        "zig": zig,
         "cc": cc,
         "time": gnu_time,
         "hyperfine": hyperfine,
     }
 
 
-def compile_binary(lang: str, src_path: Path, out_path: Path, tools: dict) -> bool:
+def compile_binary(lang: str, src_path: Path, out_path: Path, tools: dict[str, str]) -> str:
+    """Compiles a benchmark source file. Returns 'ok', 'skip', or 'fail'."""
+    if not src_path.exists():
+        return "skip"
+
     out_path.parent.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
 
     if lang == "vela":
-        if not tools["vela"]:
-            print("  [x] vela compiler not found")
-            return False
-        env["CC"] = f"{tools['cc']} -O3 -march=native"
+        if not tools["vela"] or not tools["cc"]:
+            return "skip"
+        env["CC"] = f"{tools['cc']} -O3 -march=native -s"
         cmd = [tools["vela"], str(src_path), "-o", str(out_path)]
     elif lang == "c":
         if not tools["cc"]:
-            print("  [x] C compiler not found")
-            return False
+            return "skip"
         cmd = [
             tools["cc"],
             "-O3",
             "-march=native",
+            "-s",
             "-o",
             str(out_path),
             str(src_path),
@@ -137,8 +147,7 @@ def compile_binary(lang: str, src_path: Path, out_path: Path, tools: dict) -> bo
         ]
     elif lang == "rust":
         if not tools["rustc"]:
-            print("  [x] rustc not found")
-            return False
+            return "skip"
         cmd = [
             tools["rustc"],
             "-C",
@@ -147,14 +156,15 @@ def compile_binary(lang: str, src_path: Path, out_path: Path, tools: dict) -> bo
             "lto=thin",
             "-C",
             "target-cpu=native",
+            "-C",
+            "strip=symbols",
             "-o",
             str(out_path),
             str(src_path),
         ]
     elif lang == "go":
         if not tools["go"]:
-            print("  [x] go toolchain not found")
-            return False
+            return "skip"
         cmd = [
             tools["go"],
             "build",
@@ -163,20 +173,42 @@ def compile_binary(lang: str, src_path: Path, out_path: Path, tools: dict) -> bo
             str(out_path),
             str(src_path),
         ]
+    elif lang == "zig":
+        if not tools["zig"]:
+            return "skip"
+        cmd = [
+            tools["zig"],
+            "build-exe",
+            "-O",
+            "ReleaseFast",
+            "-fstrip",
+            f"-femit-bin={out_path}",
+            str(src_path),
+        ]
     else:
-        return False
+        return "skip"
 
     res = subprocess.run(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if res.returncode != 0:
-        print(f"  [x] Failed to compile {src_path.name} ({lang}):")
+        print(f" fail\n    [!] {src_path.name} ({lang}) compile error:")
         print(res.stderr.decode("utf-8", errors="replace"))
-        return False
-    return True
+        return "fail"
+    return "ok"
 
 
-def run_benchmark_target(bin_path: Path, runs: int, warmup: int, time_bin: str):
-    # Warmup
-    for _ in range(warmup):
+def verify_and_measure(bin_path: Path, runs: int, warmup: int, time_bin: str):
+    # 1. Sanity run + capture canonical stdout
+    sanity = subprocess.run(
+        [str(bin_path)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=True,
+    )
+    stdout_output = sanity.stdout.strip()
+
+    # 2. Warmup runs (no timing)
+    for _ in range(max(0, warmup - 1)):
         subprocess.run(
             [str(bin_path)],
             stdout=subprocess.DEVNULL,
@@ -184,59 +216,44 @@ def run_benchmark_target(bin_path: Path, runs: int, warmup: int, time_bin: str):
             check=True,
         )
 
+    # 3. Clean timed runs (direct binary invocation with zero wrapper overhead)
     times = []
-    rss_list = []
-
     for _ in range(runs):
-        if time_bin and os.path.exists(time_bin):
-            t_start = time.perf_counter()
+        t_start = time.perf_counter()
+        subprocess.run(
+            [str(bin_path)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True,
+        )
+        times.append(time.perf_counter() - t_start)
+
+    # 4. Separate Peak RSS runs via GNU time (isolated from wall-clock timing)
+    rss_list = []
+    if time_bin and os.path.exists(time_bin):
+        for _ in range(min(3, runs)):
             res = subprocess.run(
                 [time_bin, "-v", str(bin_path)],
-                stdout=subprocess.PIPE,
+                stdout=subprocess.DEVNULL,
                 stderr=subprocess.PIPE,
                 text=True,
+                check=True,
             )
-            t_elapsed = time.perf_counter() - t_start
-
-            if res.returncode != 0:
-                raise RuntimeError(f"Execution error on {bin_path}: {res.stderr}")
-
-            # Parse Maximum resident set size (kbytes)
-            rss = 0
             for line in res.stderr.splitlines():
                 if "Maximum resident set size" in line:
                     match = re.search(r"(\d+)", line)
                     if match:
-                        rss = int(match.group(1))
+                        rss_list.append(int(match.group(1)))
                         break
-            times.append(t_elapsed)
-            if rss > 0:
-                rss_list.append(rss)
-        else:
-            t_start = time.perf_counter()
-            subprocess.run(
-                [str(bin_path)],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                check=True,
-            )
-            t_elapsed = time.perf_counter() - t_start
-            times.append(t_elapsed)
-
-    mean_time = statistics.mean(times)
-    stddev_time = statistics.stdev(times) if len(times) > 1 else 0.0
-    min_time = min(times)
-    max_time = max(times)
-    max_rss = max(rss_list) if rss_list else 0
-    bin_size_kb = os.path.getsize(bin_path) / 1024.0
 
     return {
-        "mean": mean_time,
-        "stddev": stddev_time,
-        "min": min_time,
-        "max": max_time,
-        "rss_kb": max_rss,
-        "bin_size_kb": bin_size_kb,
+        "stdout": stdout_output,
+        "mean": statistics.mean(times),
+        "stddev": statistics.stdev(times) if len(times) > 1 else 0.0,
+        "min": min(times),
+        "max": max(times),
+        "rss_kb": max(rss_list) if rss_list else 0,
+        "bin_size_kb": os.path.getsize(bin_path) / 1024.0,
     }
 
 
@@ -251,7 +268,7 @@ def format_duration(seconds: float) -> str:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Run language benchmarks: Vela vs C, Rust, Go"
+        description="Run language benchmarks: Vela vs C, Rust, Go, Zig"
     )
     parser.add_argument(
         "--runs", type=int, default=5, help="Number of timed runs (default: 5)"
@@ -281,10 +298,11 @@ def main():
     print("=" * 80)
     print(" Vela Comparative Benchmark Suite")
     print("=" * 80)
-    print(f"Vela:    {tools['vela']}")
-    print(f"C (GCC): {tools['cc']}")
-    print(f"Rust:    {tools['rustc']}")
-    print(f"Go:      {tools['go']}")
+    print(f"Vela:    {tools['vela'] or 'not found'}")
+    print(f"C (GCC): {tools['cc'] or 'not found'}")
+    print(f"Rust:    {tools['rustc'] or 'not found'}")
+    print(f"Go:      {tools['go'] or 'not found'}")
+    print(f"Zig:     {tools['zig'] or 'not found (will skip)'}")
     print(f"Runs:    {args.runs} (Warmup: {args.warmup})")
     print("=" * 80)
 
@@ -297,6 +315,7 @@ def main():
     ]
 
     all_results = {}
+    has_failure = False
 
     for bench in selected_benches:
         print(f"\n[+] Benchmark: {bench['name']}")
@@ -305,26 +324,43 @@ def main():
         out_b_dir = BUILD_DIR / bench["id"]
 
         bench_res = {}
-        for lang in ["c", "rust", "go", "vela"]:
+        expected_stdout = None
+
+        for lang in LANGUAGES:
             src_file = b_dir / bench["files"][lang]
             out_bin = out_b_dir / f"{bench['id']}_{lang}"
 
             print(f"  • Compiling {lang:5} ({src_file.name})...", end="", flush=True)
-            if not compile_binary(lang, src_file, out_bin, tools):
+            status = compile_binary(lang, src_file, out_bin, tools)
+            if status == "skip":
+                print(" skipped (toolchain unavailable)")
+                continue
+            if status == "fail":
+                has_failure = True
                 continue
             print(" ok")
 
             print(f"    Benchmarking {lang}...", end="", flush=True)
             try:
-                stats = run_benchmark_target(
+                stats = verify_and_measure(
                     out_bin, args.runs, args.warmup, tools["time"]
                 )
+                if expected_stdout is None:
+                    expected_stdout = stats["stdout"]
+                elif stats["stdout"] != expected_stdout:
+                    print(f" OUTPUT MISMATCH!")
+                    print(f"      Expected:\n{expected_stdout}")
+                    print(f"      Actual ({lang}):\n{stats['stdout']}")
+                    has_failure = True
+                    continue
+
                 bench_res[lang] = stats
                 print(
                     f" mean: {format_duration(stats['mean'])} ± {format_duration(stats['stddev'])}, RSS: {stats['rss_kb']} KB"
                 )
             except Exception as e:
                 print(f" error: {e}")
+                has_failure = True
 
         all_results[bench["id"]] = {
             "meta": bench,
@@ -335,29 +371,29 @@ def main():
             print(f"\n    Running hyperfine comparison for {bench['id']}...")
             bins = [
                 str(out_b_dir / f"{bench['id']}_{lang}")
-                for lang in ["c", "rust", "go", "vela"]
-                if (out_b_dir / f"{bench['id']}_{lang}").exists()
+                for lang in LANGUAGES
+                if lang in bench_res
             ]
-            subprocess.run(
-                [
-                    tools["hyperfine"],
-                    "--warmup",
-                    str(args.warmup),
-                    "--runs",
-                    str(args.runs),
-                ]
-                + bins
-            )
+            if bins:
+                subprocess.run(
+                    [
+                        tools["hyperfine"],
+                        "--warmup",
+                        str(args.warmup),
+                        "--runs",
+                        str(args.runs),
+                    ]
+                    + bins
+                )
 
-    # Output Markdown Report
     report_path = BENCH_DIR / "RESULTS.md"
     with open(report_path, "w", encoding="utf-8") as f:
         f.write("# Vela Benchmark Results\n\n")
         f.write(
-            f"Comparison between **Vela**, **C (GCC -O3)**, **Rust (opt-level=3, LTO)**, and **Go**.\n\n"
+            "Comparison between **Vela**, **C (GCC -O3)**, **Rust (opt-level=3, LTO)**, **Go**, and **Zig (ReleaseFast)**.\n\n"
         )
         f.write(
-            f"* Runs: {args.runs} (Warmup: {args.warmup}) | Measured with high-resolution timers and GNU `time` for Peak RSS.\n\n"
+            f"* Runs: {args.runs} (Warmup: {args.warmup}) | Timing uses direct process execution; Peak RSS measured separately via GNU `time -v`. All binaries stripped for fair size comparison.\n\n"
         )
 
         for b_id, data in all_results.items():
@@ -369,13 +405,11 @@ def main():
             f.write(
                 "| Language | Time (Mean ± Stddev) | Min - Max | Peak RSS | Binary Size | Rel. to Fastest |\n"
             )
-            f.write(
-                "| :--- | :--- | :--- | :--- | :--- | :--- |\n"
-            )
+            f.write("| :--- | :--- | :--- | :--- | :--- | :--- |\n")
 
             fastest_time = min((r["mean"] for r in results.values()), default=1.0)
 
-            for lang in ["c", "rust", "go", "vela"]:
+            for lang in LANGUAGES:
                 if lang not in results:
                     continue
                 r = results[lang]
@@ -405,18 +439,20 @@ def main():
     print(f"Results successfully saved to: {report_path}")
     print("=" * 80)
 
-    # Print summary table to stdout
     print("\nSummary Results:")
     for b_id, data in all_results.items():
         print(f"\n--- {data['meta']['name']} ---")
         fastest_time = min((r["mean"] for r in data["results"].values()), default=1.0)
-        for lang in ["c", "rust", "go", "vela"]:
+        for lang in LANGUAGES:
             if lang in data["results"]:
                 r = data["results"][lang]
                 ratio = r["mean"] / fastest_time
                 print(
                     f"  {lang.upper():5} | {format_duration(r['mean']):>10} ± {format_duration(r['stddev']):<8} | RSS: {r['rss_kb']:>6} KB | Bin: {r['bin_size_kb']:>7.1f} KB | {ratio:.2f}x"
                 )
+
+    if has_failure:
+        sys.exit(1)
 
 
 if __name__ == "__main__":

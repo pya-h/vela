@@ -1,0 +1,29 @@
+task mandelbrot(size: int) -> int
+    flex total = 0
+    fixed fsize = float(size)
+    each y in 0..size
+        fixed ci = 2.0 * float(y) / fsize - 1.0
+        each x in 0..size
+            fixed cr = 2.0 * float(x) / fsize - 1.5
+            flex zr = 0.0
+            flex zi = 0.0
+            flex iter = 0
+            loop iter < 50
+                fixed zr2 = zr * zr
+                fixed zi2 = zi * zi
+                when zr2 + zi2 > 4.0
+                    break
+                fi
+                zi = 2.0 * zr * zi + ci
+                zr = zr2 - zi2 + cr
+                iter += 1
+            fi
+            total += iter
+        fi
+    fi
+    <- total
+fi
+
+task main()
+    show(mandelbrot(2000))
+fi
