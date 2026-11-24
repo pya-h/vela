@@ -114,3 +114,21 @@ fn the_math_module_hovers_and_completes_its_macros_and_tasks() {
     }
     assert!(labels("include std/@@").contains(&"math".to_string()));
 }
+
+#[test]
+fn library_files_with_native_tasks_have_no_diagnostics_when_opened() {
+    let none = HashMap::new();
+    let txt_src = include_str!("../../../std/txt.vela");
+    let txt_analysis = Analysis::with_modules(txt_src, "std/txt.vela", &none);
+    assert_eq!(txt_analysis.diagnostics(), Vec::new());
+    let txt_full = Analysis::with_modules(txt_src, "/home/user/project/std/txt.vela", &none);
+    assert_eq!(txt_full.diagnostics(), Vec::new());
+
+    let math_src = include_str!("../../../std/math.vela");
+    let math_analysis = Analysis::with_modules(math_src, "std/math.vela", &none);
+    assert_eq!(math_analysis.diagnostics(), Vec::new());
+
+    let sys_src = include_str!("../../../std/sys.vela");
+    let sys_analysis = Analysis::with_modules(sys_src, "std/sys.vela", &none);
+    assert_eq!(sys_analysis.diagnostics(), Vec::new());
+}

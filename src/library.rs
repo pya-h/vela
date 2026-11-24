@@ -1,5 +1,7 @@
 //! Embedded standard library modules and their `runtime/vela_rt.h` native mappings.
 
+use std::path::Path;
+
 pub const ROOT: &str = "std";
 
 pub const MODULES: &[(&str, &str)] = &[
@@ -183,6 +185,18 @@ pub fn native(full: &str) -> Option<&'static str> {
 
 pub fn is_library(id: &str) -> bool {
     id == ROOT || id.strip_prefix(ROOT).is_some_and(|rest| rest.starts_with('/'))
+}
+
+pub fn id_from_path(path: &Path) -> Option<String> {
+    let stem = path.file_stem()?.to_str()?;
+    if !MODULES.iter().any(|(name, _)| *name == stem) {
+        return None;
+    }
+    let parent = path.parent()?;
+    if parent.file_name()?.to_str()? == ROOT {
+        return Some(format!("{}/{}", ROOT, stem));
+    }
+    None
 }
 
 pub fn listed() -> String {

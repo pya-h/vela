@@ -317,7 +317,7 @@ impl State {
         let (tokens, spans, ends) = Lexer::for_file(source, file).tokenize()?;
         let mut parser = Parser::new(tokens, spans, ends);
         let items = parser.parse_file()?;
-        check_natives(&id, &items)?;
+        check_natives(&id, path, &items)?;
         self.type_places.extend(parser.type_places());
         let includes = parser.includes();
         let type_aliases = parser.type_aliases();
@@ -868,13 +868,18 @@ fn include_key(folder: &Path, include: &Include) -> PathBuf {
 }
 
 /// Native declarations are restricted to `std/*` modules backed by runtime primitives.
-fn check_natives(id: &str, items: &[Item]) -> Result<()> {
+fn check_natives(id: &str, path: &Path, items: &[Item]) -> Result<()> {
+    let effective_id = if id.is_empty() {
+        library::id_from_path(path).unwrap_or_default()
+    } else {
+        id.to_string()
+    };
     for item in items {
         let Item::Task(task) = item else { continue };
         if !task.native {
             continue;
         }
-        if !library::is_library(id) {
+        if !library::is_library(&effective_id) {
             let fix = if task.body.is_empty() {
                 format!("give '{}' a body in Vela, closed with 'fi'", task.name)
             } else {
@@ -897,7 +902,7 @@ fn check_natives(id: &str, items: &[Item]) -> Result<()> {
                 ),
             );
         }
-        let full = format!("{}{}{}", id, MODULE_SEPARATOR, task.name);
+        let full = format!("{}{}{}", effective_id, MODULE_SEPARATOR, task.name);
         if library::native(&full).is_none() {
             return Err(Error::internal_at(
                 task.span,
