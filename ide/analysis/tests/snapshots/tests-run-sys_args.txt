@@ -1,0 +1,14 @@
+  1 | include std/sys
+    | keyword:include  module:std  operator:/  module:sys
+  3 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  4 |     region r default
+    | keyword:region  region:r  keyword:default
+  5 |     fixed argv = sys.args(r)
+    | keyword:fixed  variable:argv  operator:=  module:sys  punctuation:.  task:args  punctuation:(  region:r  punctuation:)
+  6 |     show("has_prog=", argv.len >= 1)
+    | builtin-fn:show  punctuation:(  string:"has_prog="  punctuation:,  variable:argv  punctuation:.  field:len  operator:>=  number:1  punctuation:)
+  7 |     show("prog_nonempty=", argv[0].len > 0)
+    | builtin-fn:show  punctuation:(  string:"prog_nonempty="  punctuation:,  variable:argv  punctuation:[  number:0  punctuation:]  punctuation:.  field:len  operator:>  number:0  punctuation:)
+  8 | fi
+    | keyword:fi

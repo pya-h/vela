@@ -1,0 +1,47 @@
+; std/time: wall-clock timestamps, high-resolution monotonic clocks, sleeping, and Duration.
+
+shape Duration
+    ms: int
+
+    seconds() -> float
+        <- float(.ms) / 1000.0
+    fi
+
+    nanos() -> int
+        <- .ms * 1000000
+    fi
+
+    sleep()
+        native_sleep_ms(.ms)
+    fi
+
+    str(r: region default) -> text@r
+        <- "{.ms}ms" at r
+    fi
+fi
+
+task now_ms() -> int
+    <- native_now_ms()
+fi
+
+task now_unix() -> int
+    <- native_now_unix()
+fi
+
+task monotonic_ns() -> int
+    <- native_monotonic_ns()
+fi
+
+task monotonic_ms() -> int
+    <- native_monotonic_ms()
+fi
+
+task sleep(ms: int)
+    native_sleep_ms(ms)
+fi
+
+priv native task native_now_ms() -> int
+priv native task native_now_unix() -> int
+priv native task native_monotonic_ns() -> int
+priv native task native_monotonic_ms() -> int
+priv native task native_sleep_ms(ms: int)

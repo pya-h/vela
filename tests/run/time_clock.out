@@ -1,0 +1,7 @@
+unix_ok=true
+ms_ok=true
+mono_ok=true
+zero_sleep_ok=
+secs=2.5
+nanos=2500000000
+str=2500ms

@@ -1,0 +1,25 @@
+include std/time
+
+task main()
+    region r default
+    fixed epoch_s = time.now_unix()
+    fixed epoch_ms = time.now_ms()
+    show("unix_ok=", epoch_s > 1700000000)
+    show("ms_ok=", epoch_ms >= epoch_s * 1000 - 1000)
+
+    fixed t0 = time.monotonic_ns()
+    fixed m0 = time.monotonic_ms()
+    time.sleep(5)
+    fixed d = time.Duration { ms: 2 }
+    d.sleep()
+    fixed t1 = time.monotonic_ns()
+    fixed m1 = time.monotonic_ms()
+    show("mono_ok=", t1 > t0 and m1 >= m0)
+    show("zero_sleep_ok=")
+    time.sleep(-3)
+
+    fixed dur = time.Duration { ms: 2500 }
+    show("secs=", dur.seconds())
+    show("nanos=", dur.nanos())
+    show("str=", dur.str(r))
+fi

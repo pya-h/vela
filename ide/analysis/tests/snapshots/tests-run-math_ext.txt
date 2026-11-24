@@ -1,0 +1,30 @@
+  1 | include std/math
+    | keyword:include  module:std  operator:/  module:math
+  3 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  4 |     show(math.sqrt(9.0), " ", math.hypot(3.0, 4.0))
+    | builtin-fn:show  punctuation:(  module:math  punctuation:.  task:sqrt  punctuation:(  number:9.0  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:hypot  punctuation:(  number:3.0  punctuation:,  number:4.0  punctuation:)  punctuation:)
+  5 |     show(math.TAU > 6.28 and math.TAU < 6.29)
+    | builtin-fn:show  punctuation:(  module:math  punctuation:.  variant:TAU  operator:>  number:6.28  keyword:and  module:math  punctuation:.  variant:TAU  operator:<  number:6.29  punctuation:)
+  6 |     show(math.floor(3.9), " ", math.ceil(3.1), " ", math.round(3.6), " ", math.trunc(-3.9))
+    | builtin-fn:show  punctuation:(  module:math  punctuation:.  task:floor  punctuation:(  number:3.9  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:ceil  punctuation:(  number:3.1  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:round  punctuation:(  number:3.6  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:trunc  punctuation:(  operator:-  number:3.9  punctuation:)  punctuation:)
+  7 |     show(math.fabs(-4.5), " ", math.abs(-42), " ", math.abs(0), " ", math.abs(17))
+    | builtin-fn:show  punctuation:(  module:math  punctuation:.  task:fabs  punctuation:(  operator:-  number:4.5  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:abs  punctuation:(  operator:-  number:42  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:abs  punctuation:(  number:0  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:abs  punctuation:(  number:17  punctuation:)  punctuation:)
+  8 |     show(math.sign(-9), " ", math.sign(0), " ", math.sign(9))
+    | builtin-fn:show  punctuation:(  module:math  punctuation:.  task:sign  punctuation:(  operator:-  number:9  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:sign  punctuation:(  number:0  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:sign  punctuation:(  number:9  punctuation:)  punctuation:)
+  9 |     show(math.fmin(3.5, 1.5), " ", math.fmax(3.5, 1.5))
+    | builtin-fn:show  punctuation:(  module:math  punctuation:.  task:fmin  punctuation:(  number:3.5  punctuation:,  number:1.5  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:fmax  punctuation:(  number:3.5  punctuation:,  number:1.5  punctuation:)  punctuation:)
+ 10 |     show(math.atan2(0.0, -1.0) > 3.14)
+    | builtin-fn:show  punctuation:(  module:math  punctuation:.  task:atan2  punctuation:(  number:0.0  punctuation:,  operator:-  number:1.0  punctuation:)  operator:>  number:3.14  punctuation:)
+ 11 |     fixed nan_v = math.log(-1.0, 10.0)
+    | keyword:fixed  variable:nan_v  operator:=  module:math  punctuation:.  task:log  punctuation:(  operator:-  number:1.0  punctuation:,  number:10.0  punctuation:)
+ 12 |     fixed inf_v = 1.0 / 0.0
+    | keyword:fixed  variable:inf_v  operator:=  number:1.0  operator:/  number:0.0
+ 13 |     show(math.is_nan(nan_v), " ", math.is_inf(inf_v), " ", math.is_finite(42.5), " ", math.is_finite(inf_v))
+    | builtin-fn:show  punctuation:(  module:math  punctuation:.  task:is_nan  punctuation:(  variable:nan_v  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:is_inf  punctuation:(  variable:inf_v  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:is_finite  punctuation:(  number:42.5  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:is_finite  punctuation:(  variable:inf_v  punctuation:)  punctuation:)
+ 14 |     show(math.min(10, 3), " ", math.max(10, 3), " ", math.clamp(15, 0, 10))
+    | builtin-fn:show  punctuation:(  module:math  punctuation:.  task:min  punctuation:(  number:10  punctuation:,  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:max  punctuation:(  number:10  punctuation:,  number:3  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:clamp  punctuation:(  number:15  punctuation:,  number:0  punctuation:,  number:10  punctuation:)  punctuation:)
+ 15 |     show(math.min(2.5, 1.25), " ", math.max('a', 'z'), " ", math.clamp("b", "c", "m"))
+    | builtin-fn:show  punctuation:(  module:math  punctuation:.  task:min  punctuation:(  number:2.5  punctuation:,  number:1.25  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:max  punctuation:(  string:'a'  punctuation:,  string:'z'  punctuation:)  punctuation:,  string:" "  punctuation:,  module:math  punctuation:.  task:clamp  punctuation:(  string:"b"  punctuation:,  string:"c"  punctuation:,  string:"m"  punctuation:)  punctuation:)
+ 16 | fi
+    | keyword:fi

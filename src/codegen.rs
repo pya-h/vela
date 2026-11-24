@@ -533,11 +533,19 @@ impl Generator {
         }
 
         if has_main {
+            let needs_sys = items.iter().any(
+                |i| matches!(i, Item::Task(t) if t.native && t.name.starts_with("std/sys.")),
+            );
             self.w.blank();
             // Output is C's usual: line by line to a terminal, in blocks to a
             // pipe or a file. `scan` flushes before it reads, and the runtime
             // flushes before it stops a program.
-            self.w.open("int main(void)");
+            if needs_sys {
+                self.w.open("int main(int argc, char** argv)");
+                self.w.line("vela__rt__sys_init(argc, argv);");
+            } else {
+                self.w.open("int main(void)");
+            }
             if let Some(Item::GlobalRegion(g)) = items.iter().find(|i| matches!(i, Item::GlobalRegion(_))) {
                 for stmt in &g.stmts {
                     if let StmtKind::Binding { names, init, .. } = &stmt.kind {

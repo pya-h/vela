@@ -642,3 +642,30 @@ fn a_rule_that_warns_once_holds_back_its_repeats_until_asked() {
     let out = vela(&["--help"]);
     assert!(String::from_utf8_lossy(&out.stdout).contains("[--repeat-warnings]"));
 }
+
+#[test]
+fn sys_module_forwards_args_reads_env_and_exits() {
+    let dir = temp_dir("sys-mod");
+    let src = dir.join("sys_prog.vela");
+    let exe = dir.join("sys_prog");
+    std::fs::write(
+        &src,
+        "include std/sys\n\ntask main()\n    region r default\n    fixed a = sys.args(r)\n    show(\"argc=\", a.len)\n    each i in 1..a.len\n        show(\"arg=\", a[i])\n    fi\n    when sys.env(\"VELA_TEST_VAL\", r) is {v}\n        show(\"val=\", v)\n    fi\n    when sys.env(\"VELA_TEST_EMPTY\", r) is {v}\n        show(\"empty=\", v.len)\n    fi\n    sys.exit(42)\nfi\n",
+    )
+    .unwrap();
+    let out = vela(&[src.to_str().unwrap(), "-o", exe.to_str().unwrap()]);
+    assert!(out.status.success(), "{}", stderr(&out));
+
+    let run = Command::new(&exe)
+        .args(["alpha", "beta"])
+        .env("VELA_TEST_VAL", "hello")
+        .env("VELA_TEST_EMPTY", "")
+        .output()
+        .unwrap();
+    assert_eq!(run.status.code(), Some(42));
+    assert_eq!(
+        String::from_utf8_lossy(&run.stdout),
+        "argc=3\narg=alpha\narg=beta\nval=hello\nempty=0\n"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}

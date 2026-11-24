@@ -1,11 +1,17 @@
-; std/math: math constants and `<math.h>` bindings (domain errors yield nan).
+; std/math: math constants, `<math.h>` bindings (domain errors yield nan), and ordered extremes.
 
 #P = 3.141592653589793
+
+#TAU = 6.283185307179586
 
 ; `math.e ** x` lowers to `exp(x)`.
 #e = 2.718281828459045
 
 native task pow(x: float, y: float) -> float
+
+native task sqrt(x: float) -> float
+
+native task hypot(x: float, y: float) -> float
 
 native task sin(x: float) -> float
 
@@ -19,6 +25,8 @@ native task acos(x: float) -> float
 
 native task atan(x: float) -> float
 
+native task atan2(y: float, x: float) -> float
+
 native task sinh(x: float) -> float
 
 native task cosh(x: float) -> float
@@ -30,3 +38,61 @@ native task exp(x: float) -> float
 ; Bases 2, 10, and `e` use dedicated exact routines.
 native task log(x: float, base: float = 10.0) -> float
 
+native task floor(x: float) -> float
+
+native task ceil(x: float) -> float
+
+native task round(x: float) -> float
+
+native task trunc(x: float) -> float
+
+native task fabs(x: float) -> float
+
+native task fmin(a: float, b: float) -> float
+
+native task fmax(a: float, b: float) -> float
+
+native task is_nan(x: float) -> bool
+
+native task is_inf(x: float) -> bool
+
+native task is_finite(x: float) -> bool
+
+task abs(x: int) -> int
+    when x < 0
+        <- -x
+    fi
+    <- x
+fi
+
+task sign(x: int) -> int
+    when x < 0
+        <- -1
+    else when x > 0
+        <- 1
+    fi
+    <- 0
+fi
+
+task min<T: ordered>(a: T, b: T) -> T
+    when a < b
+        <- a
+    fi
+    <- b
+fi
+
+task max<T: ordered>(a: T, b: T) -> T
+    when a > b
+        <- a
+    fi
+    <- b
+fi
+
+task clamp<T: ordered>(val: T, lo: T, hi: T) -> T
+    when val < lo
+        <- lo
+    else when val > hi
+        <- hi
+    fi
+    <- val
+fi

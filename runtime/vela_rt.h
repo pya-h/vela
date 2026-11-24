@@ -271,6 +271,18 @@ static inline double vela__rt__math_log(double x, double base) {
     return log(x) / log(base);
 }
 
+static inline bool vela__rt__math_is_nan(double x) {
+    return isnan(x) != 0;
+}
+
+static inline bool vela__rt__math_is_inf(double x) {
+    return isinf(x) != 0;
+}
+
+static inline bool vela__rt__math_is_finite(double x) {
+    return isfinite(x) != 0;
+}
+
 /* Any squaring overflow means the final power would overflow too. */
 static inline int64_t vela__rt__pow(int64_t a, int64_t b, const char* at) {
     int64_t result = 1;
@@ -3450,6 +3462,137 @@ static inline bool vela__rt__is_interactive(void) {
 
 static inline bool vela__rt__web_is_interactive(void) {
     return vela__rt__is_interactive();
+}
+
+typedef struct vela__rt__sys_state {
+    int argc;
+    char** argv;
+} vela__rt__sys_state;
+
+/* Function-local static avoids an unused global in programs not using std/sys. */
+static inline vela__rt__sys_state* vela__rt__sys(void) {
+    static vela__rt__sys_state state = { 0, NULL };
+    return &state;
+}
+
+static inline void vela__rt__sys_init(int argc, char** argv) {
+    vela__rt__sys_state* s = vela__rt__sys();
+    s->argc = argc;
+    s->argv = argv;
+}
+
+static inline int64_t vela__rt__sys_argc(void) {
+    int argc = vela__rt__sys()->argc;
+    return argc > 0 ? (int64_t)argc : 0;
+}
+
+static inline vela__rt__text vela__rt__sys_arg(int64_t index, vela__rt__region* r) {
+    vela__rt__sys_state* s = vela__rt__sys();
+    if (s->argv == NULL || index < 0 || index >= (int64_t)s->argc || s->argv[index] == NULL) {
+        return (vela__rt__text){ "", 0 };
+    }
+    const char* arg = s->argv[index];
+    return vela__rt__text_in(r, arg, strlen(arg));
+}
+
+static inline bool vela__rt__sys_has_env(vela__rt__text key) {
+    char* name = vela__rt__path_of(key);
+    if (name == NULL) {
+        return false;
+    }
+    bool found = getenv(name) != NULL;
+    free(name);
+    return found;
+}
+
+static inline vela__rt__text vela__rt__sys_get_env(vela__rt__text key, vela__rt__region* r) {
+    char* name = vela__rt__path_of(key);
+    if (name == NULL) {
+        return (vela__rt__text){ "", 0 };
+    }
+    const char* val = getenv(name);
+    free(name);
+    if (val == NULL) {
+        return (vela__rt__text){ "", 0 };
+    }
+    return vela__rt__text_in(r, val, strlen(val));
+}
+
+static inline vela__rt__text vela__rt__sys_cwd(vela__rt__region* r) {
+#if defined(_WIN32)
+    (void)r;
+    return (vela__rt__text){ "", 0 };
+#else
+    char stack_buf[4096];
+    if (getcwd(stack_buf, sizeof stack_buf) != NULL) {
+        return vela__rt__text_in(r, stack_buf, strlen(stack_buf));
+    }
+    if (errno != ERANGE) {
+        return (vela__rt__text){ "", 0 };
+    }
+    size_t cap = 8192;
+    while (cap <= 1048576) {
+        char* heap_buf = (char*)malloc(cap);
+        if (heap_buf == NULL) {
+            vela__rt__out_of_memory();
+        }
+        if (getcwd(heap_buf, cap) != NULL) {
+            vela__rt__text res = vela__rt__text_in(r, heap_buf, strlen(heap_buf));
+            free(heap_buf);
+            return res;
+        }
+        int err = errno;
+        free(heap_buf);
+        if (err != ERANGE) {
+            return (vela__rt__text){ "", 0 };
+        }
+        cap *= 2;
+    }
+    return (vela__rt__text){ "", 0 };
+#endif
+}
+
+static inline _Noreturn void vela__rt__sys_exit(int64_t code) {
+    fflush(NULL);
+    exit((int)code);
+}
+
+static inline int64_t vela__rt__time_now_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return (int64_t)ts.tv_sec * INT64_C(1000) + (int64_t)(ts.tv_nsec / 1000000);
+}
+
+static inline int64_t vela__rt__time_now_unix(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return (int64_t)ts.tv_sec;
+}
+
+static inline int64_t vela__rt__time_monotonic_ns(void) {
+    struct timespec ts;
+#if defined(CLOCK_MONOTONIC)
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) == 0) {
+        return (int64_t)ts.tv_sec * INT64_C(1000000000) + (int64_t)ts.tv_nsec;
+    }
+#endif
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return (int64_t)ts.tv_sec * INT64_C(1000000000) + (int64_t)ts.tv_nsec;
+}
+
+static inline int64_t vela__rt__time_monotonic_ms(void) {
+    return vela__rt__time_monotonic_ns() / INT64_C(1000000);
+}
+
+static inline void vela__rt__time_sleep_ms(int64_t ms) {
+    if (ms <= 0) {
+        return;
+    }
+    struct timespec req;
+    req.tv_sec = (time_t)(ms / 1000);
+    req.tv_nsec = (long)((ms % 1000) * 1000000L);
+    while (nanosleep(&req, &req) == -1 && errno == EINTR) {
+    }
 }
 
 static inline bool vela__rt__gui_is_interactive(void) {

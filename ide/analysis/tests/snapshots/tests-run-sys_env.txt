@@ -1,0 +1,42 @@
+  1 | include std/sys
+    | keyword:include  module:std  operator:/  module:sys
+  3 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  4 |     region r default
+    | keyword:region  region:r  keyword:default
+  5 |     fixed missing = sys.env("VELA_NONEXISTENT_ENV_KEY_XYZ_987", r)
+    | keyword:fixed  variable:missing  operator:=  module:sys  punctuation:.  task:env  punctuation:(  string:"VELA_NONEXISTENT_ENV_KEY_XYZ_987"  punctuation:,  region:r  punctuation:)
+  6 |     when missing is none
+    | keyword:when  variable:missing  keyword:is  keyword:none
+  7 |         show("missing=true")
+    | builtin-fn:show  punctuation:(  string:"missing=true"  punctuation:)
+  8 |     else
+    | keyword:else
+  9 |         show("missing=false")
+    | builtin-fn:show  punctuation:(  string:"missing=false"  punctuation:)
+ 10 |     fi
+    | keyword:fi
+ 11 |     fixed nul_key = sys.env("A\0B", r)
+    | keyword:fixed  variable:nul_key  operator:=  module:sys  punctuation:.  task:env  punctuation:(  string:"A  escape:\0  string:B"  punctuation:,  region:r  punctuation:)
+ 12 |     when nul_key is none
+    | keyword:when  variable:nul_key  keyword:is  keyword:none
+ 13 |         show("nul_key=true")
+    | builtin-fn:show  punctuation:(  string:"nul_key=true"  punctuation:)
+ 14 |     else
+    | keyword:else
+ 15 |         show("nul_key=false")
+    | builtin-fn:show  punctuation:(  string:"nul_key=false"  punctuation:)
+ 16 |     fi
+    | keyword:fi
+ 17 |     when sys.cwd(r) is {dir}
+    | keyword:when  module:sys  punctuation:.  task:cwd  punctuation:(  region:r  punctuation:)  keyword:is  punctuation:{  variable:dir  punctuation:}
+ 18 |         show("cwd_nonempty=", dir.len > 0)
+    | builtin-fn:show  punctuation:(  string:"cwd_nonempty="  punctuation:,  variable:dir  punctuation:.  field:len  operator:>  number:0  punctuation:)
+ 19 |     else
+    | keyword:else
+ 20 |         show("cwd_nonempty=false")
+    | builtin-fn:show  punctuation:(  string:"cwd_nonempty=false"  punctuation:)
+ 21 |     fi
+    | keyword:fi
+ 22 | fi
+    | keyword:fi

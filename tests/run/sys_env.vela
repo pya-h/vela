@@ -1,0 +1,22 @@
+include std/sys
+
+task main()
+    region r default
+    fixed missing = sys.env("VELA_NONEXISTENT_ENV_KEY_XYZ_987", r)
+    when missing is none
+        show("missing=true")
+    else
+        show("missing=false")
+    fi
+    fixed nul_key = sys.env("A\0B", r)
+    when nul_key is none
+        show("nul_key=true")
+    else
+        show("nul_key=false")
+    fi
+    when sys.cwd(r) is {dir}
+        show("cwd_nonempty=", dir.len > 0)
+    else
+        show("cwd_nonempty=false")
+    fi
+fi

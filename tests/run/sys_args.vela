@@ -1,0 +1,8 @@
+include std/sys
+
+task main()
+    region r default
+    fixed argv = sys.args(r)
+    show("has_prog=", argv.len >= 1)
+    show("prog_nonempty=", argv[0].len > 0)
+fi

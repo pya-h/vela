@@ -1,0 +1,36 @@
+; std/sys: command-line arguments, environment variables, working directory, and process exit.
+
+task args(r: region default) -> [text]@r
+    flex out = new [text]() at r
+    fixed count = sys_argc()
+    each i in 0..count
+        out.add(sys_arg(i, r))
+    fi
+    <- out
+fi
+
+task env(key: text@p, r: region default) -> maybe text@r
+    when not sys_has_env(key)
+        <- none
+    fi
+    <- sys_get_env(key, r)
+fi
+
+task cwd(r: region default) -> maybe text@r
+    fixed path = sys_cwd(r)
+    when path.len == 0
+        <- none
+    fi
+    <- path
+fi
+
+task exit(code: int = 0)
+    sys_exit(code)
+fi
+
+priv native task sys_argc() -> int
+priv native task sys_arg(index: int, r: region) -> text@r
+priv native task sys_has_env(key: text@p) -> bool
+priv native task sys_get_env(key: text@p, r: region) -> text@r
+priv native task sys_cwd(r: region) -> text@r
+priv native task sys_exit(code: int)

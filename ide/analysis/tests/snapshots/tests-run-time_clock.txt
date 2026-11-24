@@ -1,0 +1,44 @@
+  1 | include std/time
+    | keyword:include  module:std  operator:/  module:time
+  3 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  4 |     region r default
+    | keyword:region  region:r  keyword:default
+  5 |     fixed epoch_s = time.now_unix()
+    | keyword:fixed  variable:epoch_s  operator:=  module:time  punctuation:.  task:now_unix  punctuation:(  punctuation:)
+  6 |     fixed epoch_ms = time.now_ms()
+    | keyword:fixed  variable:epoch_ms  operator:=  module:time  punctuation:.  task:now_ms  punctuation:(  punctuation:)
+  7 |     show("unix_ok=", epoch_s > 1700000000)
+    | builtin-fn:show  punctuation:(  string:"unix_ok="  punctuation:,  variable:epoch_s  operator:>  number:1700000000  punctuation:)
+  8 |     show("ms_ok=", epoch_ms >= epoch_s * 1000 - 1000)
+    | builtin-fn:show  punctuation:(  string:"ms_ok="  punctuation:,  variable:epoch_ms  operator:>=  variable:epoch_s  operator:*  number:1000  operator:-  number:1000  punctuation:)
+ 10 |     fixed t0 = time.monotonic_ns()
+    | keyword:fixed  variable:t0  operator:=  module:time  punctuation:.  task:monotonic_ns  punctuation:(  punctuation:)
+ 11 |     fixed m0 = time.monotonic_ms()
+    | keyword:fixed  variable:m0  operator:=  module:time  punctuation:.  task:monotonic_ms  punctuation:(  punctuation:)
+ 12 |     time.sleep(5)
+    | module:time  punctuation:.  task:sleep  punctuation:(  number:5  punctuation:)
+ 13 |     fixed d = time.Duration { ms: 2 }
+    | keyword:fixed  variable:d  operator:=  module:time  punctuation:.  type:Duration  punctuation:{  field:ms  punctuation::  number:2  punctuation:}
+ 14 |     d.sleep()
+    | variable:d  punctuation:.  method:sleep  punctuation:(  punctuation:)
+ 15 |     fixed t1 = time.monotonic_ns()
+    | keyword:fixed  variable:t1  operator:=  module:time  punctuation:.  task:monotonic_ns  punctuation:(  punctuation:)
+ 16 |     fixed m1 = time.monotonic_ms()
+    | keyword:fixed  variable:m1  operator:=  module:time  punctuation:.  task:monotonic_ms  punctuation:(  punctuation:)
+ 17 |     show("mono_ok=", t1 > t0 and m1 >= m0)
+    | builtin-fn:show  punctuation:(  string:"mono_ok="  punctuation:,  variable:t1  operator:>  variable:t0  keyword:and  variable:m1  operator:>=  variable:m0  punctuation:)
+ 18 |     show("zero_sleep_ok=")
+    | builtin-fn:show  punctuation:(  string:"zero_sleep_ok="  punctuation:)
+ 19 |     time.sleep(-3)
+    | module:time  punctuation:.  task:sleep  punctuation:(  operator:-  number:3  punctuation:)
+ 21 |     fixed dur = time.Duration { ms: 2500 }
+    | keyword:fixed  variable:dur  operator:=  module:time  punctuation:.  type:Duration  punctuation:{  field:ms  punctuation::  number:2500  punctuation:}
+ 22 |     show("secs=", dur.seconds())
+    | builtin-fn:show  punctuation:(  string:"secs="  punctuation:,  variable:dur  punctuation:.  method:seconds  punctuation:(  punctuation:)  punctuation:)
+ 23 |     show("nanos=", dur.nanos())
+    | builtin-fn:show  punctuation:(  string:"nanos="  punctuation:,  variable:dur  punctuation:.  method:nanos  punctuation:(  punctuation:)  punctuation:)
+ 24 |     show("str=", dur.str(r))
+    | builtin-fn:show  punctuation:(  string:"str="  punctuation:,  variable:dur  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 25 | fi
+    | keyword:fi

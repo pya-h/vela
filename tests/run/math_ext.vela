@@ -1,0 +1,16 @@
+include std/math
+
+task main()
+    show(math.sqrt(9.0), " ", math.hypot(3.0, 4.0))
+    show(math.TAU > 6.28 and math.TAU < 6.29)
+    show(math.floor(3.9), " ", math.ceil(3.1), " ", math.round(3.6), " ", math.trunc(-3.9))
+    show(math.fabs(-4.5), " ", math.abs(-42), " ", math.abs(0), " ", math.abs(17))
+    show(math.sign(-9), " ", math.sign(0), " ", math.sign(9))
+    show(math.fmin(3.5, 1.5), " ", math.fmax(3.5, 1.5))
+    show(math.atan2(0.0, -1.0) > 3.14)
+    fixed nan_v = math.log(-1.0, 10.0)
+    fixed inf_v = 1.0 / 0.0
+    show(math.is_nan(nan_v), " ", math.is_inf(inf_v), " ", math.is_finite(42.5), " ", math.is_finite(inf_v))
+    show(math.min(10, 3), " ", math.max(10, 3), " ", math.clamp(15, 0, 10))
+    show(math.min(2.5, 1.25), " ", math.max('a', 'z'), " ", math.clamp("b", "c", "m"))
+fi
