@@ -183,7 +183,7 @@
 114 |     ; A shape given a shape given types, each with its own methods.
     | comment:; A shape given a shape given types, each with its own methods.
 115 |     flex deep: Holder<Box<int>> = Holder { item: Box { value: 3 } }
-    | keyword:flex  variable:deep  punctuation::  type:Holder  punctuation:<  type:Box  punctuation:<  type-builtin:int  keyword:>>  operator:=  type:Holder  punctuation:{  field:item  punctuation::  type:Box  punctuation:{  field:value  punctuation::  number:3  punctuation:}  punctuation:}
+    | keyword:flex  variable:deep  punctuation::  type:Holder  punctuation:<  type:Box  punctuation:<  type-builtin:int  punctuation:>>  operator:=  type:Holder  punctuation:{  field:item  punctuation::  type:Box  punctuation:{  field:value  punctuation::  number:3  punctuation:}  punctuation:}
 116 |     show(deep.itemOf().valueOf())
     | builtin-fn:show  punctuation:(  variable:deep  punctuation:.  method:itemOf  punctuation:(  punctuation:)  punctuation:.  method:valueOf  punctuation:(  punctuation:)  punctuation:)
 117 |     deep.item.put(5)

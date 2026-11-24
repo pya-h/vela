@@ -25,15 +25,15 @@ const TUPLE_ITEMS: &str = "a tuple holds two or more items, as in '(1, \"Ada\")'
 const TUPLE_TRAILING_COMMA: &str = "a tuple has no comma after its last item";
 
 /// Migration hint: `failure` names errors in patterns while `fail` constructs them.
-const FAILURE_NAMES: &str =
-    "a case form names a failure with 'failure', as in 'failure e'; 'fail e' makes one";
+const FAILURE_NAMES: &str = "a case form names a failure with 'failure', as in 'failure e'; 'fail e' makes one";
 
-const PLAN_B_NAMES: &str = "a plan B names the failure it handles with 'failure', as in 'failure e'; to send a failure instead, write '<- fail e'";
+const PLAN_B_NAMES: &str =
+    "a plan B names the failure it handles with 'failure', as in 'failure e'; to send a failure instead, write '<- fail e'";
 
-const FAIL_MAKES: &str =
-    "'failure' names a failure in a case form; to make one, write 'fail', as in '<- fail e'";
+const FAIL_MAKES: &str = "'failure' names a failure in a case form; to make one, write 'fail', as in '<- fail e'";
 
-const REGION_ALREADY_NAMED: &str = "the region is already named before this one; a part names a region of its own with '@', as in 'x.str()@r', or in parentheses, as in '(x.str() at r)'";
+const REGION_ALREADY_NAMED: &str =
+    "the region is already named before this one; a part names a region of its own with '@', as in 'x.str()@r', or in parentheses, as in '(x.str() at r)'";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Placing {
@@ -51,43 +51,20 @@ fn place_region(expr: &mut Expr, region: &str, span: Span, through_prefix: bool)
     {
         let taken = std::mem::replace(&mut expr.kind, ExprKind::NoneLit);
         if let ExprKind::Field(map, _) = taken {
-            expr.kind = ExprKind::MapOp {
-                map,
-                op,
-                key: None,
-                region: Some(region.to_string()),
-                region_span: span,
-            };
+            expr.kind = ExprKind::MapOp { map, op, key: None, region: Some(region.to_string()), region_span: span };
         }
         return Placing::Placed;
     }
     match &mut expr.kind {
-        ExprKind::MapOp {
-            region: Some(_), ..
-        } => Placing::Already,
+        ExprKind::MapOp { region: Some(_), .. } => Placing::Already,
         ExprKind::Call { args, .. } | ExprKind::MethodCall { args, .. } => {
-            if matches!(
-                args.last(),
-                Some(Expr {
-                    kind: ExprKind::RegionAfter(_),
-                    ..
-                })
-            ) {
+            if matches!(args.last(), Some(Expr { kind: ExprKind::RegionAfter(_), .. })) {
                 return Placing::Already;
             }
             args.push(Expr::new(ExprKind::RegionAfter(region.to_string()), span));
             Placing::Placed
         }
-        ExprKind::Scan {
-            region: written,
-            region_span,
-            ..
-        }
-        | ExprKind::Copy {
-            region: written,
-            region_span,
-            ..
-        } => {
+        ExprKind::Scan { region: written, region_span, .. } | ExprKind::Copy { region: written, region_span, .. } => {
             if written.is_some() {
                 return Placing::Already;
             }
@@ -95,9 +72,7 @@ fn place_region(expr: &mut Expr, region: &str, span: Span, through_prefix: bool)
             *region_span = span;
             Placing::Placed
         }
-        ExprKind::Unary(_, inner) | ExprKind::Fail(inner) if through_prefix => {
-            place_region(inner, region, span, false)
-        }
+        ExprKind::Unary(_, inner) | ExprKind::Fail(inner) if through_prefix => place_region(inner, region, span, false),
         _ => Placing::Nowhere,
     }
 }
@@ -106,13 +81,8 @@ fn takes_region_after(expr: &Expr) -> bool {
     if let ExprKind::Try(inner) = &expr.kind {
         return takes_region_after(inner);
     }
-    matches!(
-        expr.kind,
-        ExprKind::Call { .. }
-            | ExprKind::MethodCall { .. }
-            | ExprKind::Scan { .. }
-            | ExprKind::Copy { .. }
-    ) || matches!(&expr.kind, ExprKind::Field(_, word) if matches!(MapOp::from_word(word), Some(MapOp::Keys | MapOp::Values)))
+    matches!(expr.kind, ExprKind::Call { .. } | ExprKind::MethodCall { .. } | ExprKind::Scan { .. } | ExprKind::Copy { .. })
+        || matches!(&expr.kind, ExprKind::Field(_, word) if matches!(MapOp::from_word(word), Some(MapOp::Keys | MapOp::Values)))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -153,28 +123,7 @@ const IS_WITH_OR: &str = "an 'is' is joined with 'and', not 'or': with 'or', the
 
 impl Parser {
     pub fn new(tokens: Vec<Token>, spans: Vec<Span>, ends: Vec<Span>) -> Self {
-        Parser {
-            tokens,
-            spans,
-            ends,
-            pos: 0,
-            depth: 0,
-            operators: 0,
-            type_places: TypePlaces::new(),
-            type_parts: Vec::new(),
-            includes: Vec::new(),
-            type_aliases: Vec::new(),
-            patterns: Vec::new(),
-            in_pattern: false,
-            methods: Vec::new(),
-            lambdas: Vec::new(),
-            lambda_count: 0,
-            in_generic: false,
-            send_after_header: None,
-            loop_values: false,
-            in_err_pipe: 0,
-            in_task_body: false,
-        }
+        Parser { tokens, spans, ends, pos: 0, depth: 0, operators: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new(), type_aliases: Vec::new(), patterns: Vec::new(), in_pattern: false, methods: Vec::new(), lambdas: Vec::new(), lambda_count: 0, in_generic: false, send_after_header: None, loop_values: false, in_err_pipe: 0, in_task_body: false }
     }
 
     pub fn loop_values(&self) -> bool {
@@ -198,13 +147,7 @@ impl Parser {
     }
 
     pub fn parse_file(&mut self) -> Result<Vec<Item>> {
-        let tokens: Vec<(&Token, Span, Span)> = self
-            .tokens
-            .iter()
-            .zip(&self.spans)
-            .zip(&self.ends)
-            .map(|((token, start), end)| (token, *start, *end))
-            .collect();
+        let tokens: Vec<(&Token, Span, Span)> = self.tokens.iter().zip(&self.spans).zip(&self.ends).map(|((token, start), end)| (token, *start, *end)).collect();
         if let Some(error) = reserved_word(&tokens) {
             return Err(error);
         }
@@ -217,14 +160,9 @@ impl Parser {
         }
         while !self.is_at_end() {
             if self.check(Token::Include) {
-                return Err(Error::at(
-                    self.peek_span(),
-                    "'include' lines go at the top of the file, before any task, shape, or kind",
-                ));
+                return Err(Error::at(self.peek_span(), "'include' lines go at the top of the file, before any task, shape, or kind"));
             }
-            if self.at_type_alias_after(0)
-                || (self.check(Token::Priv) && self.at_type_alias_after(1))
-            {
+            if self.at_type_alias_after(0) || (self.check(Token::Priv) && self.at_type_alias_after(1)) {
                 let alias = self.parse_type_alias()?;
                 self.type_aliases.push(alias);
                 self.skip_newlines();
@@ -248,20 +186,11 @@ impl Parser {
         self.advance();
         let span = self.peek_span();
         if matches!(self.peek(), Token::Newline | Token::Eof) {
-            return Err(Error::at(
-                span,
-                "expected a module after 'include', as in 'include geometry'",
-            ));
+            return Err(Error::at(span, "expected a module after 'include', as in 'include geometry'"));
         }
         if let Token::Text(text) = self.peek() {
             let written = text.strip_suffix(".vela").unwrap_or(text).to_string();
-            return Err(Error::at(
-                span,
-                format!(
-                    "a module is named without quotes or '.vela', as in 'include {}'",
-                    written
-                ),
-            ));
+            return Err(Error::at(span, format!("a module is named without quotes or '.vela', as in 'include {}'", written)));
         }
         let mut path = Vec::new();
         let name_span = loop {
@@ -269,29 +198,16 @@ impl Parser {
             if self.match_token(Token::Range) {
                 path.push("..".to_string());
                 if !self.match_token(Token::Slash) {
-                    return Err(Error::at(
-                        self.peek_span(),
-                        "a module path goes on after '..' with '/', as in 'include ../geometry'",
-                    ));
+                    return Err(Error::at(self.peek_span(), "a module path goes on after '..' with '/', as in 'include ../geometry'"));
                 }
                 continue;
             }
             path.push(self.expect_ident()?);
             if self.check(Token::Dot) {
-                if matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(word)) if word == "vela")
-                {
-                    return Err(Error::at(
-                        self.peek_span(),
-                        format!(
-                            "a module is named without '.vela', as in 'include {}'",
-                            path.join("/")
-                        ),
-                    ));
+                if matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(word)) if word == "vela") {
+                    return Err(Error::at(self.peek_span(), format!("a module is named without '.vela', as in 'include {}'", path.join("/"))));
                 }
-                return Err(Error::at(
-                    self.peek_span(),
-                    "a module path separates its folders with '/', as in 'include shapes/circle'",
-                ));
+                return Err(Error::at(self.peek_span(), "a module path separates its folders with '/', as in 'include shapes/circle'"));
             }
             if !self.match_token(Token::Slash) {
                 break part_span;
@@ -307,19 +223,11 @@ impl Parser {
             ));
         }
         if self.match_token(Token::LParen) || self.match_token(Token::LBrace) {
-            let close = if only_parts {
-                Token::RBrace
-            } else {
-                Token::RParen
-            };
+            let close = if only_parts { Token::RBrace } else { Token::RParen };
             loop {
                 let at = self.peek_span();
                 let name = self.expect_ident()?;
-                parts.push(Part {
-                    name,
-                    span: at,
-                    alias: self.parse_alias()?,
-                });
+                parts.push(Part { name, span: at, alias: self.parse_alias()? });
                 if !self.match_token(Token::Comma) {
                     break;
                 }
@@ -329,14 +237,7 @@ impl Parser {
         if !matches!(self.peek(), Token::Newline | Token::Eof) {
             return Err(self.unexpected("the end of the 'include' line"));
         }
-        Ok(Include {
-            path,
-            span,
-            name_span,
-            alias,
-            parts,
-            only_parts,
-        })
+        Ok(Include { path, span, name_span, alias, parts, only_parts })
     }
 
     fn parse_alias(&mut self) -> Result<Option<Binding>> {
@@ -348,9 +249,7 @@ impl Parser {
     }
 
     fn is_module(&self, name: &str) -> bool {
-        self.includes
-            .iter()
-            .any(|included| included.local_name() == Some(name))
+        self.includes.iter().any(|included| included.local_name() == Some(name))
     }
 
     fn qualified(&mut self, name: String) -> Result<String> {
@@ -401,10 +300,7 @@ impl Parser {
         if self.depth > MAX_NESTING {
             return Err(Error::at(
                 self.peek_span(),
-                format!(
-                    "code is nested too deeply (more than {} levels)",
-                    MAX_NESTING
-                ),
+                format!("code is nested too deeply (more than {} levels)", MAX_NESTING),
             ));
         }
         Ok(())
@@ -491,15 +387,7 @@ impl Parser {
             (Token::Amp, _, _) => "; Vela writes 'and' for both at once ('&' gives a place to a 'flex&' or 'fixed&' parameter, as in 'f(&a)', and joins the words a generic type must allow)".to_string(),
             _ => String::new(),
         };
-        Error::at(
-            self.peek_span(),
-            format!(
-                "expected {}, got {}{}",
-                expected,
-                self.peek().describe(),
-                hint
-            ),
-        )
+        Error::at(self.peek_span(), format!("expected {}, got {}{}", expected, self.peek().describe(), hint))
     }
 
     fn at_line_start(&self) -> bool {
@@ -507,19 +395,11 @@ impl Parser {
     }
 
     fn misplaced_send(&self) -> Error {
-        let line_start = (0..self.pos)
-            .rev()
-            .find(|&p| self.tokens.get(p) == Some(&Token::Newline))
-            .map_or(0, |p| p + 1);
-        if let Some(opener @ (Token::Task | Token::Each | Token::Case)) =
-            self.tokens.get(line_start)
-        {
+        let line_start = (0..self.pos).rev().find(|&p| self.tokens.get(p) == Some(&Token::Newline)).map_or(0, |p| p + 1);
+        if let Some(opener @ (Token::Task | Token::Each | Token::Case)) = self.tokens.get(line_start) {
             return Error::at(
                 self.peek_span(),
-                format!(
-                    "'<-' must start a line: the body of a '{}' starts on the line after it",
-                    opener.describe().trim_matches('\'')
-                ),
+                format!("'<-' must start a line: the body of a '{}' starts on the line after it", opener.describe().trim_matches('\'')),
             );
         }
         let after_value = self.pos > 0
@@ -563,13 +443,7 @@ impl Parser {
         if self.at_pattern_after(first) && self.peek_span().col > 1 {
             return Err(Error::at(self.peek_span(), MISPLACED_PATTERN));
         }
-        if self.is_at_end()
-            || self.at_item_start()
-            || matches!(
-                self.peek(),
-                Token::Else | Token::Case | Token::Otherwise | Token::Finally | Token::RBrace
-            )
-        {
+        if self.is_at_end() || self.at_item_start() || matches!(self.peek(), Token::Else | Token::Case | Token::Otherwise | Token::Finally | Token::RBrace) {
             let hint = match self.peek() {
                 Token::Else if opener == "task" => " (or an 'else' without its 'when')",
                 Token::Case if opener == "task" => " (or a 'case' outside a 'match' or 'select')",
@@ -601,6 +475,46 @@ impl Parser {
         }
     }
 
+    fn match_gt(&mut self) -> bool {
+        if self.match_token(Token::Gt) {
+            true
+        } else if self.peek() == &Token::Shr {
+            if let Some(tok) = self.tokens.get_mut(self.pos) {
+                *tok = Token::Gt;
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    fn cannot_start_expr(token: Option<&Token>) -> bool {
+        let Some(token) = token else { return true };
+        !matches!(
+            token,
+            Token::Ident(_)
+                | Token::Int(_)
+                | Token::Float(_)
+                | Token::Text(_)
+                | Token::Interpolated(_)
+                | Token::Char(_)
+                | Token::True
+                | Token::False
+                | Token::None
+                | Token::LParen
+                | Token::LBracket
+                | Token::LBrace
+                | Token::Minus
+                | Token::Not
+                | Token::Bang
+                | Token::Tilde
+                | Token::ChanRecv
+                | Token::Fail
+                | Token::Own
+                | Token::New
+        )
+    }
+
     fn match_token(&mut self, tok: Token) -> bool {
         if self.peek() == &tok {
             self.advance();
@@ -623,11 +537,7 @@ impl Parser {
         let is_end = matches!(self.peek(), Token::Ident(name) if name == "end");
         let next = self.tokens.get(self.pos + 1).unwrap_or(&Token::Eof);
         if is_end && matches!(next, Token::Newline | Token::Eof) {
-            let message = if plan_b {
-                "a plan B's block closes with '}', not 'end'"
-            } else {
-                "blocks close with 'fi', not 'end'"
-            };
+            let message = if plan_b { "a plan B's block closes with '}', not 'end'" } else { "blocks close with 'fi', not 'end'" };
             return Err(Error::at(self.peek_span(), message));
         }
         Ok(())
@@ -636,35 +546,14 @@ impl Parser {
     fn at_item_start(&self) -> bool {
         match self.peek() {
             Token::Event if self.in_task_body => false,
-            Token::Task
-            | Token::Shape
-            | Token::Kind
-            | Token::Actor
-            | Token::Event
-            | Token::Include => true,
-            Token::Region => {
-                matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(w)) if w == "global")
-            }
-            Token::Priv => {
-                matches!(
-                    self.tokens.get(self.pos + 1),
-                    Some(Token::Task | Token::Shape | Token::Kind | Token::Actor | Token::Event)
-                ) || self.at_macro_after(1)
-                    || self.at_type_alias_after(1)
-                    || self.at_pattern_after(1)
-                    || self.at_event_after(1)
-            }
+            Token::Task | Token::Shape | Token::Kind | Token::Actor | Token::Event | Token::Include => true,
+            Token::Region => matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(w)) if w == "global"),
+            Token::Priv => matches!(self.tokens.get(self.pos + 1), Some(Token::Task | Token::Shape | Token::Kind | Token::Actor | Token::Event)) || self.at_macro_after(1) || self.at_type_alias_after(1) || self.at_pattern_after(1) || self.at_event_after(1),
             _ if self.in_task_body => {
                 self.at_macro_after(0)
-                    || (self.at_line_start()
-                        && (self.at_type_alias_after(0) || self.at_pattern_after(0)))
+                    || (self.at_line_start() && (self.at_type_alias_after(0) || self.at_pattern_after(0)))
             }
-            _ => {
-                self.at_event_after(0)
-                    || self.at_macro_after(0)
-                    || (self.at_line_start()
-                        && (self.at_type_alias_after(0) || self.at_pattern_after(0)))
-            }
+            _ => self.at_event_after(0) || self.at_macro_after(0) || (self.at_line_start() && (self.at_type_alias_after(0) || self.at_pattern_after(0))),
         }
     }
 
@@ -675,14 +564,8 @@ impl Parser {
             return false;
         }
         let rest = self.tokens.get(self.pos + 1..).unwrap_or_default();
-        let next = rest
-            .iter()
-            .find(|token| **token != Token::Newline)
-            .unwrap_or(&Token::Eof);
-        matches!(
-            next,
-            Token::Eof | Token::Task | Token::Shape | Token::Kind | Token::Priv | Token::Event
-        )
+        let next = rest.iter().find(|token| **token != Token::Newline).unwrap_or(&Token::Eof);
+        matches!(next, Token::Eof | Token::Task | Token::Shape | Token::Kind | Token::Priv | Token::Event)
     }
 
     fn at_event_after(&self, mut ahead: usize) -> bool {
@@ -727,27 +610,19 @@ impl Parser {
     /// languages write one, is none.
     fn at_macro_after(&self, ahead: usize) -> bool {
         let at = |offset: usize| self.tokens.get(self.pos + ahead + offset);
-        let starts =
-            |index: usize| index == 0 || self.tokens.get(index - 1) == Some(&Token::Newline);
+        let starts = |index: usize| index == 0 || self.tokens.get(index - 1) == Some(&Token::Newline);
         let hash = self.pos + ahead;
-        let line_start = starts(hash)
-            || (hash > 0 && self.tokens.get(hash - 1) == Some(&Token::Priv) && starts(hash - 1));
+        let line_start = starts(hash) || (hash > 0 && self.tokens.get(hash - 1) == Some(&Token::Priv) && starts(hash - 1));
         line_start
             && at(0) == Some(&Token::Hash)
             && matches!(at(1), Some(Token::Ident(_)))
-            && matches!(
-                at(2),
-                Some(Token::Assign | Token::Colon | Token::Newline | Token::Eof) | None
-            )
+            && matches!(at(2), Some(Token::Assign | Token::Colon | Token::Newline | Token::Eof) | None)
     }
 
     fn at_macro_word(&self) -> bool {
         matches!(self.peek(), Token::Ident(word) if word == MACRO)
             && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_)))
-            && matches!(
-                self.tokens.get(self.pos + 2),
-                Some(Token::Assign | Token::Colon)
-            )
+            && matches!(self.tokens.get(self.pos + 2), Some(Token::Assign | Token::Colon))
     }
 
     fn parse_macro(&mut self) -> Result<MacroDef> {
@@ -755,43 +630,26 @@ impl Parser {
         let span = self.peek_span();
         let name = self.expect_ident()?;
         if self.check(Token::Colon) {
-            return Err(Error::at(
-                self.peek_span(),
-                format!(
-                    "a macro's type is its value's, so none is written: '#{} = …'",
-                    name
-                ),
-            ));
+            return Err(Error::at(self.peek_span(), format!("a macro's type is its value's, so none is written: '#{} = …'", name)));
         }
         if !self.match_token(Token::Assign) {
             return Err(self.unexpected(&format!("'=' and the value macro '{}' stands for", name)));
         }
         let value = self.parse_expr()?;
         if !matches!(self.peek(), Token::Newline | Token::Eof) {
-            return Err(
-                self.unexpected("the end of the line: a macro is written on a line of its own")
-            );
+            return Err(self.unexpected("the end of the line: a macro is written on a line of its own"));
         }
-        Ok(MacroDef {
-            name,
-            value,
-            span,
-            private: false,
-        })
+        Ok(MacroDef { name, value, span, private: false })
     }
 
     fn at_pattern_after(&self, ahead: usize) -> bool {
         matches!(self.tokens.get(self.pos + ahead), Some(Token::Ident(word)) if word == PATTERN)
             && matches!(self.tokens.get(self.pos + ahead + 1), Some(Token::Ident(_)))
-            && matches!(
-                self.tokens.get(self.pos + ahead + 2),
-                None | Some(Token::Newline | Token::Eof | Token::Colon | Token::Lt)
-            )
+            && matches!(self.tokens.get(self.pos + ahead + 2), None | Some(Token::Newline | Token::Eof | Token::Colon | Token::Lt))
     }
 
     fn at_type_alias_after(&self, ahead: usize) -> bool {
-        matches!(self.tokens.get(self.pos + ahead), Some(Token::Ident(word)) if word == ALIAS)
-            && matches!(self.tokens.get(self.pos + ahead + 1), Some(Token::Ident(_)))
+        matches!(self.tokens.get(self.pos + ahead), Some(Token::Ident(word)) if word == ALIAS) && matches!(self.tokens.get(self.pos + ahead + 1), Some(Token::Ident(_)))
     }
 
     fn parse_type_alias(&mut self) -> Result<AliasDef> {
@@ -800,24 +658,14 @@ impl Parser {
         let span = self.peek_span();
         let name = self.expect_ident()?;
         if !self.match_token(Token::FatArrow) {
-            return Err(self.unexpected(&format!(
-                "'=>' and the type '{}' stands for, as in 'alias {} => (int) -> int'",
-                name, name
-            )));
+            return Err(self.unexpected(&format!("'=>' and the type '{}' stands for, as in 'alias {} => (int) -> int'", name, name)));
         }
         let ty_span = self.peek_span();
         let ty = self.parse_type()?;
         if !matches!(self.peek(), Token::Newline | Token::Eof) {
-            return Err(self
-                .unexpected("the end of the line: a type alias is written on a line of its own"));
+            return Err(self.unexpected("the end of the line: a type alias is written on a line of its own"));
         }
-        Ok(AliasDef {
-            name,
-            ty,
-            span,
-            ty_span,
-            private,
-        })
+        Ok(AliasDef { name, ty, span, ty_span, private })
     }
 
     fn parse_item(&mut self) -> Result<Item> {
@@ -836,12 +684,7 @@ impl Parser {
                 Token::Actor => self.parse_actor().map(Item::Actor)?,
                 _ if self.at_macro_after(0) => self.parse_macro().map(Item::Macro)?,
                 _ if self.at_event_after(0) => self.parse_event(None, true).map(Item::Event)?,
-                _ => {
-                    return Err(Error::at(
-                        span,
-                        "'priv' goes before a task, shape, kind, actor, pattern, type alias, or macro, or a shape's field",
-                    ));
-                }
+                _ => return Err(Error::at(span, "'priv' goes before a task, shape, kind, actor, pattern, type alias, or macro, or a shape's field")),
             };
             match &mut item {
                 Item::Task(t) => t.private = true,
@@ -865,13 +708,7 @@ impl Parser {
                 Some(Token::Ident(name)) => name.clone(),
                 _ => String::new(),
             };
-            return Err(Error::at(
-                self.peek_span(),
-                format!(
-                    "a macro is written with '#' before its name, as in '#{} = …'",
-                    name
-                ),
-            ));
+            return Err(Error::at(self.peek_span(), format!("a macro is written with '#' before its name, as in '#{} = …'", name)));
         }
         if self.check(Token::Region)
             && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(w)) if w == "global")
@@ -886,25 +723,13 @@ impl Parser {
             Token::Shape => self.parse_shape().map(Item::Shape),
             Token::Kind => self.parse_kind().map(Item::Kind),
             Token::Actor => self.parse_actor().map(Item::Actor),
-            Token::Fi => Err(Error::at(
-                self.peek_span(),
-                "expected 'task', 'shape', 'kind', or 'actor', got 'fi'; is there an extra 'fi' above it?",
-            )),
+            Token::Fi => Err(Error::at(self.peek_span(), "expected 'task', 'shape', 'kind', or 'actor', got 'fi'; is there an extra 'fi' above it?")),
             Token::Ident(word)
                 if (word == "use" || word == "import")
                     && self.at_line_start()
-                    && matches!(
-                        self.tokens.get(self.pos + 1),
-                        Some(Token::Ident(_) | Token::Range | Token::Text(_))
-                    ) =>
+                    && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_) | Token::Range | Token::Text(_))) =>
             {
-                Err(Error::at(
-                    self.peek_span(),
-                    format!(
-                        "expected 'task', 'shape', or 'kind', got name '{}'; another file is brought in with 'include', as in 'include geometry'",
-                        word
-                    ),
-                ))
+                Err(Error::at(self.peek_span(), format!("expected 'task', 'shape', or 'kind', got name '{}'; another file is brought in with 'include', as in 'include geometry'", word)))
             }
             token if !matches!(token, Token::Send) || self.at_line_start() => {
                 let statement = matches!(
@@ -931,10 +756,7 @@ impl Parser {
                 if statement {
                     return Err(Error::at(
                         self.peek_span(),
-                        format!(
-                            "{}; statements go inside a task (is there an extra 'fi' above it?)",
-                            error.message
-                        ),
+                        format!("{}; statements go inside a task (is there an extra 'fi' above it?)", error.message),
                     ));
                 }
                 Err(error)
@@ -1004,22 +826,10 @@ impl Parser {
     fn parse_decorated(&mut self) -> Result<Item> {
         let first = self.peek_span();
         let (decorators, wrappers) = self.parse_decorator_lines()?;
-        let decorated = matches!(self.peek(), Token::Task)
-            || self.at_native()
-            || (self.check(Token::Priv)
-                && !self.at_macro_after(1)
-                && matches!(self.tokens.get(self.pos + 1), Some(Token::Task)));
-        let decorated = decorated
-            || (self.check(Token::Priv)
-                && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(word)) if word == NATIVE));
+        let decorated = matches!(self.peek(), Token::Task) || self.at_native() || (self.check(Token::Priv) && !self.at_macro_after(1) && matches!(self.tokens.get(self.pos + 1), Some(Token::Task)));
+        let decorated = decorated || (self.check(Token::Priv) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(word)) if word == NATIVE));
         if !decorated {
-            return Err(Error::at(
-                first,
-                format!(
-                    "a decorator goes on the lines above a task, and {} follows it",
-                    self.peek().describe()
-                ),
-            ));
+            return Err(Error::at(first, format!("a decorator goes on the lines above a task, and {} follows it", self.peek().describe())));
         }
         let mut item = self.parse_item()?;
         if let Item::Task(task) = &mut item {
@@ -1057,15 +867,10 @@ impl Parser {
     fn parse_startup_decorator(&mut self) -> Result<Decorator> {
         let span = self.peek_span();
         if !matches!(self.peek(), Token::Ident(_)) {
-            return Err(self
-                .unexpected("the name of a task after '$', as in '$register' or '$route(\"/\")'"));
+            return Err(self.unexpected("the name of a task after '$', as in '$register' or '$route(\"/\")'"));
         }
         let name = self.decorator_name()?;
-        let args = if self.check(Token::LParen) {
-            self.parse_arg_list()?
-        } else {
-            Vec::new()
-        };
+        let args = if self.check(Token::LParen) { self.parse_arg_list()? } else { Vec::new() };
         let passes = self.match_token(Token::Question);
         Ok((name, args, span, passes))
     }
@@ -1074,11 +879,7 @@ impl Parser {
         let name = self.expect_ident()?;
         let mut name = self.qualified(name)?;
         while self.match_token(Token::Dot) {
-            let member = if self.match_token(Token::New) {
-                NEW_WORD.to_string()
-            } else {
-                self.expect_ident()?
-            };
+            let member = if self.match_token(Token::New) { NEW_WORD.to_string() } else { self.expect_ident()? };
             name = format!("{}{}{}", name, MODULE_SEPARATOR, member);
         }
         Ok(name)
@@ -1088,40 +889,20 @@ impl Parser {
         let opened = self.peek_span();
         self.advance();
         if self.check(Token::RParen) {
-            return Err(Error::at(
-                opened,
-                "'$( … )' names the wrappers of the task below it, as in '$(timed)' or '$(timed, logged(\"sq\"))'; leave it out when there are none",
-            ));
+            return Err(Error::at(opened, "'$( … )' names the wrappers of the task below it, as in '$(timed)' or '$(timed, logged(\"sq\"))'; leave it out when there are none"));
         }
         loop {
             let span = self.peek_span();
-            let member = self.check(Token::Dot)
-                && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_)));
+            let member = self.check(Token::Dot) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_)));
             if member {
                 self.advance();
             }
             if !matches!(self.peek(), Token::Ident(_)) {
-                return Err(self
-                    .unexpected("the name of a wrapper, as in '$(timed)' or '$(logged(\"sq\"))'"));
+                return Err(self.unexpected("the name of a wrapper, as in '$(timed)' or '$(logged(\"sq\"))'"));
             }
-            let name = if member {
-                format!("{}{}", MEMBER_WRAPPER, self.expect_ident()?)
-            } else {
-                self.decorator_name()?
-            };
-            let args = if self.check(Token::LParen) {
-                self.parse_arg_list()?
-            } else {
-                Vec::new()
-            };
-            wrappers.push(Expr::new(
-                ExprKind::Call {
-                    name,
-                    types: Vec::new(),
-                    args,
-                },
-                span,
-            ));
+            let name = if member { format!("{}{}", MEMBER_WRAPPER, self.expect_ident()?) } else { self.decorator_name()? };
+            let args = if self.check(Token::LParen) { self.parse_arg_list()? } else { Vec::new() };
+            wrappers.push(Expr::new(ExprKind::Call { name, types: Vec::new(), args }, span));
             if !self.match_token(Token::Comma) {
                 break;
             }
@@ -1136,10 +917,7 @@ impl Parser {
         let opened = self.peek_span();
         let mut task = self.parse_task_header()?;
         if self.check(Token::LBrace) {
-            return Err(Error::at(
-                self.peek_span(),
-                "a task's body starts on the line after its header, and closes with 'fi'",
-            ));
+            return Err(Error::at(self.peek_span(), "a task's body starts on the line after its header, and closes with 'fi'"));
         }
         self.skip_newlines();
         let outer = std::mem::replace(&mut self.in_generic, !task.types.is_empty());
@@ -1163,29 +941,11 @@ impl Parser {
         } else {
             Type::Nothing
         };
-        Ok(TaskDef {
-            name,
-            types,
-            given: Vec::new(),
-            params,
-            ret,
-            results,
-            body: Vec::new(),
-            span,
-            private: false,
-            native: false,
-            owner: None,
-            decorators: Vec::new(),
-            passes: Vec::new(),
-            wrappers: Vec::new(),
-            kept: None,
-            shortcut: false,
-        })
+        Ok(TaskDef { name, types, given: Vec::new(), params, ret, results, body: Vec::new(), span, private: false, native: false, owner: None, decorators: Vec::new(), passes: Vec::new(), wrappers: Vec::new(), kept: None, shortcut: false })
     }
 
     fn at_native(&self) -> bool {
-        matches!(self.peek(), Token::Ident(word) if word == NATIVE)
-            && self.tokens.get(self.pos + 1) == Some(&Token::Task)
+        matches!(self.peek(), Token::Ident(word) if word == NATIVE) && self.tokens.get(self.pos + 1) == Some(&Token::Task)
     }
 
     fn parse_native(&mut self) -> Result<TaskDef> {
@@ -1197,14 +957,7 @@ impl Parser {
             return Err(self.unexpected("the end of the line: a native task is its header alone"));
         }
         self.skip_newlines();
-        if !matches!(
-            self.peek(),
-            Token::Task | Token::Shape | Token::Kind | Token::Priv | Token::Eof
-        ) && !self.at_native()
-            && !self.at_macro_after(0)
-            && !self.at_type_alias_after(0)
-            && !self.at_pattern_after(0)
-        {
+        if !matches!(self.peek(), Token::Task | Token::Shape | Token::Kind | Token::Priv | Token::Eof) && !self.at_native() && !self.at_macro_after(0) && !self.at_type_alias_after(0) && !self.at_pattern_after(0) {
             task.body = self.parse_block()?;
             self.expect_fi("task", opened)?;
         }
@@ -1214,83 +967,45 @@ impl Parser {
     fn parse_type_params(&mut self, groups: bool) -> Result<Vec<TypeParam>> {
         // `<>` reads as one token, `not similar`, wherever values are.
         if self.check(Token::NotSimilar) {
-            return Err(Error::at(
-                self.peek_span(),
-                "'< … >' names the types a declaration takes, as in '<T>'; leave it out when it takes none",
-            ));
+            return Err(Error::at(self.peek_span(), "'< … >' names the types a declaration takes, as in '<T>'; leave it out when it takes none"));
         }
         if !self.match_token(Token::Lt) {
             return Ok(Vec::new());
         }
         let mut params: Vec<TypeParam> = Vec::new();
         loop {
-            if self.check(Token::Gt) {
+            if self.check(Token::Gt) || self.check(Token::Shr) {
                 let message = match params.is_empty() {
-                    true => {
-                        "'< … >' names the types a declaration takes, as in '<T>'; leave it out when it takes none"
-                    }
-                    false => {
-                        "expected the name of another type after ',', as in '<T, U>'; leave the ',' out when there is none"
-                    }
+                    true => "'< … >' names the types a declaration takes, as in '<T>'; leave it out when it takes none",
+                    false => "expected the name of another type after ',', as in '<T, U>'; leave the ',' out when there is none",
                 };
                 return Err(Error::at(self.peek_span(), message));
             }
             let span = self.peek_span();
             let name = self.expect_ident()?;
             if Type::builtin(&name).is_some() {
-                return Err(Error::at(
-                    span,
-                    format!(
-                        "'{}' is a builtin type, so it can't name a type a declaration takes; use another name, as in '<T>'",
-                        name
-                    ),
-                ));
+                return Err(Error::at(span, format!("'{}' is a builtin type, so it can't name a type a declaration takes; use another name, as in '<T>'", name)));
             }
             if let Some(before) = params.iter().find(|param| param.name == name) {
-                return Err(Error::at(
-                    span,
-                    format!(
-                        "'{}' is already taken at {}:{}",
-                        name, before.span.line, before.span.col
-                    ),
-                ));
+                return Err(Error::at(span, format!("'{}' is already taken at {}:{}", name, before.span.line, before.span.col)));
             }
             let group = self.check(Token::Ellipsis);
             if group {
                 if !groups {
-                    return Err(Error::at(
-                        self.peek_span(),
-                        "only a task takes a group of types, 'P...'; a shape takes each type by name, as in '<T, U>'",
-                    ));
+                    return Err(Error::at(self.peek_span(), "only a task takes a group of types, 'P...'; a shape takes each type by name, as in '<T, U>'"));
                 }
                 if let Some(before) = params.iter().find(|param| param.group) {
-                    return Err(Error::at(
-                        span,
-                        format!(
-                            "a task takes one group of types, and '{}...' is one already",
-                            before.name
-                        ),
-                    ));
+                    return Err(Error::at(span, format!("a task takes one group of types, and '{}...' is one already", before.name)));
                 }
                 self.advance();
             }
-            let (needs, patterns) = if self.match_token(Token::Colon) {
-                self.parse_needs()?
-            } else {
-                (Vec::new(), Vec::new())
-            };
-            params.push(TypeParam {
-                name,
-                span,
-                needs,
-                patterns,
-                group,
-            });
+            let (needs, patterns) = if self.match_token(Token::Colon) { self.parse_needs()? } else { (Vec::new(), Vec::new()) };
+            params.push(TypeParam { name, span, needs, patterns, group });
             if !self.match_token(Token::Comma) {
                 break;
             }
         }
-        if !self.match_token(Token::Gt) {
+        if !self.match_gt() {
             return Err(self.unexpected("',' and another type, or '>' to close the types"));
         }
         Ok(params)
@@ -1302,66 +1017,25 @@ impl Parser {
         let mut patterns: Vec<Followed> = Vec::new();
         loop {
             let span = self.peek_span();
-            let word = self.expect_ident().map_err(|_| {
-                Error::at(
-                    span,
-                    format!(
-                        "expected what the type must allow: {}, or a pattern it follows",
-                        needs_list()
-                    ),
-                )
-            })?;
+            let word = self.expect_ident().map_err(|_| Error::at(span, format!("expected what the type must allow: {}, or a pattern it follows", needs_list())))?;
             let Some(need) = Need::from_word(&word) else {
                 let pattern = self.qualified(word)?;
                 if let Some(before) = patterns.iter().find(|before| before.name == pattern) {
-                    return Err(Error::at(
-                        span,
-                        format!(
-                            "'{}' is written twice, at {}:{} too",
-                            pattern, before.span.line, before.span.col
-                        ),
-                    ));
+                    return Err(Error::at(span, format!("'{}' is written twice, at {}:{} too", pattern, before.span.line, before.span.col)));
                 }
-                let types = if self.check(Token::Lt) {
-                    self.parse_given_types()?
-                } else {
-                    Vec::new()
-                };
-                patterns.push(Followed {
-                    name: pattern,
-                    types,
-                    span,
-                });
+                let types = if self.check(Token::Lt) { self.parse_given_types()? } else { Vec::new() };
+                patterns.push(Followed { name: pattern, types, span });
                 if !self.match_token(Token::Amp) {
                     return Ok((kept, patterns));
                 }
                 continue;
             };
-            if let Some(&(before, _)) = kept
-                .iter()
-                .find(|(before, _)| before.means(need) || need.means(*before))
-            {
+            if let Some(&(before, _)) = kept.iter().find(|(before, _)| before.means(need) || need.means(*before)) {
                 if before == need {
-                    return Err(Error::at(
-                        span,
-                        format!("'{}' is written twice", need.word()),
-                    ));
+                    return Err(Error::at(span, format!("'{}' is written twice", need.word())));
                 }
-                let (narrower, wider) = if before.means(need) {
-                    (before, need)
-                } else {
-                    (need, before)
-                };
-                return Err(Error::at(
-                    span,
-                    format!(
-                        "{}, so '{}' already means '{}'; write '{}' alone",
-                        why_means(narrower, wider),
-                        narrower.word(),
-                        wider.word(),
-                        narrower.word()
-                    ),
-                ));
+                let (narrower, wider) = if before.means(need) { (before, need) } else { (need, before) };
+                return Err(Error::at(span, format!("{}, so '{}' already means '{}'; write '{}' alone", why_means(narrower, wider), narrower.word(), wider.word(), narrower.word())));
             }
             kept.push((need, span));
             if !self.match_token(Token::Amp) {
@@ -1374,15 +1048,10 @@ impl Parser {
         let mut types = Vec::new();
         loop {
             if self.check(Token::Newline) || self.check(Token::Fi) || self.is_at_end() {
-                let expected = if types.is_empty() {
-                    "expected a return type after '->'"
-                } else {
-                    "expected another result after ','"
-                };
+                let expected = if types.is_empty() { "expected a return type after '->'" } else { "expected another result after ','" };
                 return Err(Error::at(self.peek_span(), expected));
             }
-            let named = matches!(self.peek(), Token::Ident(_))
-                && self.tokens.get(self.pos + 1) == Some(&Token::Colon);
+            let named = matches!(self.peek(), Token::Ident(_)) && self.tokens.get(self.pos + 1) == Some(&Token::Colon);
             let name = if named {
                 let at = self.peek_span();
                 let name = self.expect_ident()?;
@@ -1400,10 +1069,7 @@ impl Parser {
                 };
                 return Err(Error::at(
                     at,
-                    format!(
-                        "either every result has a name or none does, and this one {}, as in '-> steps: int, peak: int'",
-                        which
-                    ),
+                    format!("either every result has a name or none does, and this one {}, as in '-> steps: int, peak: int'", which),
                 ));
             }
             let ty_span = self.peek_span();
@@ -1412,11 +1078,7 @@ impl Parser {
             // In a pattern, `area() -> float, name(r: region) -> text@r`: no
             // result's type is a name and a `(`, so one starts the next header.
             let next_header = self.in_pattern
-                && (matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_)))
-                    && matches!(
-                        self.tokens.get(self.pos + 2),
-                        Some(Token::LParen | Token::Lt)
-                    )
+                && (matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) && matches!(self.tokens.get(self.pos + 2), Some(Token::LParen | Token::Lt))
                     || matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(word)) if word == ALTERS));
             if next_header || !self.match_token(Token::Comma) {
                 break;
@@ -1441,14 +1103,9 @@ impl Parser {
         let mut shared: Vec<SharedField> = Vec::new();
         let mut methods: Vec<TaskDef> = Vec::new();
         let mut events: Vec<EventDef> = Vec::new();
-        while !self.check(Token::Fi)
-            && !self.is_at_end()
-            && (!self.at_item_start() || self.at_shape_event())
-        {
+        while !self.check(Token::Fi) && !self.is_at_end() && (!self.at_item_start() || self.at_shape_event()) {
             self.skip_newlines();
-            if self.check(Token::Fi) || (self.at_item_start() && !self.at_shape_event()) {
-                break;
-            }
+            if self.check(Token::Fi) || (self.at_item_start() && !self.at_shape_event()) { break; }
             self.reject_stray_end()?;
             let (decorators, wrappers) = self.parse_member_decorators("shape")?;
             let private = self.match_token(Token::Priv);
@@ -1461,18 +1118,7 @@ impl Parser {
             }
             if self.check(Token::Shared) && self.at_method_from(self.pos + 1) {
                 self.advance();
-                let mut method = self.parse_method(
-                    &name,
-                    "shape",
-                    &types,
-                    private,
-                    true,
-                    Above {
-                        fields: &fields,
-                        shared: &shared,
-                        methods: &methods,
-                    },
-                )?;
+                let mut method = self.parse_method(&name, "shape", &types, private, true, Above { fields: &fields, shared: &shared, methods: &methods })?;
                 decorate(&mut method, decorators, wrappers);
                 methods.push(method);
                 self.skip_newlines();
@@ -1489,30 +1135,14 @@ impl Parser {
                 return Err(Error::at(self.peek_span(), new_only_shared(&name)));
             }
             if self.at_method() {
-                let mut method = self.parse_method(
-                    &name,
-                    "shape",
-                    &types,
-                    private,
-                    false,
-                    Above {
-                        fields: &fields,
-                        shared: &shared,
-                        methods: &methods,
-                    },
-                )?;
+                let mut method = self.parse_method(&name, "shape", &types, private, false, Above { fields: &fields, shared: &shared, methods: &methods })?;
                 decorate(&mut method, decorators, wrappers);
                 methods.push(method);
                 self.skip_newlines();
                 continue;
             }
-            if matches!(self.peek(), Token::Ident(word) if word == READ)
-                && self.tokens.get(self.pos + 1) == Some(&Token::Shared)
-            {
-                return Err(Error::at(
-                    self.peek_span(),
-                    format!("'shared' goes first, as in 'shared {} f: int = 0'", READ),
-                ));
+            if matches!(self.peek(), Token::Ident(word) if word == READ) && self.tokens.get(self.pos + 1) == Some(&Token::Shared) {
+                return Err(Error::at(self.peek_span(), format!("'shared' goes first, as in 'shared {} f: int = 0'", READ)));
             }
             let read = self.match_read(private)?;
             self.reject_field_below_method(&methods, "shape")?;
@@ -1527,88 +1157,48 @@ impl Parser {
         self.expect_fi("shape", opened)?;
         self.methods.extend(methods.into_iter().map(Item::Task));
         self.methods.extend(events.into_iter().map(Item::Event));
-        Ok(ShapeDef {
-            name,
-            types,
-            given: Vec::new(),
-            fields,
-            shared,
-            span,
-            private: false,
-            follows,
-        })
+        Ok(ShapeDef { name, types, given: Vec::new(), fields, shared, span, private: false, follows })
     }
 
-    fn parse_shared_field(
-        &mut self,
-        shape: &str,
-        types: &[TypeParam],
-        private: bool,
-        methods: &[TaskDef],
-    ) -> Result<SharedField> {
+    fn parse_shared_field(&mut self, shape: &str, types: &[TypeParam], private: bool, methods: &[TaskDef]) -> Result<SharedField> {
         let at = self.peek_span();
         self.advance();
         if self.check(Token::Priv) {
-            return Err(Error::at(
-                self.peek_span(),
-                "'priv' goes first, as in 'priv shared f: int = 0'",
-            ));
+            return Err(Error::at(self.peek_span(), "'priv' goes first, as in 'priv shared f: int = 0'"));
         }
         if self.check(Token::Shared) {
-            return Err(Error::at(
-                self.peek_span(),
-                "'shared' is already written here",
-            ));
+            return Err(Error::at(self.peek_span(), "'shared' is already written here"));
         }
         let word_at = self.peek_span();
         let flex = self.match_token(Token::Flex);
         let bind = !flex && self.match_token(Token::Bind);
         if (flex || bind) && self.check(Token::Amp) {
-            return Err(Error::at(
-                self.peek_span(),
-                "a shared field is a value of its own, not a place elsewhere, so it is 'shared flex' or 'shared bind', without '&'",
-            ));
+            return Err(Error::at(self.peek_span(), "a shared field is a value of its own, not a place elsewhere, so it is 'shared flex' or 'shared bind', without '&'"));
         }
         if (flex || bind) && self.check(Token::Flex) {
-            return Err(Error::at(
-                self.peek_span(),
-                "'flex' is already written here",
-            ));
+            return Err(Error::at(self.peek_span(), "'flex' is already written here"));
         }
         if (flex || bind) && self.check(Token::Bind) {
-            return Err(Error::at(
-                self.peek_span(),
-                "'bind' is already written here",
-            ));
+            return Err(Error::at(self.peek_span(), "'bind' is already written here"));
         }
         let read = self.match_read(private)?;
         if (flex || bind) && read {
             let word = if flex { "flex" } else { "bind" };
             return Err(Error::at(
                 word_at,
-                format!(
-                    "a shared field is '{0}' or '{1}', not both: '{0}' lets any code that sees it change it, and '{1}' only the methods of its shape",
-                    word, READ
-                ),
+                format!("a shared field is '{0}' or '{1}', not both: '{0}' lets any code that sees it change it, and '{1}' only the methods of its shape", word, READ),
             ));
         }
         if read && (self.check(Token::Flex) || self.check(Token::Bind)) {
             return Err(Error::at(
                 self.peek_span(),
-                format!(
-                    "a shared field is 'flex' or 'bind' or '{0}', not both: 'flex' or 'bind' lets any code that sees it change it, and '{0}' only the methods of its shape change",
-                    READ
-                ),
+                format!("a shared field is 'flex' or 'bind' or '{0}', not both: 'flex' or 'bind' lets any code that sees it change it, and '{0}' only the methods of its shape change", READ),
             ));
         }
         if !types.is_empty() {
             return Err(Error::at(
                 at,
-                format!(
-                    "a shape that takes types can't have shared fields yet ('{}' takes {}): it is a different shape for every set of types",
-                    shape,
-                    type_param_list(types)
-                ),
+                format!("a shape that takes types can't have shared fields yet ('{}' takes {}): it is a different shape for every set of types", shape, type_param_list(types)),
             ));
         }
         self.reject_field_below_method(methods, "shape")?;
@@ -1617,26 +1207,16 @@ impl Parser {
         if field.default.is_none() {
             return Err(Error::at(
                 field.ty_span,
-                format!(
-                    "a shared field names its first value, as in 'shared {0}: {1} = …', since no literal ever gives it one",
-                    field.name, field.ty
-                ),
+                format!("a shared field names its first value, as in 'shared {0}: {1} = …', since no literal ever gives it one", field.name, field.ty),
             ));
         }
         field.private = private;
         field.read = read;
-        Ok(SharedField {
-            field,
-            flex,
-            bind,
-            start: None,
-        })
+        Ok(SharedField { field, flex, bind, start: None })
     }
 
     fn reject_field_below_method(&self, methods: &[TaskDef], what: &str) -> Result<()> {
-        let Some(first) = methods.first() else {
-            return Ok(());
-        };
+        let Some(first) = methods.first() else { return Ok(()) };
         let name = first.owner.as_ref().map_or("", |owner| owner.name.as_str());
         let of = if what == "kind" { "variant" } else { "field" };
         Err(Error::at(
@@ -1654,18 +1234,10 @@ impl Parser {
 
     fn at_method_from(&self, pos: usize) -> bool {
         let mut pos = pos;
-        if matches!(self.tokens.get(pos), Some(Token::Ident(word)) if word == ALTERS)
-            && matches!(
-                self.tokens.get(pos + 1),
-                Some(Token::Ident(_) | Token::New | Token::Own)
-            )
-        {
+        if matches!(self.tokens.get(pos), Some(Token::Ident(word)) if word == ALTERS) && matches!(self.tokens.get(pos + 1), Some(Token::Ident(_) | Token::New | Token::Own)) {
             pos += 1;
         }
-        matches!(
-            self.tokens.get(pos),
-            Some(Token::Ident(_) | Token::New | Token::Own)
-        ) && matches!(self.tokens.get(pos + 1), Some(Token::LParen | Token::Lt))
+        matches!(self.tokens.get(pos), Some(Token::Ident(_) | Token::New | Token::Own)) && matches!(self.tokens.get(pos + 1), Some(Token::LParen | Token::Lt))
     }
 
     fn parse_member_decorators(&mut self, what: &str) -> Result<(Vec<Decorator>, Vec<Expr>)> {
@@ -1687,75 +1259,34 @@ impl Parser {
         let follows = self.tokens.get(at).unwrap_or(&Token::Eof).describe();
         if lines.0.is_empty() {
             let what_follows = match self.tokens.get(at) {
-                Some(Token::Shared) => {
-                    "a shared field, which holds a value rather than running".to_string()
-                }
-                Some(Token::Ident(field))
-                    if what == "shape" && self.tokens.get(at + 1) == Some(&Token::Colon) =>
-                {
-                    format!(
-                        "the field '{}', which holds a value rather than running",
-                        field
-                    )
-                }
-                Some(Token::Ident(_)) if what == "kind" => format!(
-                    "{}, a variant, which makes a value rather than running",
-                    follows
-                ),
+                Some(Token::Shared) => "a shared field, which holds a value rather than running".to_string(),
+                Some(Token::Ident(field)) if what == "shape" && self.tokens.get(at + 1) == Some(&Token::Colon) => format!("the field '{}', which holds a value rather than running", field),
+                Some(Token::Ident(_)) if what == "kind" => format!("{}, a variant, which makes a value rather than running", follows),
                 _ => follows,
             };
-            return Err(Error::at(
-                first,
-                format!(
-                    "a wrapper in a {} goes on the lines above a method, as in '$(timed)' above 'area() -> int', and what follows it is {}",
-                    what, what_follows
-                ),
-            ));
+            return Err(Error::at(first, format!("a wrapper in a {} goes on the lines above a method, as in '$(timed)' above 'area() -> int', and what follows it is {}", what, what_follows)));
         }
         let follows = if (what == "shape" && method) || alters {
             "; this is a method of every value, which has no value to be called on where the program starts, though it takes wrappers, '$(w)', which run at each call".to_string()
         } else if self.tokens.get(at) == Some(&Token::Shared) {
             ", and a shared field follows it, which takes none".to_string()
         } else if what == "kind" && matches!(self.tokens.get(at), Some(Token::Ident(_))) {
-            format!(
-                ", and {} follows it, a variant or a method of every value, which take no startup decorator",
-                follows
-            )
+            format!(", and {} follows it, a variant or a method of every value, which take no startup decorator", follows)
         } else {
             format!(", and {} follows it", follows)
         };
-        Err(Error::at(
-            first,
-            format!(
-                "a startup decorator in a {} goes on the lines above a shared method, as in '$register' above 'shared new(…)'{}",
-                what, follows
-            ),
-        ))
+        Err(Error::at(first, format!("a startup decorator in a {} goes on the lines above a shared method, as in '$register' above 'shared new(…)'{}", what, follows)))
     }
 
     fn reject_misplaced_method_words(&self) -> Result<()> {
-        if matches!(self.peek(), Token::Ident(word) if word == ALTERS)
-            && self.tokens.get(self.pos + 1) == Some(&Token::Shared)
-        {
+        if matches!(self.peek(), Token::Ident(word) if word == ALTERS) && self.tokens.get(self.pos + 1) == Some(&Token::Shared) {
             return Err(Error::at(self.peek_span(), SHARED_NEVER_ALTERS));
         }
         Ok(())
     }
 
-    fn parse_method(
-        &mut self,
-        owner: &str,
-        what: &str,
-        types: &[TypeParam],
-        private: bool,
-        is_shared: bool,
-        above: Above,
-    ) -> Result<TaskDef> {
-        let Above {
-            fields,
-            shared,
-            methods,
-        } = above;
+    fn parse_method(&mut self, owner: &str, what: &str, types: &[TypeParam], private: bool, is_shared: bool, above: Above) -> Result<TaskDef> {
+        let Above { fields, shared, methods } = above;
         let opened = self.peek_span();
         let alters_span = match self.peek() {
             Token::Ident(word) if word == ALTERS => {
@@ -1777,30 +1308,19 @@ impl Parser {
             _ => self.expect_ident()?,
         };
         if is_shared && name == STR {
-            return Err(Error::at(
-                span,
-                "a method named 'str' writes a value it is called on, so it isn't 'shared'",
-            ));
+            return Err(Error::at(span, "a method named 'str' writes a value it is called on, so it isn't 'shared'"));
         }
         if is_shared && !types.is_empty() {
             return Err(Error::at(
                 span,
-                format!(
-                    "a {0} that takes types can't have shared methods yet ('{1}' takes {2}): it is a different {0} for every set of types",
-                    what,
-                    owner,
-                    type_param_list(types)
-                ),
+                format!("a {0} that takes types can't have shared methods yet ('{1}' takes {2}): it is a different {0} for every set of types", what, owner, type_param_list(types)),
             ));
         }
         reject_member_named_this(&name, span, "a method")?;
         if is_builtin_member(&name) || name == LEN {
             return Err(Error::at(
                 span,
-                format!(
-                    "'{}' is a reserved name: every value or slice already answers to it, so a method can't be called that",
-                    name
-                ),
+                format!("'{}' is a reserved name: every value or slice already answers to it, so a method can't be called that", name),
             ));
         }
         if let Some(field) = fields.iter().find(|field| field.name == name) {
@@ -1821,58 +1341,20 @@ impl Parser {
                 ),
             ));
         }
-        if let Some(before) = methods.iter().find(|before| {
-            before
-                .owner
-                .as_ref()
-                .is_some_and(|before| before.name == name)
-        }) {
-            return Err(Error::at(
-                span,
-                format!(
-                    "method '{}' is already defined at {}:{}",
-                    name, before.span.line, before.span.col
-                ),
-            ));
+        if let Some(before) = methods.iter().find(|before| before.owner.as_ref().is_some_and(|before| before.name == name)) {
+            return Err(Error::at(span, format!("method '{}' is already defined at {}:{}", name, before.span.line, before.span.col)));
         }
         let own = self.parse_type_params(false)?;
-        if let Some(clash) = own
-            .iter()
-            .find(|param| types.iter().any(|outer| outer.name == param.name))
-        {
-            return Err(Error::at(
-                clash.span,
-                format!(
-                    "'{}' is already a type '{}' takes; name the method's own type otherwise, as in '<R>'",
-                    clash.name, owner
-                ),
-            ));
+        if let Some(clash) = own.iter().find(|param| types.iter().any(|outer| outer.name == param.name)) {
+            return Err(Error::at(clash.span, format!("'{}' is already a type '{}' takes; name the method's own type otherwise, as in '<R>'", clash.name, owner)));
         }
-        let mut params = if is_shared {
-            Vec::new()
-        } else {
-            vec![receiver(owner, types, span)]
-        };
+        let mut params = if is_shared { Vec::new() } else { vec![receiver(owner, types, span)] };
         let types: Vec<TypeParam> = types.iter().cloned().chain(own).collect();
         let types = types.as_slice();
         let read = self.parse_field_list(Slot::Param);
-        params.extend(if what == "kind" {
-            read.map_err(Parser::kind_member)?
-        } else {
-            read?
-        });
-        if let Some(param) = params
-            .iter()
-            .skip(usize::from(!is_shared))
-            .find(|param| param.ty == Type::Region && param.name == THIS_WORD)
-        {
-            return Err(Error::at(
-                param.span,
-                format!(
-                    "'{0}' is the region the value this method is called on lives in, written '@{0}', so a region parameter can't take the name",
-                    THIS_WORD
-                ),
-            ));
+        params.extend(if what == "kind" { read.map_err(Parser::kind_member)? } else { read? });
+        if let Some(param) = params.iter().skip(usize::from(!is_shared)).find(|param| param.ty == Type::Region && param.name == THIS_WORD) {
+            return Err(Error::at(param.span, format!("'{0}' is the region the value this method is called on lives in, written '@{0}', so a region parameter can't take the name", THIS_WORD)));
         }
         let mut results = Vec::new();
         let ret = if self.match_token(Token::Arrow) {
@@ -1881,10 +1363,7 @@ impl Parser {
             Type::Nothing
         };
         if self.check(Token::LBrace) {
-            return Err(Error::at(
-                self.peek_span(),
-                "a method's body starts on the line after its header, and closes with 'fi'",
-            ));
+            return Err(Error::at(self.peek_span(), "a method's body starts on the line after its header, and closes with 'fi'"));
         }
         self.skip_newlines();
         let outer = std::mem::replace(&mut self.in_generic, !types.is_empty());
@@ -1902,12 +1381,7 @@ impl Parser {
             span,
             private,
             native: false,
-            owner: Some(Owner {
-                name,
-                alters: alters_span.is_some(),
-                alters_span,
-                shared: is_shared,
-            }),
+            owner: Some(Owner { name, alters: alters_span.is_some(), alters_span, shared: is_shared }),
             decorators: Vec::new(),
             passes: Vec::new(),
             wrappers: Vec::new(),
@@ -1928,9 +1402,7 @@ impl Parser {
         let mut methods: Vec<TaskDef> = Vec::new();
         while !self.check(Token::Fi) && !self.is_at_end() && !self.at_item_start() {
             self.skip_newlines();
-            if self.check(Token::Fi) || self.at_item_start() {
-                break;
-            }
+            if self.check(Token::Fi) || self.at_item_start() { break; }
             // A variant may be named `end`; only a stray `end` that ends the
             // kind (followed by the file's end or a new item) is the old keyword.
             if self.end_closes_item() {
@@ -1942,18 +1414,7 @@ impl Parser {
             self.reject_misplaced_method_words()?;
             if self.check(Token::Shared) && self.at_method_from(self.pos + 1) {
                 self.advance();
-                let mut method = self.parse_method(
-                    &name,
-                    "kind",
-                    &types,
-                    private,
-                    true,
-                    Above {
-                        fields: &[],
-                        shared: &[],
-                        methods: &methods,
-                    },
-                )?;
+                let mut method = self.parse_method(&name, "kind", &types, private, true, Above { fields: &[], shared: &[], methods: &methods })?;
                 decorate(&mut method, decorators, wrappers);
                 methods.push(method);
                 self.skip_newlines();
@@ -1962,10 +1423,7 @@ impl Parser {
             if self.check(Token::Shared) {
                 return Err(Error::at(
                     self.peek_span(),
-                    format!(
-                        "a kind has no fields, so no shared ones; a shape has them, and a kind has shared methods, as in 'shared make() -> {}'",
-                        name
-                    ),
+                    format!("a kind has no fields, so no shared ones; a shape has them, and a kind has shared methods, as in 'shared make() -> {}'", name),
                 ));
             }
             if self.check(Token::New) {
@@ -1973,55 +1431,31 @@ impl Parser {
             }
             // `alters` or trailing `->` disambiguates kind methods from payloaded variants.
             if self.at_method() && !self.at_variant_payload(&methods) {
-                let mut method = self.parse_method(
-                    &name,
-                    "kind",
-                    &types,
-                    private,
-                    false,
-                    Above {
-                        fields: &[],
-                        shared: &[],
-                        methods: &methods,
-                    },
-                )?;
+                let mut method = self.parse_method(&name, "kind", &types, private, false, Above { fields: &[], shared: &[], methods: &methods })?;
                 decorate(&mut method, decorators, wrappers);
                 methods.push(method);
                 self.skip_newlines();
                 continue;
             }
             if let Some(wrapper) = wrappers.first() {
-                return Err(Error::at(
-                    wrapper.span,
-                    "a wrapper in a kind goes on the lines above a method, and a variant follows it here, which makes a value rather than running",
-                ));
+                return Err(Error::at(wrapper.span, "a wrapper in a kind goes on the lines above a method, and a variant follows it here, which makes a value rather than running"));
             }
             if private {
-                return Err(Error::at(
-                    variant_span,
-                    "a variant can't be 'priv': every variant is as visible as its kind",
-                ));
+                return Err(Error::at(variant_span, "a variant can't be 'priv': every variant is as visible as its kind"));
             }
             self.reject_field_below_method(&methods, "kind")?;
             let tag = self.expect_ident()?;
             let payload = if self.check(Token::LParen) {
-                self.parse_field_list(Slot::Value)
-                    .map_err(Parser::kind_member)?
+                self.parse_field_list(Slot::Value).map_err(Parser::kind_member)?
             } else {
                 Vec::new()
             };
-            variants.push(Variant {
-                tag,
-                payload,
-                span: variant_span,
-            });
+            variants.push(Variant { tag, payload, span: variant_span });
             self.skip_newlines();
         }
         self.expect_fi("kind", opened)?;
         for method in &methods {
-            let Some(owner) = method.owner.as_ref().filter(|owner| owner.shared) else {
-                continue;
-            };
+            let Some(owner) = method.owner.as_ref().filter(|owner| owner.shared) else { continue };
             if let Some(variant) = variants.iter().find(|variant| variant.tag == owner.name) {
                 return Err(Error::at(
                     method.span,
@@ -2033,17 +1467,7 @@ impl Parser {
             }
         }
         self.methods.extend(methods.into_iter().map(Item::Task));
-        Ok(KindDef {
-            name,
-            types,
-            given: Vec::new(),
-            variants,
-            span,
-            private: false,
-            imitates,
-            follows: Vec::new(),
-            imitated: 0,
-        })
+        Ok(KindDef { name, types, given: Vec::new(), variants, span, private: false, imitates, follows: Vec::new(), imitated: 0 })
     }
 
     fn parse_actor(&mut self) -> Result<ActorDef> {
@@ -2059,9 +1483,7 @@ impl Parser {
         let mut handlers: Vec<ActorHandler> = Vec::new();
         while !self.check(Token::Fi) && !self.is_at_end() && !self.at_item_start() {
             self.skip_newlines();
-            if self.check(Token::Fi) || self.at_item_start() {
-                break;
-            }
+            if self.check(Token::Fi) || self.at_item_start() { break; }
             if matches!(self.peek(), Token::Ident(word) if word == "on") {
                 self.advance();
                 let handler_opened = self.peek_span();
@@ -2121,10 +1543,7 @@ impl Parser {
         loop {
             if self.check(Token::Shared) {
                 if shared {
-                    return Err(Error::at(
-                        self.peek_span(),
-                        "'shared' is already written here",
-                    ));
+                    return Err(Error::at(self.peek_span(), "'shared' is already written here"));
                 }
                 self.advance();
                 shared = true;
@@ -2132,10 +1551,7 @@ impl Parser {
             }
             if matches!(self.peek(), Token::Ident(word) if word == ALTERS) {
                 if alters_span.is_some() {
-                    return Err(Error::at(
-                        self.peek_span(),
-                        "'alters' is already written here",
-                    ));
+                    return Err(Error::at(self.peek_span(), "'alters' is already written here"));
                 }
                 let at = self.peek_span();
                 self.advance();
@@ -2149,10 +1565,7 @@ impl Parser {
                         }
                     }
                     if !self.match_token(Token::RParen) {
-                        return Err(Error::at(
-                            self.peek_span(),
-                            "expected ')' to close 'alters(...)'",
-                        ));
+                        return Err(Error::at(self.peek_span(), "expected ')' to close 'alters(...)'"));
                     }
                 }
                 continue;
@@ -2178,52 +1591,24 @@ impl Parser {
                 let target = self.parse_alter_target()?;
                 EventTrigger::AfterTask(target)
             } else if matches!(self.peek(), Token::Ident(w) if w == "call") {
-                return Err(Error::at(
-                    self.peek_span(),
-                    "to run an event before or after a task or method, write 'before <name>' or 'after <name>'",
-                ));
+                return Err(Error::at(self.peek_span(), "to run an event before or after a task or method, write 'before <name>' or 'after <name>'"));
             } else if matches!(self.peek(), Token::Ident(w) if w == READ) {
                 self.advance();
                 let target = self.parse_alter_target()?;
                 EventTrigger::Read(target)
-            } else if matches!(self.peek(), Token::Ident(w) if w == "init")
-                && !self
-                    .tokens
-                    .get(self.pos + 1)
-                    .is_some_and(|t| matches!(t, Token::Dot))
-            {
+            } else if matches!(self.peek(), Token::Ident(w) if w == "init") && !self.tokens.get(self.pos + 1).is_some_and(|t| matches!(t, Token::Dot)) {
                 self.advance();
                 EventTrigger::Lifecycle(LifecycleKind::Init)
-            } else if matches!(self.peek(), Token::Ident(w) if w == "drop")
-                && !self
-                    .tokens
-                    .get(self.pos + 1)
-                    .is_some_and(|t| matches!(t, Token::Dot))
-            {
+            } else if matches!(self.peek(), Token::Ident(w) if w == "drop") && !self.tokens.get(self.pos + 1).is_some_and(|t| matches!(t, Token::Dot)) {
                 self.advance();
                 EventTrigger::Lifecycle(LifecycleKind::Drop)
-            } else if matches!(self.peek(), Token::Ident(w) if w == "change")
-                && !self
-                    .tokens
-                    .get(self.pos + 1)
-                    .is_some_and(|t| matches!(t, Token::Dot))
-            {
+            } else if matches!(self.peek(), Token::Ident(w) if w == "change") && !self.tokens.get(self.pos + 1).is_some_and(|t| matches!(t, Token::Dot)) {
                 self.advance();
                 EventTrigger::Lifecycle(LifecycleKind::Change)
-            } else if matches!(self.peek(), Token::Ident(w) if w == "start")
-                && !self
-                    .tokens
-                    .get(self.pos + 1)
-                    .is_some_and(|t| matches!(t, Token::Dot))
-            {
+            } else if matches!(self.peek(), Token::Ident(w) if w == "start") && !self.tokens.get(self.pos + 1).is_some_and(|t| matches!(t, Token::Dot)) {
                 self.advance();
                 EventTrigger::Lifecycle(LifecycleKind::Start)
-            } else if matches!(self.peek(), Token::Ident(w) if w == "end")
-                && !self
-                    .tokens
-                    .get(self.pos + 1)
-                    .is_some_and(|t| matches!(t, Token::Dot))
-            {
+            } else if matches!(self.peek(), Token::Ident(w) if w == "end") && !self.tokens.get(self.pos + 1).is_some_and(|t| matches!(t, Token::Dot)) {
                 self.advance();
                 EventTrigger::Lifecycle(LifecycleKind::End)
             } else {
@@ -2245,10 +1630,7 @@ impl Parser {
             let target = self.parse_alter_target()?;
             EventTrigger::AfterTask(target)
         } else {
-            return Err(Error::at(
-                trigger_span,
-                "expected 'on', 'before', or 'after'",
-            ));
+            return Err(Error::at(trigger_span, "expected 'on', 'before', or 'after'"));
         };
 
         let cond = if self.match_token(Token::When) {
@@ -2265,10 +1647,7 @@ impl Parser {
         };
 
         if !matches!(self.peek(), Token::Newline | Token::Eof) {
-            return Err(Error::at(
-                self.peek_span(),
-                "unexpected token in event header",
-            ));
+            return Err(Error::at(self.peek_span(), "unexpected token in event header"));
         }
 
         self.skip_newlines();
@@ -2297,27 +1676,13 @@ impl Parser {
             return Ok(Vec::new());
         }
         let (does, other, members) = match what {
-            "kind" => (
-                "imitates another kind or follows a pattern",
-                "Other",
-                "the variants of a kind start",
-            ),
+            "kind" => ("imitates another kind or follows a pattern", "Other", "the variants of a kind start"),
             _ => ("follows a pattern", "Shaped", "the fields of a shape start"),
         };
         let first = self.peek_span();
-        let doubled = self.tokens.get(self.pos + 1) == Some(&Token::Colon)
-            && self
-                .spans
-                .get(self.pos + 1)
-                .is_some_and(|next| next.line == first.line && next.col == first.col + 1);
+        let doubled = self.tokens.get(self.pos + 1) == Some(&Token::Colon) && self.spans.get(self.pos + 1).is_some_and(|next| next.line == first.line && next.col == first.col + 1);
         if !doubled {
-            return Err(Error::at(
-                first,
-                format!(
-                    "a {} {} with '::' after its name, as in '{} {}::{}'",
-                    what, does, what, name, other
-                ),
-            ));
+            return Err(Error::at(first, format!("a {} {} with '::' after its name, as in '{} {}::{}'", what, does, what, name, other)));
         }
         self.advance();
         self.advance();
@@ -2331,13 +1696,7 @@ impl Parser {
                     (false, "kind") => "another kind or pattern after '&'",
                     (false, _) => "another pattern after '&'",
                 };
-                return Err(Error::at(
-                    at,
-                    format!(
-                        "expected {}, as in '{} {}::{}'",
-                        expected, what, name, other
-                    ),
-                ));
+                return Err(Error::at(at, format!("expected {}, as in '{} {}::{}'", expected, what, name, other)));
             }
             after.push((self.parse_type()?, at));
             if !self.match_token(Token::Amp) {
@@ -2345,15 +1704,8 @@ impl Parser {
             }
         }
         if !matches!(self.peek(), Token::Newline | Token::Eof) {
-            let more = if what == "kind" {
-                "another kind or pattern"
-            } else {
-                "another pattern"
-            };
-            return Err(self.unexpected(&format!(
-                "'&' and {}, or the end of the line: {} on the line after its name",
-                more, members
-            )));
+            let more = if what == "kind" { "another kind or pattern" } else { "another pattern" };
+            return Err(self.unexpected(&format!("'&' and {}, or the end of the line: {} on the line after its name", more, members)));
         }
         Ok(after)
     }
@@ -2367,18 +1719,10 @@ impl Parser {
         let name = self.expect_ident()?;
         let types = self.parse_type_params(false)?;
         if self.check(Token::Colon) {
-            return Err(Error::at(
-                self.peek_span(),
-                format!(
-                    "a pattern follows no other pattern yet; ask for the other's methods in '{}' too, or have a shape follow both, joined with '&'",
-                    name
-                ),
-            ));
+            return Err(Error::at(self.peek_span(), format!("a pattern follows no other pattern yet; ask for the other's methods in '{}' too, or have a shape follow both, joined with '&'", name)));
         }
         if !matches!(self.peek(), Token::Newline | Token::Eof) {
-            return Err(self.unexpected(
-                "the end of the line: the members of a pattern start on the line after its name",
-            ));
+            return Err(self.unexpected("the end of the line: the members of a pattern start on the line after its name"));
         }
         self.skip_newlines();
         let mut fields: Vec<Field> = Vec::new();
@@ -2386,41 +1730,22 @@ impl Parser {
         let mut last_bare: Option<(Span, String, String)> = None;
         while !self.check(Token::Fi) && !self.is_at_end() && !self.at_item_start() {
             self.reject_pattern_words()?;
-            if matches!(self.peek(), Token::Ident(_))
-                && self.tokens.get(self.pos + 1) == Some(&Token::Colon)
-            {
+            if matches!(self.peek(), Token::Ident(_)) && self.tokens.get(self.pos + 1) == Some(&Token::Colon) {
                 if let Some(first) = methods.first() {
                     let method = first.owner.as_ref().map_or("", |owner| owner.name.as_str());
-                    return Err(Error::at(
-                        self.peek_span(),
-                        format!(
-                            "every field of a pattern goes above its methods, and method '{}' is declared at {}:{}",
-                            method, first.span.line, first.span.col
-                        ),
-                    ));
+                    return Err(Error::at(self.peek_span(), format!("every field of a pattern goes above its methods, and method '{}' is declared at {}:{}", method, first.span.line, first.span.col)));
                 }
                 let field = self.parse_field(Slot::Field)?;
                 reject_member_named_this(&field.name, field.span, "a field")?;
                 if let Some(before) = fields.iter().find(|before| before.name == field.name) {
-                    return Err(Error::at(
-                        field.span,
-                        format!(
-                            "field '{}' is already defined at {}:{}",
-                            field.name, before.span.line, before.span.col
-                        ),
-                    ));
+                    return Err(Error::at(field.span, format!("field '{}' is already defined at {}:{}", field.name, before.span.line, before.span.col)));
                 }
                 if field.default.is_some() {
-                    return Err(Error::at(
-                        field.ty_span,
-                        "a pattern's field names no value it falls back on; the shape following the pattern declares the field, and may give it one",
-                    ));
+                    return Err(Error::at(field.ty_span, "a pattern's field names no value it falls back on; the shape following the pattern declares the field, and may give it one"));
                 }
                 fields.push(field);
                 if !matches!(self.peek(), Token::Newline | Token::Eof) {
-                    return Err(self.unexpected(
-                        "the end of the line: a pattern's field is written on a line of its own",
-                    ));
+                    return Err(self.unexpected("the end of the line: a pattern's field is written on a line of its own"));
                 }
                 self.skip_newlines();
                 continue;
@@ -2435,62 +1760,23 @@ impl Parser {
                 return Err(self.unexpected("',' and another method, or the end of the line"));
             }
             self.skip_newlines();
-            if line.len() == 1
-                && !self.check(Token::Fi)
-                && !self.is_at_end()
-                && !self.at_item_start()
-                && !self.at_pattern_member()
-            {
+            if line.len() == 1 && !self.check(Token::Fi) && !self.is_at_end() && !self.at_item_start() && !self.at_pattern_member() {
                 // A bare `call()` on the next line starts a default body rather than another header.
-                let bare = matches!(
-                    (
-                        self.tokens.get(self.pos),
-                        self.tokens.get(self.pos + 1),
-                        self.tokens.get(self.pos + 2),
-                        self.tokens.get(self.pos + 3)
-                    ),
-                    (
-                        Some(Token::Ident(_)),
-                        Some(Token::LParen),
-                        Some(Token::RParen),
-                        Some(Token::Newline | Token::Eof)
-                    )
-                );
-                let bare = bare.then(|| {
-                    (
-                        self.peek_span(),
-                        match self.peek() {
-                            Token::Ident(name) => name.clone(),
-                            _ => String::new(),
-                        },
-                    )
-                });
+                let bare = matches!((self.tokens.get(self.pos), self.tokens.get(self.pos + 1), self.tokens.get(self.pos + 2), self.tokens.get(self.pos + 3)), (Some(Token::Ident(_)), Some(Token::LParen), Some(Token::RParen), Some(Token::Newline | Token::Eof)));
+                let bare = bare.then(|| (self.peek_span(), match self.peek() { Token::Ident(name) => name.clone(), _ => String::new() }));
                 let lambdas = self.lambdas.len();
-                let header = line.first().map(|method| {
-                    (
-                        method.span,
-                        method
-                            .owner
-                            .as_ref()
-                            .map_or(String::new(), |owner| owner.name.clone()),
-                    )
-                });
+                let header = line.first().map(|method| (method.span, method.owner.as_ref().map_or(String::new(), |owner| owner.name.clone())));
                 let read = self.parse_block().and_then(|body| match &header {
                     Some((span, _)) => self.expect_fi("method", *span).map(|()| body),
                     None => Ok(body),
                 });
                 let body = match (read, &bare, &header) {
                     (Ok(body), _, _) => body,
-                    (Err(_), Some((at, called)), Some((_, method))) => {
-                        return Err(Error::at(*at, two_headers(called, method)));
-                    }
+                    (Err(_), Some((at, called)), Some((_, method))) => return Err(Error::at(*at, two_headers(called, method))),
                     (Err(error), _, _) => return Err(error),
                 };
                 if let Some(Item::Task(lambda)) = self.lambdas.get(lambdas) {
-                    return Err(Error::at(
-                        lambda.span,
-                        "a pattern's default method holds no lambda yet; write a task outside the pattern, and name it here",
-                    ));
+                    return Err(Error::at(lambda.span, "a pattern's default method holds no lambda yet; write a task outside the pattern, and name it here"));
                 }
                 if let Some(method) = line.first_mut() {
                     method.body = body;
@@ -2509,54 +1795,20 @@ impl Parser {
         }
         self.expect_fi("pattern", opened)?;
         if fields.is_empty() && methods.is_empty() {
-            return Err(Error::at(
-                span,
-                format!(
-                    "pattern '{}' asks for nothing; give it a method a shape following it has, as in 'area() -> float'",
-                    name
-                ),
-            ));
+            return Err(Error::at(span, format!("pattern '{}' asks for nothing; give it a method a shape following it has, as in 'area() -> float'", name)));
         }
-        Ok(PatternDef {
-            name,
-            types,
-            fields,
-            methods,
-            span,
-            private,
-        })
+        Ok(PatternDef { name, types, fields, methods, span, private })
     }
 
     fn reject_pattern_words(&self) -> Result<()> {
         let at = self.peek_span();
         match self.peek() {
-            Token::Priv => Err(Error::at(
-                at,
-                "a pattern's members are as visible as the pattern; a method a pattern asks for is never 'priv', since any code using the pattern calls it",
-            )),
-            Token::Shared => Err(Error::at(
-                at,
-                "a pattern has no shared fields or methods yet; it asks for what each value of a shape has",
-            )),
-            Token::Dollar => Err(Error::at(
-                at,
-                "a pattern's method takes no decorators; the method a shape writes for it may",
-            )),
-            Token::New => Err(Error::at(
-                at,
-                "a pattern has no shared methods yet, so no 'new'",
-            )),
-            Token::Ident(word)
-                if word == READ
-                    && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) =>
-            {
-                Err(Error::at(
-                    at,
-                    format!(
-                        "a pattern's field is written without '{}'; the shape following it says who may change it",
-                        READ
-                    ),
-                ))
+            Token::Priv => Err(Error::at(at, "a pattern's members are as visible as the pattern; a method a pattern asks for is never 'priv', since any code using the pattern calls it")),
+            Token::Shared => Err(Error::at(at, "a pattern has no shared fields or methods yet; it asks for what each value of a shape has")),
+            Token::Dollar => Err(Error::at(at, "a pattern's method takes no decorators; the method a shape writes for it may")),
+            Token::New => Err(Error::at(at, "a pattern has no shared methods yet, so no 'new'")),
+            Token::Ident(word) if word == READ && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) => {
+                Err(Error::at(at, format!("a pattern's field is written without '{}'; the shape following it says who may change it", READ)))
             }
             _ => Ok(()),
         }
@@ -2570,13 +1822,7 @@ impl Parser {
             (Some(Token::Ident(word)), Some(Token::Ident(_))) if word == ALTERS => true,
             (Some(Token::Ident(_)), Some(Token::Colon | Token::Lt)) => true,
             (Some(Token::Ident(_)), Some(Token::LParen)) => {
-                if matches!(
-                    token(pos + 2),
-                    Some(Token::Flex | Token::Bind | Token::Fixed)
-                ) || matches!(
-                    (token(pos + 2), token(pos + 3)),
-                    (Some(Token::Ident(_)), Some(Token::Colon))
-                ) {
+                if matches!(token(pos + 2), Some(Token::Flex | Token::Bind | Token::Fixed)) || matches!((token(pos + 2), token(pos + 3)), (Some(Token::Ident(_)), Some(Token::Colon))) {
                     return true;
                 }
                 let mut depth = 0usize;
@@ -2612,50 +1858,25 @@ impl Parser {
         };
         let span = self.peek_span();
         if !matches!(self.peek(), Token::Ident(_)) {
-            return Err(self.unexpected(
-                "a method's header, as in 'area() -> float', or a field, as in 'name: text'",
-            ));
+            return Err(self.unexpected("a method's header, as in 'area() -> float', or a field, as in 'name: text'"));
         }
         let name = self.expect_ident()?;
         reject_member_named_this(&name, span, "a method")?;
         if is_builtin_member(&name) || name == LEN {
-            return Err(Error::at(
-                span,
-                format!(
-                    "'{}' is a reserved name: every value or slice already answers to it, so a method can't be called that",
-                    name
-                ),
-            ));
+            return Err(Error::at(span, format!("'{}' is a reserved name: every value or slice already answers to it, so a method can't be called that", name)));
         }
         if let Some(field) = fields.iter().find(|field| field.name == name) {
             return Err(Error::at(
                 span,
-                format!(
-                    "'{0}' is already a field of this pattern, at {1}:{2}; both are written '.{0}', so a field and a method can't share a name",
-                    name, field.span.line, field.span.col
-                ),
+                format!("'{0}' is already a field of this pattern, at {1}:{2}; both are written '.{0}', so a field and a method can't share a name", name, field.span.line, field.span.col),
             ));
         }
-        if let Some(before) = methods.iter().find(|before| {
-            before
-                .owner
-                .as_ref()
-                .is_some_and(|before| before.name == name)
-        }) {
-            return Err(Error::at(
-                span,
-                format!(
-                    "method '{}' is already defined at {}:{}",
-                    name, before.span.line, before.span.col
-                ),
-            ));
+        if let Some(before) = methods.iter().find(|before| before.owner.as_ref().is_some_and(|before| before.name == name)) {
+            return Err(Error::at(span, format!("method '{}' is already defined at {}:{}", name, before.span.line, before.span.col)));
         }
         let own = self.parse_type_params(false)?;
         if !self.check(Token::LParen) {
-            return Err(self.unexpected(&format!(
-                "'(' and the parameters of method '{}', as in '{}() -> int'",
-                name, name
-            )));
+            return Err(self.unexpected(&format!("'(' and the parameters of method '{}', as in '{}() -> int'", name, name)));
         }
         let mut params = vec![Field {
             name: THIS.to_string(),
@@ -2670,23 +1891,10 @@ impl Parser {
         }];
         params.extend(self.parse_field_list(Slot::Param)?);
         if let Some(param) = params.iter().skip(1).find(|param| param.default.is_some()) {
-            return Err(Error::at(
-                param.span,
-                "a pattern's method names no value a parameter falls back on yet; every call gives each one",
-            ));
+            return Err(Error::at(param.span, "a pattern's method names no value a parameter falls back on yet; every call gives each one"));
         }
-        if let Some(param) = params
-            .iter()
-            .skip(1)
-            .find(|param| param.ty == Type::Region && param.name == THIS_WORD)
-        {
-            return Err(Error::at(
-                param.span,
-                format!(
-                    "'{0}' is the region the value this method is called on lives in, written '@{0}', so a region parameter can't take the name",
-                    THIS_WORD
-                ),
-            ));
+        if let Some(param) = params.iter().skip(1).find(|param| param.ty == Type::Region && param.name == THIS_WORD) {
+            return Err(Error::at(param.span, format!("'{0}' is the region the value this method is called on lives in, written '@{0}', so a region parameter can't take the name", THIS_WORD)));
         }
         let mut results = Vec::new();
         let ret = if self.match_token(Token::Arrow) {
@@ -2708,12 +1916,7 @@ impl Parser {
             span,
             private: false,
             native: false,
-            owner: Some(Owner {
-                name,
-                alters: alters_span.is_some(),
-                alters_span,
-                shared: false,
-            }),
+            owner: Some(Owner { name, alters: alters_span.is_some(), alters_span, shared: false }),
             decorators: Vec::new(),
             passes: Vec::new(),
             wrappers: Vec::new(),
@@ -2734,13 +1937,7 @@ impl Parser {
                 Some(Token::LParen) => depth += 1,
                 Some(Token::RParen) => {
                     depth = match depth.checked_sub(1) {
-                        Some(0) => {
-                            return named
-                                && matches!(
-                                    self.tokens.get(pos + 1),
-                                    Some(Token::Newline | Token::Eof) | None
-                                );
-                        }
+                        Some(0) => return named && matches!(self.tokens.get(pos + 1), Some(Token::Newline | Token::Eof) | None),
                         Some(left) => left,
                         None => return false,
                     };
@@ -2769,21 +1966,10 @@ impl Parser {
     fn parse_field(&mut self, slot: Slot) -> Result<Field> {
         let span = self.peek_span();
         if self.check(Token::Priv) {
-            return Err(Error::at(
-                span,
-                "only a shape's field can be 'priv', not a parameter or a variant's value",
-            ));
+            return Err(Error::at(span, "only a shape's field can be 'priv', not a parameter or a variant's value"));
         }
-        if matches!(self.peek(), Token::Ident(word) if word == READ)
-            && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_)))
-        {
-            return Err(Error::at(
-                span,
-                format!(
-                    "only a shape's field can be '{}', not a parameter or a variant's value",
-                    READ
-                ),
-            ));
+        if matches!(self.peek(), Token::Ident(word) if word == READ) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) {
+            return Err(Error::at(span, format!("only a shape's field can be '{}', not a parameter or a variant's value", READ)));
         }
         let passing = self.match_passing(slot)?;
         let name = self.expect_ident()?;
@@ -2791,25 +1977,11 @@ impl Parser {
         let ty_span = self.peek_span();
         let mut ty = self.parse_type()?;
         if self.check(Token::Ellipsis) {
-            ty = self.group_type(
-                ty,
-                slot == Slot::Param,
-                "a parameter's type, as in 'args: P...'",
-            )?;
+            ty = self.group_type(ty, slot == Slot::Param, "a parameter's type, as in 'args: P...'")?;
         }
         let default_region = self.match_default(slot == Slot::Param)?;
         let default = self.match_field_default(slot)?;
-        Ok(Field {
-            name,
-            ty,
-            span,
-            ty_span,
-            private: false,
-            read: false,
-            default_region,
-            passing,
-            default,
-        })
+        Ok(Field { name, ty, span, ty_span, private: false, read: false, default_region, passing, default })
     }
 
     fn match_passing(&mut self, slot: Slot) -> Result<Passing> {
@@ -2829,29 +2001,17 @@ impl Parser {
                 ));
             }
             Slot::Field => {
-                return Err(Error::at(
-                    at,
-                    "only a parameter can be 'fixed'; a shape's field is part of the value holding it, and changes where that value is held",
-                ));
+                return Err(Error::at(at, "only a parameter can be 'fixed'; a shape's field is part of the value holding it, and changes where that value is held"));
             }
             Slot::Value => {
-                return Err(Error::at(
-                    at,
-                    format!("only a parameter can be '{}', not a variant's value", word),
-                ));
+                return Err(Error::at(at, format!("only a parameter can be '{}', not a variant's value", word)));
             }
         }
         self.advance();
         let by_place = if self.check(Token::Amp) {
             // `flex&` is one word: `flex &x` reads as the `&` of a call.
             if !self.amp_against_word() {
-                return Err(Error::at(
-                    self.peek_span(),
-                    format!(
-                        "a parameter that is the caller's place is written '{0}& x', with '&' against '{0}'",
-                        word
-                    ),
-                ));
+                return Err(Error::at(self.peek_span(), format!("a parameter that is the caller's place is written '{0}& x', with '&' against '{0}'", word)));
             }
             self.advance();
             true
@@ -2870,20 +2030,11 @@ impl Parser {
         if matches!(self.peek(), Token::Flex | Token::Fixed | Token::Bind) {
             return Err(Error::at(
                 self.peek_span(),
-                format!(
-                    "'{}' is already written here: a parameter is written with one of 'flex', 'flex&', 'fixed', 'fixed&', 'bind' and 'bind&', or none",
-                    passing.word()
-                ),
+                format!("'{}' is already written here: a parameter is written with one of 'flex', 'flex&', 'fixed', 'fixed&', 'bind' and 'bind&', or none", passing.word()),
             ));
         }
         if self.check(Token::Amp) {
-            return Err(Error::at(
-                self.peek_span(),
-                format!(
-                    "'&' marks a place given at a call, as in 'f(&a)'; a parameter's name is written without it, as in '{}& a: int'",
-                    word
-                ),
-            ));
+            return Err(Error::at(self.peek_span(), format!("'&' marks a place given at a call, as in 'f(&a)'; a parameter's name is written without it, as in '{}& a: int'", word)));
         }
         Ok(passing)
     }
@@ -2894,44 +2045,22 @@ impl Parser {
     /// `read(`, so both still work. `private` says `priv` was read just before,
     /// which a field is instead of `read`, not as well.
     fn match_read(&mut self, private: bool) -> Result<bool> {
-        if !matches!(self.peek(), Token::Ident(word) if word == READ)
-            || !matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_)))
-        {
+        if !matches!(self.peek(), Token::Ident(word) if word == READ) || !matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) {
             return Ok(false);
         }
         let at = self.peek_span();
-        if matches!(
-            self.tokens.get(self.pos + 2),
-            Some(Token::LParen | Token::Lt)
-        ) {
-            return Err(Error::at(
-                at,
-                format!(
-                    "only a field can be '{}', not a method; a method that changes the value it is called on says '{}'",
-                    READ, ALTERS
-                ),
-            ));
+        if matches!(self.tokens.get(self.pos + 2), Some(Token::LParen | Token::Lt)) {
+            return Err(Error::at(at, format!("only a field can be '{}', not a method; a method that changes the value it is called on says '{}'", READ, ALTERS)));
         }
         if private {
             return Err(Error::at(
                 at,
-                format!(
-                    "a field is 'priv' or '{0}', not both: 'priv' keeps it to its own file, and '{0}' lets any file read it",
-                    READ
-                ),
+                format!("a field is 'priv' or '{0}', not both: 'priv' keeps it to its own file, and '{0}' lets any file read it", READ),
             ));
         }
         self.advance();
-        if matches!(self.peek(), Token::Ident(word) if word == READ)
-            && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_)))
-        {
-            return Err(Error::at(
-                self.peek_span(),
-                format!(
-                    "'{}' is already written here: a field is read-only or it isn't",
-                    READ
-                ),
-            ));
+        if matches!(self.peek(), Token::Ident(word) if word == READ) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) {
+            return Err(Error::at(self.peek_span(), format!("'{}' is already written here: a field is read-only or it isn't", READ)));
         }
         Ok(true)
     }
@@ -2942,53 +2071,27 @@ impl Parser {
             return Ok(None);
         }
         if slot == Slot::Value {
-            return Err(Error::at(
-                at,
-                "only a shape's field or a task's parameter can be given a value to fall back on, not a variant's value",
-            ));
+            return Err(Error::at(at, "only a shape's field or a task's parameter can be given a value to fall back on, not a variant's value"));
         }
         Ok(Some(self.parse_expr()?))
     }
 
     fn check_param_defaults(params: &[Field]) -> Result<()> {
-        let Some(first) = params.iter().position(|param| param.default.is_some()) else {
-            return Ok(());
-        };
+        let Some(first) = params.iter().position(|param| param.default.is_some()) else { return Ok(()) };
         for param in params.iter().filter(|param| param.default.is_some()) {
-            let at = param
-                .default
-                .as_ref()
-                .map_or(param.span, |value| value.span);
+            let at = param.default.as_ref().map_or(param.span, |value| value.span);
             if param.passing.is_ref() {
                 return Err(Error::at(
                     at,
-                    format!(
-                        "'{}' is the caller's place, '{}', which a call names with '&'; a place has no value to fall back on",
-                        param.name,
-                        param.passing.word()
-                    ),
+                    format!("'{}' is the caller's place, '{}', which a call names with '&'; a place has no value to fall back on", param.name, param.passing.word()),
                 ));
             }
             if param.ty == Type::Region {
-                return Err(Error::at(
-                    at,
-                    format!(
-                        "'{}' is a region, which a call names; a region has no value to fall back on",
-                        param.name
-                    ),
-                ));
+                return Err(Error::at(at, format!("'{}' is a region, which a call names; a region has no value to fall back on", param.name)));
             }
         }
-        if let Some(group) = params
-            .iter()
-            .find(|param| matches!(param.ty, Type::Group(_)))
-        {
-            let at = params.get(first).map_or(group.span, |param| {
-                param
-                    .default
-                    .as_ref()
-                    .map_or(param.span, |value| value.span)
-            });
+        if let Some(group) = params.iter().find(|param| matches!(param.ty, Type::Group(_))) {
+            let at = params.get(first).map_or(group.span, |param| param.default.as_ref().map_or(param.span, |value| value.span));
             return Err(Error::at(
                 at,
                 format!(
@@ -2997,13 +2100,7 @@ impl Parser {
                 ),
             ));
         }
-        let Some(after) = params
-            .iter()
-            .skip(first)
-            .find(|param| param.default.is_none())
-        else {
-            return Ok(());
-        };
+        let Some(after) = params.iter().skip(first).find(|param| param.default.is_none()) else { return Ok(()) };
         let before = params.get(first).map_or("", |param| param.name.as_str());
         Err(Error::at(
             after.span,
@@ -3021,21 +2118,12 @@ impl Parser {
         if !params {
             return Err(Error::at(
                 self.peek_span(),
-                format!(
-                    "only a region a task takes can be a default region, as in 'r: region {}'",
-                    DEFAULT
-                ),
+                format!("only a region a task takes can be a default region, as in 'r: region {}'", DEFAULT),
             ));
         }
         self.advance();
         if matches!(self.peek(), Token::Ident(word) if word == DEFAULT) {
-            return Err(Error::at(
-                self.peek_span(),
-                format!(
-                    "'{}' is already written here: a region is the default or it isn't",
-                    DEFAULT
-                ),
-            ));
+            return Err(Error::at(self.peek_span(), format!("'{}' is already written here: a region is the default or it isn't", DEFAULT)));
         }
         Ok(true)
     }
@@ -3062,8 +2150,7 @@ impl Parser {
         let start = self.peek_span();
         self.type_parts.clear();
         let ty = self.parse_type_parts();
-        self.type_places
-            .insert(start.place_key(), std::mem::take(&mut self.type_parts));
+        self.type_places.insert(start.place_key(), std::mem::take(&mut self.type_parts));
         ty
     }
 
@@ -3084,10 +2171,7 @@ impl Parser {
         let error = self.parse_simple_type()?;
         self.no_or_in_type()?;
         if self.check(Token::Tilde) {
-            return Err(Error::at(
-                self.peek_span(),
-                "a type has one error type: '~' can't appear twice",
-            ));
+            return Err(Error::at(self.peek_span(), "a type has one error type: '~' can't appear twice"));
         }
         Ok(Type::Or(Box::new(value), Box::new(error)))
     }
@@ -3123,24 +2207,9 @@ impl Parser {
         // written inside must be the same one. A tuple or an array keeps no
         // region of its own, so only this sees it; the checker reports the
         // types that keep one, naming what is in the other region.
-        if let Some(inner) = ty
-            .regions()
-            .into_iter()
-            .find(|inner| *inner != region)
-            .filter(|_| keeps_no_region(&ty))
-        {
-            let at = self
-                .type_parts
-                .iter()
-                .find(|(part, _)| *part == format!("@{}", inner))
-                .map_or(region_span, |(_, at)| *at);
-            return Err(Error::at(
-                at,
-                format!(
-                    "everything a value in region '{0}' holds is in '{0}'; remove '@{1}'",
-                    region, inner
-                ),
-            ));
+        if let Some(inner) = ty.regions().into_iter().find(|inner| *inner != region).filter(|_| keeps_no_region(&ty)) {
+            let at = self.type_parts.iter().find(|(part, _)| *part == format!("@{}", inner)).map_or(region_span, |(_, at)| *at);
+            return Err(Error::at(at, format!("everything a value in region '{0}' holds is in '{0}'; remove '@{1}'", region, inner)));
         }
         let mut named = !ty.regions().is_empty();
         let ty = ty.map_regions_of_names(&mut |_| {
@@ -3148,13 +2217,7 @@ impl Parser {
             Some(region.clone())
         });
         if !named {
-            return Err(Error::at(
-                region_span,
-                format!(
-                    "'{}' holds no pointers or text, so it lives in no region; remove '@{}'",
-                    ty, region
-                ),
-            ));
+            return Err(Error::at(region_span, format!("'{}' holds no pointers or text, so it lives in no region; remove '@{}'", ty, region)));
         }
         Ok(ty)
     }
@@ -3190,6 +2253,13 @@ impl Parser {
             self.leave(1);
             return Ok(Type::Own(inner));
         }
+        if self.match_token(Token::BitXor) {
+            self.enter()?;
+            self.enter()?;
+            let inner = Box::new(self.parse_prefixed_type()?);
+            self.leave(2);
+            return Ok(Type::Ptr(Box::new(Type::Ptr(inner, None)), None));
+        }
         let prefix = if self.match_token(Token::Caret) {
             Some(Token::Caret)
         } else if self.match_token(Token::Maybe) {
@@ -3202,11 +2272,7 @@ impl Parser {
             self.enter()?;
             let inner = Box::new(self.parse_prefixed_type()?);
             self.leave(1);
-            return Ok(if prefix == Token::Caret {
-                Type::Ptr(inner, None)
-            } else {
-                Type::Maybe(inner)
-            });
+            return Ok(if prefix == Token::Caret { Type::Ptr(inner, None) } else { Type::Maybe(inner) });
         }
         self.parse_named_type(span)
     }
@@ -3214,14 +2280,8 @@ impl Parser {
     fn at_kept(&self) -> bool {
         match self.tokens.get(self.pos + 1) {
             Some(Token::AtSign) => true,
-            Some(Token::Flex) => matches!(
-                self.tokens.get(self.pos + 2),
-                Some(Token::AtSign | Token::Amp)
-            ),
-            Some(Token::Bind) => matches!(
-                self.tokens.get(self.pos + 2),
-                Some(Token::AtSign | Token::Amp)
-            ),
+            Some(Token::Flex) => matches!(self.tokens.get(self.pos + 2), Some(Token::AtSign | Token::Amp)),
+            Some(Token::Bind) => matches!(self.tokens.get(self.pos + 2), Some(Token::AtSign | Token::Amp)),
             Some(Token::Fixed) => self.tokens.get(self.pos + 2) == Some(&Token::Amp),
             _ => false,
         }
@@ -3253,37 +2313,17 @@ impl Parser {
                     KeptMode::Plain => Passing::FixedRef,
                 };
                 if matches!(self.peek(), Token::Dot | Token::LBracket) {
-                    return Err(Error::at(
-                        span,
-                        format!(
-                            "a lambda keeps a variable as a place, not a field or an item of one; keep the variable, '{} {}'",
-                            passing.word(),
-                            name
-                        ),
-                    ));
+                    return Err(Error::at(span, format!("a lambda keeps a variable as a place, not a field or an item of one; keep the variable, '{} {}'", passing.word(), name)));
                 }
                 if places.iter().any(|place| place.name == name) {
-                    return Err(Error::at(
-                        span,
-                        format!(
-                            "'{}' is already in this lambda's list; each place is kept once",
-                            name
-                        ),
-                    ));
+                    return Err(Error::at(span, format!("'{}' is already in this lambda's list; each place is kept once", name)));
                 }
-                places.push(KeptPlace {
-                    name,
-                    passing,
-                    span,
-                });
+                places.push(KeptPlace { name, passing, span });
             } else if !fixed && self.match_token(Token::AtSign) {
                 let span = self.peek_span();
                 let name = self.expect_ident()?;
                 if region.is_some() {
-                    return Err(Error::at(
-                        at,
-                        "a lambda keeps what it uses in one region, so its list names one, as in '[flex& count, @r]'",
-                    ));
+                    return Err(Error::at(at, "a lambda keeps what it uses in one region, so its list names one, as in '[flex& count, @r]'"));
                 }
                 region = Some((name, mode, span));
             } else {
@@ -3297,15 +2337,10 @@ impl Parser {
             }
         }
         if !self.match_token(Token::RBracket) {
-            return Err(
-                self.unexpected("',' and another item, or ']' to close what the lambda keeps")
-            );
+            return Err(self.unexpected("',' and another item, or ']' to close what the lambda keeps"));
         }
         let Some((region, mode, at)) = region else {
-            return Err(Error::at(
-                opened,
-                "a lambda keeps what it uses in a region, which its list names, as in '[flex& count, @r]'",
-            ));
+            return Err(Error::at(opened, "a lambda keeps what it uses in a region, which its list names, as in '[flex& count, @r]'"));
         };
         Ok((region, mode, at, places))
     }
@@ -3315,10 +2350,7 @@ impl Parser {
         if let Some(place) = places.first() {
             return Err(Error::at(
                 place.span,
-                format!(
-                    "the type of a lambda names only the region it keeps what it uses in, '[@{}]'; the places it keeps are its own, so its type doesn't name '{}'",
-                    region, place.name
-                ),
+                format!("the type of a lambda names only the region it keeps what it uses in, '[@{}]'; the places it keeps are its own, so its type doesn't name '{}'", region, place.name),
             ));
         }
         self.type_parts.push((format!("@{}", region), at));
@@ -3334,40 +2366,18 @@ impl Parser {
             false => Type::Unknown,
         };
         let Type::Task(task) = task else {
-            return Err(Error::at(
-                span,
-                format!(
-                    "the type of a lambda that keeps what it uses is a task's type after '{0}', as in '{0}(int) -> int'",
-                    written
-                ),
-            ));
+            return Err(Error::at(span, format!("the type of a lambda that keeps what it uses is a task's type after '{0}', as in '{0}(int) -> int'", written)));
         };
-        if task
-            .taken
-            .iter()
-            .any(|how| *how == Taken::Region(region.clone()))
-        {
-            return Err(Error::at(
-                at,
-                format!(
-                    "'{}' keeps what the lambda uses in '{}', so a region the lambda takes is named otherwise, as in '@a'",
-                    written, region
-                ),
-            ));
+        if task.taken.iter().any(|how| *how == Taken::Region(region.clone())) {
+            return Err(Error::at(at, format!("'{}' keeps what the lambda uses in '{}', so a region the lambda takes is named otherwise, as in '@a'", written, region)));
         }
-        Ok(Type::Closure(Box::new(ClosureType {
-            task: *task,
-            region,
-            mode,
-        })))
+        Ok(Type::Closure(Box::new(ClosureType { task: *task, region, mode })))
     }
 
     fn parse_named_type(&mut self, span: Span) -> Result<Type> {
         let name = self.expect_ident()?;
         let mut name = self.qualified(name)?;
-        while self.check(Token::Dot)
-            && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_)))
-        {
+        while self.check(Token::Dot) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) {
             self.advance();
             name = format!("{}{}{}", name, MODULE_SEPARATOR, self.expect_ident()?);
         }
@@ -3400,17 +2410,11 @@ impl Parser {
             return Ok(Type::Commitment(Box::new(ty)));
         }
         if self.check(Token::NotSimilar) {
-            return Err(Error::at(
-                self.peek_span(),
-                "'< … >' names the types a shape is given, as in '<int>'; leave it out for a shape that takes none",
-            ));
+            return Err(Error::at(self.peek_span(), "'< … >' names the types a shape is given, as in '<int>'; leave it out for a shape that takes none"));
         }
         if self.check(Token::Lt) {
             if Type::builtin(&name).is_some() {
-                return Err(Error::at(
-                    self.peek_span(),
-                    format!("'{}' takes no types, so '< … >' has nothing to name", name),
-                ));
+                return Err(Error::at(self.peek_span(), format!("'{}' takes no types, so '< … >' has nothing to name", name)));
             }
             let types = self.parse_given_types()?;
             if is_chan {
@@ -3425,11 +2429,7 @@ impl Parser {
                 let inner = types.into_iter().next().unwrap_or(Type::Unknown);
                 return Ok(Type::Commitment(Box::new(inner)));
             }
-            return Ok(Type::Applied(Box::new(Applied {
-                name,
-                types,
-                region: None,
-            })));
+            return Ok(Type::Applied(Box::new(Applied { name, types, region: None })));
         }
         Ok(Type::builtin(&name).unwrap_or(Type::Named(name, None)))
     }
@@ -3442,11 +2442,8 @@ impl Parser {
         self.advance();
         let mut types = Vec::new();
         loop {
-            if self.check(Token::Gt) {
-                return Err(Error::at(
-                    self.peek_span(),
-                    "'< … >' names the types a shape is given, as in '<int>'; leave it out for a shape that takes none",
-                ));
+            if self.check(Token::Gt) || self.check(Token::Shr) {
+                return Err(Error::at(self.peek_span(), "'< … >' names the types a shape is given, as in '<int>'; leave it out for a shape that takes none"));
             }
             self.enter()?;
             let ty = self.parse_type_parts();
@@ -3456,7 +2453,7 @@ impl Parser {
                 break;
             }
         }
-        if !self.match_token(Token::Gt) {
+        if !self.match_gt() {
             return Err(self.unexpected("',' and another type, or '>' to close the types"));
         }
         Ok(types)
@@ -3478,8 +2475,7 @@ impl Parser {
                 };
             }
             let at = self.peek_span();
-            let fixed_value = self.check(Token::Fixed)
-                && !matches!(self.tokens.get(self.pos + 1), Some(Token::Amp));
+            let fixed_value = self.check(Token::Fixed) && !matches!(self.tokens.get(self.pos + 1), Some(Token::Amp));
             let how = self.parse_taken()?;
             if (how != Taken::Value || fixed_value) && marked.is_none() {
                 let written = match &how {
@@ -3491,11 +2487,7 @@ impl Parser {
                 };
                 marked = Some((at, written));
             }
-            let item = if matches!(how, Taken::Region(_)) {
-                Type::Region
-            } else {
-                self.parse_type_parts()?
-            };
+            let item = if matches!(how, Taken::Region(_)) { Type::Region } else { self.parse_type_parts()? };
             taken.push(how);
             if self.check(Token::Ellipsis) {
                 let written = match taken.last() {
@@ -3507,31 +2499,16 @@ impl Parser {
                 };
                 match written {
                     Some(written) if written.starts_with('@') => {
-                        return Err(Error::at(
-                            at,
-                            format!(
-                                "a group never holds a region, so '{}' can't come before '...'; name the region on its own beside the group, as in '({}, P...) -> R'",
-                                written, written
-                            ),
-                        ));
+                        return Err(Error::at(at, format!("a group never holds a region, so '{}' can't come before '...'; name the region on its own beside the group, as in '({}, P...) -> R'", written, written)));
                     }
                     Some(written) => {
-                        return Err(Error::at(
-                            at,
-                            format!(
-                                "a group's values are taken as the task given for it takes them, so '{}' can't come before the group: '(P...) -> R' fits 'put(flex& n: int)' too",
-                                written
-                            ),
-                        ));
+                        return Err(Error::at(at, format!("a group's values are taken as the task given for it takes them, so '{}' can't come before the group: '(P...) -> R' fits 'put(flex& n: int)' too", written)));
                     }
                     None => {}
                 }
                 let first = !items.iter().any(|item| matches!(item, Type::Group(_)));
                 if !first {
-                    return Err(Error::at(
-                        self.peek_span(),
-                        "a task's type takes one group of types, as in '(int, P...) -> R'; the values around it are named one by one",
-                    ));
+                    return Err(Error::at(self.peek_span(), "a task's type takes one group of types, as in '(int, P...) -> R'; the values around it are named one by one"));
                 }
                 let group = self.group_type(item, true, "")?;
                 items.push(group);
@@ -3549,22 +2526,10 @@ impl Parser {
             return self.parse_task_type(items, taken);
         }
         if let Some(Type::Group(group)) = items.iter().find(|item| matches!(item, Type::Group(_))) {
-            return Err(Error::at(
-                opened,
-                format!(
-                    "a group of types, '{}...', is only part of what a task's type takes, as in '({}...) -> R' or '(int, {}...) -> R'",
-                    group, group, group
-                ),
-            ));
+            return Err(Error::at(opened, format!("a group of types, '{}...', is only part of what a task's type takes, as in '({}...) -> R' or '(int, {}...) -> R'", group, group, group)));
         }
         if let Some((at, written)) = marked {
-            return Err(Error::at(
-                at,
-                format!(
-                    "'{}' says how a task's type takes a parameter, as in '(flex& int) -> nothing', '(flex [int]@r) -> nothing' or '(@r, int) -> [int]@r', and these parentheses hold no task's type: a '->' follows a task's",
-                    written
-                ),
-            ));
+            return Err(Error::at(at, format!("'{}' says how a task's type takes a parameter, as in '(flex& int) -> nothing', '(flex [int]@r) -> nothing' or '(@r, int) -> [int]@r', and these parentheses hold no task's type: a '->' follows a task's", written)));
         }
         if items.len() == 1 {
             return Ok(items.remove(0));
@@ -3575,19 +2540,10 @@ impl Parser {
     fn group_type(&mut self, ty: Type, allowed: bool, where_: &str) -> Result<Type> {
         let at = self.peek_span();
         let Type::Named(name, None) = &ty else {
-            return Err(Error::at(
-                at,
-                format!(
-                    "'...' after a type marks a group of types the task takes, as in 'P...', and '{}' is no name of one",
-                    ty
-                ),
-            ));
+            return Err(Error::at(at, format!("'...' after a type marks a group of types the task takes, as in 'P...', and '{}' is no name of one", ty)));
         };
         if !allowed {
-            return Err(Error::at(
-                at,
-                format!("a group of types, '{}...', is only {}", name, where_),
-            ));
+            return Err(Error::at(at, format!("a group of types, '{}...', is only {}", name, where_)));
         }
         self.advance();
         Ok(Type::Group(name.clone()))
@@ -3595,36 +2551,18 @@ impl Parser {
 
     fn parse_task_type(&mut self, params: Vec<Type>, taken: Vec<Taken>) -> Result<Type> {
         self.advance();
-        if matches!(
-            self.peek(),
-            Token::Newline
-                | Token::Eof
-                | Token::RParen
-                | Token::RBracket
-                | Token::Comma
-                | Token::Assign
-                | Token::Fi
-        ) {
-            return Err(Error::at(
-                self.peek_span(),
-                "a task's type names what the task sends after '->', or 'nothing' when it sends no value, as in '(int) -> nothing'",
-            ));
+        if matches!(self.peek(), Token::Newline | Token::Eof | Token::RParen | Token::RBracket | Token::Comma | Token::Assign | Token::Fi) {
+            return Err(Error::at(self.peek_span(), "a task's type names what the task sends after '->', or 'nothing' when it sends no value, as in '(int) -> nothing'"));
         }
         let ret = self.parse_type_parts()?;
-        let taken = if taken.len() == params.len() {
-            taken
-        } else {
-            vec![Taken::Value; params.len()]
-        };
+        let taken = if taken.len() == params.len() { taken } else { vec![Taken::Value; params.len()] };
         Ok(Type::Task(Box::new(TaskType { params, taken, ret })))
     }
 
     fn parse_taken(&mut self) -> Result<Taken> {
         if self.match_token(Token::AtSign) {
             if !matches!(self.peek(), Token::Ident(_)) {
-                return Err(
-                    self.unexpected("the name of a region after '@', as in '(@r, int) -> [int]@r'")
-                );
+                return Err(self.unexpected("the name of a region after '@', as in '(@r, int) -> [int]@r'"));
             }
             return Ok(Taken::Region(self.expect_ident()?));
         }
@@ -3645,20 +2583,11 @@ impl Parser {
         }
         if !self.amp_against_word() {
             let word = base.word();
-            return Err(Error::at(
-                at,
-                format!(
-                    "'{0}&' is written with '&' against '{0}', as in '({0}& int) -> nothing'",
-                    word
-                ),
-            ));
+            return Err(Error::at(at, format!("'{0}&' is written with '&' against '{0}', as in '({0}& int) -> nothing'", word)));
         }
         self.advance();
         if self.check(Token::AtSign) {
-            return Err(Error::at(
-                at,
-                "a region is given as it is, so a task's type writes it '@r' alone, never as a place",
-            ));
+            return Err(Error::at(at, "a region is given as it is, so a task's type writes it '@r' alone, never as a place"));
         }
         Ok(Taken::Place(match base {
             Passing::Flex => Passing::FlexRef,
@@ -3690,29 +2619,18 @@ impl Parser {
             let error = self.unexpected("'#' and a count, as in '[int#4]', ']' for a slice, as in '[int]@r', or ':' and a value type for a map, as in '[text: int]@r'");
             // `[int; 4]`: the `;` started a comment, which ended the line.
             return Err(match self.check(Token::Newline) {
-                true => Error {
-                    message: format!("{} (';' starts a comment)", error.message),
-                    ..error
-                },
+                true => Error { message: format!("{} (';' starts a comment)", error.message), ..error },
                 false => error,
             });
         }
         let count_span = self.peek_span();
         let count = match self.peek() {
             Token::Int(n) => *n,
-            _ => {
-                return Err(Error::at(
-                    count_span,
-                    "an array's count is a whole number, as in '[int#4]'",
-                ));
-            }
+            _ => return Err(Error::at(count_span, "an array's count is a whole number, as in '[int#4]'")),
         };
         self.advance();
         let Some(count) = u64::try_from(count).ok().filter(|count| *count > 0) else {
-            return Err(Error::at(
-                count_span,
-                "an array holds at least one value, so its count is 1 or more",
-            ));
+            return Err(Error::at(count_span, "an array holds at least one value, so its count is 1 or more"));
         };
         self.expect(Token::RBracket)?;
         Ok(Type::Array(items, count))
@@ -3727,12 +2645,8 @@ impl Parser {
         let mut stmts = Vec::new();
         loop {
             self.skip_newlines();
-            let ends_outer = matches!(
-                self.peek(),
-                Token::Else | Token::Case | Token::Otherwise | Token::Finally | Token::RBrace
-            );
-            if self.is_at_end() || self.at_item_start() || ends_outer || stops.contains(self.peek())
-            {
+            let ends_outer = matches!(self.peek(), Token::Else | Token::Case | Token::Otherwise | Token::Finally | Token::RBrace);
+            if self.is_at_end() || self.at_item_start() || ends_outer || stops.contains(self.peek()) {
                 break;
             }
             self.reject_stray_end_in(stops.contains(&Token::RBrace))?;
@@ -3755,25 +2669,16 @@ impl Parser {
             Token::Loop | Token::Endless | Token::Each => self.parse_loop_stmt(span),
             Token::Block => self.parse_plain_block(),
             Token::Break | Token::Continue => self.parse_jump(),
-            Token::Finally => Err(Error::at(
-                span,
-                "'finally' belongs at the end of a loop, before 'fi'",
-            )),
+            Token::Finally => Err(Error::at(span, "'finally' belongs at the end of a loop, before 'fi'")),
             Token::Ident(_)
                 if matches!(self.tokens.get(self.pos + 1), Some(Token::FatArrow))
-                    && !matches!(
-                        self.tokens.get(self.pos + 2),
-                        Some(Token::LParen | Token::LBrace)
-                    ) =>
+                    && !matches!(self.tokens.get(self.pos + 2), Some(Token::LParen | Token::LBrace)) =>
             {
                 self.parse_named_stmt(span)
             }
             Token::Match => self.parse_match(),
             _ if self.at_select() => self.parse_select(),
-            Token::Otherwise => Err(Error::at(
-                span,
-                "'otherwise' belongs at the end of a 'select', before 'fi'",
-            )),
+            Token::Otherwise => Err(Error::at(span, "'otherwise' belongs at the end of a 'select', before 'fi'")),
             Token::Event => self.parse_event_stmt(span),
             _ if self.at_event_after(0) => self.parse_event_stmt(span),
             Token::Send => self.parse_send(),
@@ -3787,23 +2692,11 @@ impl Parser {
                 self.parse_simple_stmt(span)
             }
             Token::Region => self.parse_region(),
-            Token::Priv => Err(Error::at(
-                span,
-                "'priv' goes before a task, shape, kind, pattern, type alias, or macro, or a shape's field, not a statement",
-            )),
+            Token::Priv => Err(Error::at(span, "'priv' goes before a task, shape, kind, pattern, type alias, or macro, or a shape's field, not a statement")),
             _ if self.at_macro_after(0) => Err(Error::at(span, MISPLACED_MACRO)),
-            Token::Ident(name)
-                if name == "free"
-                    && matches!(
-                        self.tokens.get(self.pos + 1),
-                        Some(Token::Ident(_) | Token::New)
-                    ) =>
-            {
-                Err(Error::at(
-                    span,
-                    "Vela has no 'free': memory in a region is freed when the block declaring the region closes",
-                ))
-            }
+            Token::Ident(name) if name == "free" && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_) | Token::New)) => Err(
+                Error::at(span, "Vela has no 'free': memory in a region is freed when the block declaring the region closes"),
+            ),
             _ => self.parse_simple_stmt(span),
         }
     }
@@ -3823,9 +2716,7 @@ impl Parser {
     #[inline(never)]
     fn parse_named_stmt(&mut self, span: Span) -> Result<Stmt> {
         let stmt = self.parse_named_loop()?;
-        let StmtKind::Named(name, inner) = stmt.kind else {
-            return Ok(stmt);
-        };
+        let StmtKind::Named(name, inner) = stmt.kind else { return Ok(stmt) };
         if self.check(Token::LBrace) {
             return self.loop_with_plan_b(*inner, Some((name, span)), span);
         }
@@ -3839,12 +2730,7 @@ impl Parser {
         Ok(Stmt::new(StmtKind::Event(Box::new(e)), span))
     }
 
-    fn loop_with_plan_b(
-        &mut self,
-        stmt: Stmt,
-        name: Option<(String, Span)>,
-        span: Span,
-    ) -> Result<Stmt> {
+    fn loop_with_plan_b(&mut self, stmt: Stmt, name: Option<(String, Span)>, span: Span) -> Result<Stmt> {
         if !self.check(Token::LBrace) {
             return Ok(match name {
                 Some((name, at)) => Stmt::new(StmtKind::Named(name, Box::new(stmt)), at),
@@ -3853,17 +2739,7 @@ impl Parser {
         }
         let value = self.loop_value(stmt, name, false, span);
         let value = self.parse_suffixes(value, false)?;
-        if !matches!(
-            self.peek(),
-            Token::Newline
-                | Token::Eof
-                | Token::Fi
-                | Token::Else
-                | Token::Case
-                | Token::Otherwise
-                | Token::Finally
-                | Token::RBrace
-        ) {
+        if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::Otherwise | Token::Finally | Token::RBrace) {
             return Err(self.unexpected("the end of the line after the loop's plan B"));
         }
         Ok(Stmt::new(StmtKind::Expr(value), span))
@@ -3894,32 +2770,10 @@ impl Parser {
                 "++" | "--" => Expr::new(ExprKind::IntLit(1), at),
                 _ => self.parse_expr()?,
             };
-            if !matches!(
-                self.peek(),
-                Token::Newline
-                    | Token::Eof
-                    | Token::Fi
-                    | Token::Else
-                    | Token::Case
-                    | Token::Otherwise
-                    | Token::Finally
-                    | Token::RBrace
-            ) {
-                return Err(self.unexpected(&format!(
-                    "the end of the line: '{}' is a statement of its own",
-                    symbol
-                )));
+            if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::Otherwise | Token::Finally | Token::RBrace) {
+                return Err(self.unexpected(&format!("the end of the line: '{}' is a statement of its own", symbol)));
             }
-            return Ok(Stmt::new(
-                StmtKind::Step {
-                    target: expr,
-                    op,
-                    value,
-                    symbol,
-                    at,
-                },
-                span,
-            ));
+            return Ok(Stmt::new(StmtKind::Step { target: expr, op, value, symbol, at }, span));
         }
         Ok(Stmt::new(StmtKind::Expr(expr), span))
     }
@@ -3930,13 +2784,7 @@ impl Parser {
             targets.push(self.parse_target()?);
         }
         if let Some((_, symbol)) = step_operator(self.peek()) {
-            return Err(Error::at(
-                self.peek_span(),
-                format!(
-                    "'{0}' changes one place, so each goes on a line of its own, as in 'a {0} …'",
-                    symbol
-                ),
-            ));
+            return Err(Error::at(self.peek_span(), format!("'{0}' changes one place, so each goes on a line of its own, as in 'a {0} …'", symbol)));
         }
         if !self.match_token(Token::Assign) {
             return Err(Error::at(
@@ -3973,10 +2821,7 @@ impl Parser {
         }
         self.expect(Token::Send)?;
         if self.check(Token::Newline) || self.is_at_end() {
-            return Err(Error::at(
-                self.peek_span(),
-                "expected the value to set the result to, after '<-'",
-            ));
+            return Err(Error::at(self.peek_span(), "expected the value to set the result to, after '<-'"));
         }
         let values = self.parse_value_list()?;
         Ok(Stmt::new(StmtKind::SetResults(names, values), span))
@@ -4004,10 +2849,7 @@ impl Parser {
         }
         self.expect(Token::RParen)?;
         if parts.len() < 2 {
-            return Err(Error::at(
-                opened,
-                "a tuple has two or more items, so '( … )' names two or more places, as in '(a, b) = pair'",
-            ));
+            return Err(Error::at(opened, "a tuple has two or more items, so '( … )' names two or more places, as in '(a, b) = pair'"));
         }
         Ok(parts)
     }
@@ -4024,12 +2866,7 @@ impl Parser {
                 Some(Token::RParen | Token::RBracket | Token::RBrace) => {
                     depth = depth.saturating_sub(1);
                     if depth == 0 {
-                        return comma
-                            && (!statement
-                                || matches!(
-                                    self.tokens.get(p + 1),
-                                    Some(Token::Assign | Token::Comma)
-                                ));
+                        return comma && (!statement || matches!(self.tokens.get(p + 1), Some(Token::Assign | Token::Comma)));
                     }
                 }
                 Some(Token::Comma) if depth == 1 => comma = true,
@@ -4070,10 +2907,7 @@ impl Parser {
                 | Token::Minus
         );
         if old_keyword {
-            return Err(Error::at(
-                self.peek_span(),
-                "a task sends its result with '<-', not 'send'",
-            ));
+            return Err(Error::at(self.peek_span(), "a task sends its result with '<-', not 'send'"));
         }
         Ok(())
     }
@@ -4091,57 +2925,31 @@ impl Parser {
         let mut names = vec![self.parse_bound()?];
         while self.match_token(Token::Comma) {
             if reference {
-                return Err(Error::at(
-                    self.peek_span(),
-                    format!(
-                        "a reference is declared one at a time, each with its own '{}&'",
-                        word
-                    ),
-                ));
+                return Err(Error::at(self.peek_span(), format!("a reference is declared one at a time, each with its own '{}&'", word)));
             }
             names.push(self.parse_bound()?);
         }
         if reference && names.iter().any(|bound| !bound.parts.is_empty()) {
-            return Err(Error::at(
-                span,
-                format!(
-                    "a reference names one place, so '{}&' takes one name, not a tuple's items",
-                    word
-                ),
-            ));
+            return Err(Error::at(span, format!("a reference names one place, so '{}&' takes one name, not a tuple's items", word)));
         }
         let colon = self.match_token(Token::ColonAssign);
         if !colon {
             self.expect(Token::Assign)?;
         } else if reference {
-            return Err(Error::at(
-                span,
-                "a reference is not allocated with ':='; write '=' and '&' to refer to a place, as in 'bind& x = &y'",
-            ));
+            return Err(Error::at(span, "a reference is not allocated with ':='; write '=' and '&' to refer to a place, as in 'bind& x = &y'"));
         }
         let init = self.parse_value_list()?;
         if reference && init.len() > 1 {
-            return Err(Error::at(
-                init.get(1).map_or(span, |value| value.span),
-                "a reference names one place, so it takes one value, as in '&x'",
-            ));
+            return Err(Error::at(init.get(1).map_or(span, |value| value.span), "a reference names one place, so it takes one value, as in '&x'"));
         }
-        let kind = StmtKind::Binding {
-            names,
-            mode,
-            reference,
-            init,
-            colon,
-        };
+        let kind = StmtKind::Binding { names, mode, reference, init, colon };
         Ok(Stmt::new(kind, span))
     }
 
     /// Whether the `&` at the cursor is written against the word just read, as
     /// in `flex&`: it starts where the word ends, whichever its length.
     fn amp_against_word(&self) -> bool {
-        self.check(Token::Amp)
-            && self.pos.checked_sub(1).and_then(|word| self.ends.get(word))
-                == Some(&self.peek_span())
+        self.check(Token::Amp) && self.pos.checked_sub(1).and_then(|word| self.ends.get(word)) == Some(&self.peek_span())
     }
 
     fn match_reference(&mut self, word: &str) -> Result<bool> {
@@ -4149,23 +2957,11 @@ impl Parser {
             return Ok(false);
         }
         if !self.amp_against_word() {
-            return Err(Error::at(
-                self.peek_span(),
-                format!(
-                    "a reference is written '{0}& y = &x', with '&' against '{0}'",
-                    word
-                ),
-            ));
+            return Err(Error::at(self.peek_span(), format!("a reference is written '{0}& y = &x', with '&' against '{0}'", word)));
         }
         self.advance();
         if self.check(Token::Amp) {
-            return Err(Error::at(
-                self.peek_span(),
-                format!(
-                    "'&' marks the place a reference names, after '=', as in '{}& y = &x'",
-                    word
-                ),
-            ));
+            return Err(Error::at(self.peek_span(), format!("'&' marks the place a reference names, after '=', as in '{}& y = &x'", word)));
         }
         Ok(true)
     }
@@ -4185,19 +2981,12 @@ impl Parser {
             let cond = self.parse_condition()?;
             self.skip_newlines();
             let body = self.parse_block_until(&[Token::Else, Token::Fi])?;
-            arms.push(WhenArm {
-                cond,
-                body,
-                span: at,
-            });
+            arms.push(WhenArm { cond, body, span: at });
             if !self.match_token(Token::Else) {
                 return Ok(Stmt::new(StmtKind::When(arms, None), span));
             }
             if matches!(self.peek(), Token::Ident(name) if name == "if") {
-                return Err(Error::at(
-                    self.peek_span(),
-                    "Vela writes 'else when', not 'else if'",
-                ));
+                return Err(Error::at(self.peek_span(), "Vela writes 'else when', not 'else if'"));
             }
             if !self.check(Token::When) {
                 self.skip_newlines();
@@ -4218,10 +3007,7 @@ impl Parser {
         // A `when` is a value too, so `loop when x < 3` would read as a loop
         // whose condition is a whole `when`, taking the loop's own `fi` with it.
         if self.check(Token::When) {
-            return Err(Error::at(
-                self.peek_span(),
-                "a 'loop' takes its condition directly, without 'when'",
-            ));
+            return Err(Error::at(self.peek_span(), "a 'loop' takes its condition directly, without 'when'"));
         }
         if matches!(self.peek(), Token::Flex | Token::Fixed | Token::Bind) {
             return Err(Error::at(
@@ -4264,50 +3050,20 @@ impl Parser {
         };
         let value = if self.check(Token::Assign) {
             if !stop {
-                return Err(Error::at(
-                    self.peek_span(),
-                    "a 'continue' goes on with the loop's next pass, so it gives no value; 'break = v' stops a loop that gives one with a value",
-                ));
+                return Err(Error::at(self.peek_span(), "a 'continue' goes on with the loop's next pass, so it gives no value; 'break = v' stops a loop that gives one with a value"));
             }
             self.advance();
             Some(Box::new(self.parse_expr()?))
         } else {
             None
         };
-        if !matches!(
-            self.peek(),
-            Token::Newline
-                | Token::Eof
-                | Token::Fi
-                | Token::Else
-                | Token::Case
-                | Token::Otherwise
-                | Token::Finally
-                | Token::RBrace
-        ) {
+        if !matches!(self.peek(), Token::Newline | Token::Eof | Token::Fi | Token::Else | Token::Case | Token::Otherwise | Token::Finally | Token::RBrace) {
             let what = if stop { "stops" } else { "goes on with" };
             let example = name.as_ref().map_or("outer", |(name, _)| name.as_str());
-            let given = if stop {
-                ", and the value it gives after '=', as in 'break = v'"
-            } else {
-                ""
-            };
-            return Err(Error::at(
-                self.peek_span(),
-                format!(
-                    "a '{0}' takes the name of the loop it {1}, when that is not the innermost, as in '{0} {2}'{3}",
-                    word, what, example, given
-                ),
-            ));
+            let given = if stop { ", and the value it gives after '=', as in 'break = v'" } else { "" };
+            return Err(Error::at(self.peek_span(), format!("a '{0}' takes the name of the loop it {1}, when that is not the innermost, as in '{0} {2}'{3}", word, what, example, given)));
         }
-        Ok(Stmt::new(
-            if stop {
-                StmtKind::Break(name, value)
-            } else {
-                StmtKind::Continue(name)
-            },
-            span,
-        ))
+        Ok(Stmt::new(if stop { StmtKind::Break(name, value) } else { StmtKind::Continue(name) }, span))
     }
 
     fn parse_endless(&mut self) -> Result<Stmt> {
@@ -4320,14 +3076,7 @@ impl Parser {
             ));
         }
         let (body, finally) = self.parse_loop_body("endless", span)?;
-        let parted = PartedLoop {
-            start: Vec::new(),
-            cond: None,
-            step: Vec::new(),
-            body,
-            finally,
-            endless: true,
-        };
+        let parted = PartedLoop { start: Vec::new(), cond: None, step: Vec::new(), body, finally, endless: true };
         Ok(Stmt::new(StmtKind::Parted(Box::new(parted)), span))
     }
 
@@ -4373,21 +3122,10 @@ impl Parser {
         ends.push(end);
         let mut parts = Vec::new();
         for (i, (&first, &last)) in bounds.iter().zip(&ends).enumerate() {
-            let items = if i == 1 {
-                if first < last {
-                    vec![(first, last)]
-                } else {
-                    Vec::new()
-                }
-            } else {
-                loop_items(self, first, last)
-            };
+            let items = if i == 1 { if first < last { vec![(first, last)] } else { Vec::new() } } else { loop_items(self, first, last) };
             parts.push(items);
         }
-        for p in bars
-            .into_iter()
-            .chain(parts.iter().flatten().map(|&(_, last)| last))
-        {
+        for p in bars.into_iter().chain(parts.iter().flatten().map(|&(_, last)| last)) {
             if let Some(token) = self.tokens.get_mut(p)
                 && matches!(token, Token::Parts | Token::Comma)
             {
@@ -4421,39 +3159,19 @@ impl Parser {
                     declaring = Some(mode);
                     self.parse_binding(mode)?
                 }
-                Token::Newline => {
-                    return Err(Error::at(
-                        self.peek_span(),
-                        "an item of a loop's start is missing between two ','s",
-                    ));
-                }
+                Token::Newline => return Err(Error::at(self.peek_span(), "an item of a loop's start is missing between two ','s")),
                 _ => match declaring {
                     Some(mode) => self.parse_binding_names(mode, false, self.peek_span())?,
                     None => self.parse_stmt()?,
                 },
             };
-            if let StmtKind::Binding {
-                reference: true, ..
-            } = item.kind
-            {
-                return Err(Error::at(
-                    item.span,
-                    "a loop's start declares values for the loop, not references; name the place itself",
-                ));
+            if let StmtKind::Binding { reference: true, .. } = item.kind {
+                return Err(Error::at(item.span, "a loop's start declares values for the loop, not references; name the place itself"));
             }
             // `loop a || b`: a start that only gives a value is a condition,
             // and `||` was meant as 'or'.
             if let StmtKind::Expr(e) = &item.kind
-                && !matches!(
-                    e.kind,
-                    ExprKind::Call { .. }
-                        | ExprKind::MethodCall { .. }
-                        | ExprKind::Invoke { .. }
-                        | ExprKind::PlanB { .. }
-                        | ExprKind::Pipe(_)
-                        | ExprKind::Try(_)
-                        | ExprKind::ErrPipe { .. }
-                )
+                && !matches!(e.kind, ExprKind::Call { .. } | ExprKind::MethodCall { .. } | ExprKind::Invoke { .. } | ExprKind::PlanB { .. } | ExprKind::Pipe(_) | ExprKind::Try(_) | ExprKind::ErrPipe { .. })
             {
                 let bar = if n + 1 == items { last } else { first };
                 return Err(Error::at(
@@ -4461,27 +3179,17 @@ impl Parser {
                     "a loop's start sets places or calls tasks, and this one only gives a value; for either of two conditions, Vela writes 'or'",
                 ));
             }
-            self.end_loop_item(
-                last,
-                "',' or '||': a loop's start parts its items with ',', and '||' ends it",
-            )?;
+            self.end_loop_item(last, "',' or '||': a loop's start parts its items with ',', and '||' ends it")?;
             started.push(item);
         }
         let cond = match cond.first() {
             Some(&(first, last)) => {
                 self.pos = first;
                 if self.check(Token::When) {
-                    return Err(Error::at(
-                        self.peek_span(),
-                        "a 'loop' takes its condition directly, without 'when'",
-                    ));
+                    return Err(Error::at(self.peek_span(), "a 'loop' takes its condition directly, without 'when'"));
                 }
                 let cond = self.parse_condition()?;
-                let what = if step.is_empty() {
-                    "the end of the line or '||': a loop takes one condition, so join two with 'and' or 'or'"
-                } else {
-                    "'||': a loop takes one condition, so join two with 'and' or 'or'"
-                };
+                let what = if step.is_empty() { "the end of the line or '||': a loop takes one condition, so join two with 'and' or 'or'" } else { "'||': a loop takes one condition, so join two with 'and' or 'or'" };
                 self.end_loop_item(last, what)?;
                 Some(cond)
             }
@@ -4491,10 +3199,7 @@ impl Parser {
         for (first, last) in step {
             self.pos = first;
             if self.check(Token::Newline) {
-                return Err(Error::at(
-                    self.peek_span(),
-                    "an item of a loop's step is missing between two ','s",
-                ));
+                return Err(Error::at(self.peek_span(), "an item of a loop's step is missing between two ','s"));
             }
             steps.push(self.parse_stmt()?);
             self.end_loop_item(last, "',' or the end of the line: a loop's step parts its items with ',', and its line ends after them")?;
@@ -4503,14 +3208,7 @@ impl Parser {
             self.advance();
         }
         let (body, finally) = self.parse_loop_body("loop", span)?;
-        let parted = PartedLoop {
-            start: started,
-            cond,
-            step: steps,
-            body,
-            finally,
-            endless: false,
-        };
+        let parted = PartedLoop { start: started, cond, step: steps, body, finally, endless: false };
         Ok(Stmt::new(StmtKind::Parted(Box::new(parted)), span))
     }
 
@@ -4538,10 +3236,7 @@ impl Parser {
             _ => {
                 return Err(Error::at(
                     self.peek_span(),
-                    format!(
-                        "'{} =>' names a loop, so 'loop', 'each' or 'endless' follows it on its line, as in '{} => each x in xs'",
-                        name, name
-                    ),
+                    format!("'{} =>' names a loop, so 'loop', 'each' or 'endless' follows it on its line, as in '{} => each x in xs'", name, name),
                 ));
             }
         };
@@ -4552,10 +3247,7 @@ impl Parser {
         let span = self.peek_span();
         self.advance();
         if !matches!(self.peek(), Token::Newline | Token::Eof) {
-            return Err(Error::at(
-                self.peek_span(),
-                "a 'block' takes nothing on its line: its statements start on the next one, and 'fi' closes it",
-            ));
+            return Err(Error::at(self.peek_span(), "a 'block' takes nothing on its line: its statements start on the next one, and 'fi' closes it"));
         }
         self.skip_newlines();
         let body = self.parse_block()?;
@@ -4567,18 +3259,10 @@ impl Parser {
         let opened = self.peek_span();
         self.advance();
         let span = self.peek_span();
-        let name = if self.match_token(Token::Underscore) {
-            DISCARD.to_string()
-        } else {
-            self.expect_ident()?
-        };
+        let name = if self.match_token(Token::Underscore) { DISCARD.to_string() } else { self.expect_ident()? };
         let second = if self.match_token(Token::Comma) {
             let at = self.peek_span();
-            let second = if self.match_token(Token::Underscore) {
-                DISCARD.to_string()
-            } else {
-                self.expect_ident()?
-            };
+            let second = if self.match_token(Token::Underscore) { DISCARD.to_string() } else { self.expect_ident()? };
             Some((second, at))
         } else {
             None
@@ -4586,16 +3270,11 @@ impl Parser {
         self.expect(Token::In)?;
         let range = self.parse_expr()?;
         let (body, finally) = self.parse_loop_body("each", opened)?;
-        Ok(Stmt::new(
-            StmtKind::Each(name, second, range, body, finally),
-            span,
-        ))
+        Ok(Stmt::new(StmtKind::Each(name, second, range, body, finally), span))
     }
 
     fn at_select(&self) -> bool {
-        let Token::Ident(name) = self.peek() else {
-            return false;
-        };
+        let Token::Ident(name) = self.peek() else { return false };
         if name != "select" {
             return false;
         }
@@ -4635,11 +3314,7 @@ impl Parser {
             self.expect(Token::Case)?;
             let kind = self.parse_select_arm_kind()?;
             let body = self.parse_select_body()?;
-            arms.push(SelectArm {
-                kind,
-                body,
-                span: arm_span,
-            });
+            arms.push(SelectArm { kind, body, span: arm_span });
         }
         let mut otherwise = None;
         let mut otherwise_span = None;
@@ -4651,10 +3326,7 @@ impl Parser {
             otherwise_span = Some(ow_span);
             self.skip_newlines();
             if self.check(Token::Otherwise) {
-                return Err(Error::at(
-                    self.peek_span(),
-                    "duplicate 'otherwise' in 'select'",
-                ));
+                return Err(Error::at(self.peek_span(), "duplicate 'otherwise' in 'select'"));
             }
             if self.check(Token::Case) {
                 return Err(Error::at(
@@ -4693,12 +3365,7 @@ impl Parser {
                 self.advance();
             }
             let chan = self.parse_expr()?;
-            return Ok(SelectArmKind::Recv {
-                mode,
-                name,
-                name_span,
-                chan,
-            });
+            return Ok(SelectArmKind::Recv { mode, name, name_span, chan });
         }
         let value = self.parse_expr_no_send()?;
         if !self.match_token(Token::ChanSend) {
@@ -4727,11 +3394,7 @@ impl Parser {
             Token::Underscore => DISCARD.to_string(),
             _ => return None,
         };
-        let span = self
-            .spans
-            .get(self.pos + offset)
-            .copied()
-            .unwrap_or_default();
+        let span = self.spans.get(self.pos + offset).copied().unwrap_or_default();
         Some((mode, name, span, offset + 2))
     }
 
@@ -4762,9 +3425,7 @@ impl Parser {
         let mut cases = Vec::new();
         while !self.check(Token::Fi) && !self.is_at_end() && !self.at_item_start() {
             self.skip_newlines();
-            if self.check(Token::Fi) || self.at_item_start() {
-                break;
-            }
+            if self.check(Token::Fi) || self.at_item_start() { break; }
             self.reject_stray_end()?;
             self.expect(Token::Case)?;
             let pattern = self.parse_pattern("case")?;
@@ -4772,17 +3433,10 @@ impl Parser {
                 self.advance();
                 let value = self.parse_expr()?;
                 let value_span = value.span;
-                cases.push(Case {
-                    pattern,
-                    body: vec![Stmt::new(StmtKind::Expr(value), value_span)],
-                });
+                cases.push(Case { pattern, body: vec![Stmt::new(StmtKind::Expr(value), value_span)] });
                 continue;
             }
-            if !self.check(Token::Newline)
-                && !self.check(Token::Fi)
-                && !self.check(Token::Case)
-                && !self.is_at_end()
-            {
+            if !self.check(Token::Newline) && !self.check(Token::Fi) && !self.check(Token::Case) && !self.is_at_end() {
                 if self.check(Token::Send) {
                     return Err(self.misplaced_send());
                 }
@@ -4819,26 +3473,15 @@ impl Parser {
                         self.expect(Token::RBrace)?;
                         TypedForm::Value(names)
                     }
-                    Token::Ident(_)
-                    | Token::Flex
-                    | Token::Bind
-                    | Token::LParen
-                    | Token::Underscore => TypedForm::Named(self.parse_pattern_names()?),
+                    Token::Ident(_) | Token::Flex | Token::Bind | Token::LParen | Token::Underscore => TypedForm::Named(self.parse_pattern_names()?),
                     _ => TypedForm::Only,
                 };
-                PatternKind::Typed {
-                    ty,
-                    form,
-                    asks: false,
-                }
+                PatternKind::Typed { ty, form, asks: false }
             }
             Token::Maybe => {
                 return Err(Error::at(
                     span,
-                    format!(
-                        "a type after '{}' can't be matched; a type is tested after 'is', on a tuple's item read with '.#', as in 'when t.#2 is maybe int {{x}}'",
-                        keyword
-                    ),
+                    format!("a type after '{}' can't be matched; a type is tested after 'is', on a tuple's item read with '.#', as in 'when t.#2 is maybe int {{x}}'", keyword),
                 ));
             }
             Token::LBrace => {
@@ -4873,9 +3516,7 @@ impl Parser {
             }
             Token::Ident(_) => {
                 let mut written = vec![self.expect_ident()?];
-                while self.check(Token::Dot)
-                    && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_)))
-                {
+                while self.check(Token::Dot) && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_))) {
                     self.advance();
                     written.push(self.expect_ident()?);
                 }
@@ -4883,10 +3524,7 @@ impl Parser {
                     let kind = written.join(".");
                     return Err(Error::at(
                         self.peek_span(),
-                        format!(
-                            "a case form takes the types of '{0}' from the value it matches, so it names none: '{1} {0}.Tag …'",
-                            kind, keyword
-                        ),
+                        format!("a case form takes the types of '{0}' from the value it matches, so it names none: '{1} {0}.Tag …'", kind, keyword),
                     ));
                 }
                 let module_first = written.first().is_some_and(|first| self.is_module(first));
@@ -4900,44 +3538,21 @@ impl Parser {
                         ),
                     ));
                 }
-                if keyword == "is"
-                    && written.is_empty()
-                    && crate::check::BUILTIN_TYPE_WORDS.contains(&tag.as_str())
-                    && self.check(Token::LBrace)
-                {
-                    return Err(Error::at(
-                        span,
-                        format!(
-                            "a tuple's item read with '.#' is a maybe, so a type test writes its type as one, as in 'is maybe {0} {{x}}'",
-                            tag
-                        ),
-                    ));
+                if keyword == "is" && written.is_empty() && crate::check::BUILTIN_TYPE_WORDS.contains(&tag.as_str()) && self.check(Token::LBrace) {
+                    return Err(Error::at(span, format!("a tuple's item read with '.#' is a maybe, so a type test writes its type as one, as in 'is maybe {0} {{x}}'", tag)));
                 }
-                let kind = (!written.is_empty())
-                    .then(|| Box::new((written.join(&MODULE_SEPARATOR.to_string()), span)));
+                let kind = (!written.is_empty()).then(|| Box::new((written.join(&MODULE_SEPARATOR.to_string()), span)));
                 if self.check(Token::LParen) {
                     return Err(Error::at(
                         self.peek_span(),
-                        format!(
-                            "a case form names its bindings without parentheses, as in '{} {} value'",
-                            keyword, tag
-                        ),
+                        format!("a case form names its bindings without parentheses, as in '{} {} value'", keyword, tag),
                     ));
                 }
                 let mut binds = Vec::new();
-                while matches!(
-                    self.peek(),
-                    Token::Ident(_) | Token::Underscore | Token::Flex | Token::Bind
-                ) {
+                while matches!(self.peek(), Token::Ident(_) | Token::Underscore | Token::Flex | Token::Bind) {
                     let names = self.parse_pattern_names()?;
                     if !names.parts.is_empty() {
-                        return Err(Error::at(
-                            names.span,
-                            format!(
-                                "a case form names its bindings without parentheses, as in '{} {} value'",
-                                keyword, tag
-                            ),
-                        ));
+                        return Err(Error::at(names.span, format!("a case form names its bindings without parentheses, as in '{} {} value'", keyword, tag)));
                     }
                     binds.push(names);
                 }
@@ -4965,12 +3580,7 @@ impl Parser {
         self.enter()?;
         let parts = self.parse_pattern_parts(span);
         self.leave(1);
-        Ok(Names {
-            name: String::new(),
-            span,
-            mode,
-            parts: parts?,
-        })
+        Ok(Names { name: String::new(), span, mode, parts: parts? })
     }
 
     fn parse_pattern_parts(&mut self, opened: Span) -> Result<Vec<Names>> {
@@ -4980,10 +3590,7 @@ impl Parser {
         }
         self.expect(Token::RParen)?;
         if parts.len() < 2 {
-            return Err(Error::at(
-                opened,
-                "a tuple has two or more items, so '( … )' names two or more, as in 'is (x, y)'",
-            ));
+            return Err(Error::at(opened, "a tuple has two or more items, so '( … )' names two or more, as in 'is (x, y)'"));
         }
         Ok(parts)
     }
@@ -5001,13 +3608,7 @@ impl Parser {
                     "'( … )' takes a tuple apart, so each name in it takes its own type, as in 'fixed (a: int, b: text) = t'",
                 ));
             }
-            return Ok(Bound {
-                name: String::new(),
-                span,
-                ty: None,
-                ty_span: None,
-                parts,
-            });
+            return Ok(Bound { name: String::new(), span, ty: None, ty_span: None, parts });
         }
         let (name, name_span) = self.parse_bound_name()?;
         let (ty, ty_span) = if self.match_token(Token::Colon) {
@@ -5016,13 +3617,7 @@ impl Parser {
         } else {
             (None, None)
         };
-        Ok(Bound {
-            name,
-            span: name_span,
-            ty,
-            ty_span,
-            parts: Vec::new(),
-        })
+        Ok(Bound { name, span: name_span, ty, ty_span, parts: Vec::new() })
     }
 
     fn parse_bound_parts(&mut self, opened: Span) -> Result<Vec<Bound>> {
@@ -5032,10 +3627,7 @@ impl Parser {
         }
         self.expect(Token::RParen)?;
         if parts.len() < 2 {
-            return Err(Error::at(
-                opened,
-                "a tuple has two or more items, so '( … )' names two or more, as in 'fixed (a, b) = pair'",
-            ));
+            return Err(Error::at(opened, "a tuple has two or more items, so '( … )' names two or more, as in 'fixed (a, b) = pair'"));
         }
         Ok(parts)
     }
@@ -5054,27 +3646,12 @@ impl Parser {
     /// otherwise end the statement and send.
     fn parse_send(&mut self) -> Result<Stmt> {
         let span = self.peek_span();
-        let starts_line = self.pos == 0
-            || matches!(
-                self.tokens.get(self.pos - 1),
-                Some(Token::Newline | Token::LBrace)
-            )
-            || self.send_after_header == Some(self.pos);
+        let starts_line = self.pos == 0 || matches!(self.tokens.get(self.pos - 1), Some(Token::Newline | Token::LBrace)) || self.send_after_header == Some(self.pos);
         if !starts_line {
             return Err(self.misplaced_send());
         }
         self.advance();
-        if matches!(
-            self.peek(),
-            Token::Newline
-                | Token::Fi
-                | Token::Else
-                | Token::Case
-                | Token::Otherwise
-                | Token::Finally
-                | Token::RBrace
-        ) || self.is_at_end()
-        {
+        if matches!(self.peek(), Token::Newline | Token::Fi | Token::Else | Token::Case | Token::Otherwise | Token::Finally | Token::RBrace) || self.is_at_end() {
             Ok(Stmt::new(StmtKind::Send(Vec::new()), span))
         } else {
             let values = self.parse_value_list()?;
@@ -5119,11 +3696,7 @@ impl Parser {
                 }
                 seen_default = true;
             }
-            names.push(RegionDecl {
-                name,
-                default,
-                span: name_span,
-            });
+            names.push(RegionDecl { name, default, span: name_span });
             if !self.match_token(Token::Comma) {
                 break;
             }
@@ -5152,18 +3725,12 @@ impl Parser {
         loop {
             let value = self.parse_binary(AND_PRECEDENCE + 1)?;
             if self.check(Token::Assign) {
-                return Err(Error::at(
-                    self.peek_span(),
-                    "'=' assigns; to compare, write '=='",
-                ));
+                return Err(Error::at(self.peek_span(), "'=' assigns; to compare, write '=='"));
             }
             let asks_at = self.peek_span();
             let asks = self.match_token(Token::Question);
             if asks && !self.check(Token::Is) {
-                return Err(Error::at(
-                    asks_at,
-                    "'?' after a tuple's item read with '.#' asks for its type, which an 'is' then tests, as in 't.#5? is maybe int'",
-                ));
+                return Err(Error::at(asks_at, "'?' after a tuple's item read with '.#' asks for its type, which an 'is' then tests, as in 't.#5? is maybe int'"));
             }
             let is_at = self.peek_span();
             let pattern = match self.match_token(Token::Is) {
@@ -5176,22 +3743,11 @@ impl Parser {
                     }
                     let mut pattern = self.parse_pattern("is")?;
                     match &mut pattern.kind {
-                        PatternKind::Typed {
-                            form: TypedForm::Only,
-                            asks: written,
-                            ..
-                        } if asks => *written = true,
-                        PatternKind::Typed {
-                            form: TypedForm::Only,
-                            ty,
-                            ..
-                        } => {
+                        PatternKind::Typed { form: TypedForm::Only, asks: written, .. } if asks => *written = true,
+                        PatternKind::Typed { form: TypedForm::Only, ty, .. } => {
                             return Err(Error::at(
                                 pattern.span,
-                                format!(
-                                    "a type alone after 'is' tests the type of a tuple's item, which a '?' asks for, as in 't.#5? is {0}'; or name the value, as in 'is {0} x' or 'is {0} {{x}}'",
-                                    ty
-                                ),
+                                format!("a type alone after 'is' tests the type of a tuple's item, which a '?' asks for, as in 't.#5? is {0}'; or name the value, as in 'is {0} x' or 'is {0} {{x}}'", ty),
                             ));
                         }
                         _ if asks => {
@@ -5219,37 +3775,19 @@ impl Parser {
         }
         if !matched {
             let mut values = parts.into_iter().map(|(value, _)| value);
-            let first = values
-                .next()
-                .ok_or_else(|| Error::at(self.peek_span(), "expected a condition"))?;
-            let joined = values.zip(joins).fold(first, |left, (right, span)| {
-                Expr::new(
-                    ExprKind::Binary(BinaryOp::And, Box::new(left), Box::new(right)),
-                    span,
-                )
-            });
+            let first = values.next().ok_or_else(|| Error::at(self.peek_span(), "expected a condition"))?;
+            let joined = values.zip(joins).fold(first, |left, (right, span)| Expr::new(ExprKind::Binary(BinaryOp::And, Box::new(left), Box::new(right)), span));
             let value = self.parse_operators(joined, 1)?;
             if self.check(Token::Is) {
                 return Err(Error::at(self.peek_span(), IS_WITH_OR));
             }
             if self.check(Token::Assign) {
-                return Err(Error::at(
-                    self.peek_span(),
-                    "'=' assigns; to compare, write '=='",
-                ));
+                return Err(Error::at(self.peek_span(), "'=' assigns; to compare, write '=='"));
             }
             return Ok(Condition::new(value, None));
         }
-        let chained = parts.into_iter().rev().fold(None, |and, (value, pattern)| {
-            Some(Box::new(Condition {
-                value,
-                pattern,
-                and,
-            }))
-        });
-        chained
-            .map(|chained| *chained)
-            .ok_or_else(|| Error::at(self.peek_span(), "expected a condition"))
+        let chained = parts.into_iter().rev().fold(None, |and, (value, pattern)| Some(Box::new(Condition { value, pattern, and })));
+        chained.map(|chained| *chained).ok_or_else(|| Error::at(self.peek_span(), "expected a condition"))
     }
 
     fn binary_op(token: &Token) -> Option<(BinaryOp, u8)> {
@@ -5335,11 +3873,7 @@ impl Parser {
                     left = self.parse_call_region(left)?;
                 }
             }
-            if self.check(Token::Newline)
-                && min <= Self::PIPE_PRECEDENCE
-                && !ranged
-                && self.pipe_on_next_line()
-            {
+            if self.check(Token::Newline) && min <= Self::PIPE_PRECEDENCE && !ranged && self.pipe_on_next_line() {
                 while self.check(Token::Newline) {
                     self.advance();
                 }
@@ -5384,8 +3918,8 @@ impl Parser {
             if (self.check(Token::Range) || self.check(Token::RangeInclusive))
                 && min <= Self::RANGE_PRECEDENCE
                 && ranged
+                && let ExprKind::Range(start, step, None, _) = left.kind
             {
-                if let ExprKind::Range(start, step, None, _) = left.kind {
                     self.enter_operator()?;
                     levels += 1;
                     let inclusive = self.match_token(Token::RangeInclusive);
@@ -5399,7 +3933,6 @@ impl Parser {
                     );
                     continue;
                 }
-            }
             if allow_send && self.check(Token::ChanSend) && min <= Self::CHAN_SEND_PRECEDENCE {
                 if sent {
                     self.leave_operators(levels);
@@ -5416,9 +3949,7 @@ impl Parser {
                 sent = true;
                 continue;
             }
-            let Some((op, precedence)) = Self::binary_op(self.peek()) else {
-                break;
-            };
+            let Some((op, precedence)) = Self::binary_op(self.peek()) else { break };
             if precedence < min {
                 break;
             }
@@ -5428,11 +3959,7 @@ impl Parser {
             self.enter_operator()?;
             levels += 1;
             self.advance();
-            let next = if op == BinaryOp::Pow {
-                precedence
-            } else {
-                precedence + 1
-            };
+            let next = if op == BinaryOp::Pow { precedence } else { precedence + 1 };
             let right = self.parse_binary_with(next, allow_send)?;
             left = Expr::new(ExprKind::Binary(op, Box::new(left), Box::new(right)), span);
         }
@@ -5445,32 +3972,15 @@ impl Parser {
         while self.tokens.get(at) == Some(&Token::Newline) {
             at += 1;
         }
-        matches!(
-            self.tokens.get(at),
-            Some(Token::Pipe(_) | Token::ErrPipe(_))
-        )
+        matches!(self.tokens.get(at), Some(Token::Pipe(_) | Token::ErrPipe(_)))
     }
 
     fn parse_pipe(&mut self, value: Expr, count: usize) -> Result<Expr> {
         let span = self.peek_span();
         let pipe = Token::Pipe(count).describe();
         self.advance();
-        if matches!(
-            self.peek(),
-            Token::RParen
-                | Token::RBracket
-                | Token::RBrace
-                | Token::Comma
-                | Token::Newline
-                | Token::Eof
-        ) {
-            return Err(Error::at(
-                self.peek_span(),
-                format!(
-                    "{} gives the value before it to the call written after it, as in 'xs |> total()'",
-                    pipe
-                ),
-            ));
+        if matches!(self.peek(), Token::RParen | Token::RBracket | Token::RBrace | Token::Comma | Token::Newline | Token::Eof) {
+            return Err(Error::at(self.peek_span(), format!("{} gives the value before it to the call written after it, as in 'xs |> total()'", pipe)));
         }
         let parenthesized = self.check(Token::LParen);
         let mut step = self.parse_postfix()?;
@@ -5497,71 +4007,38 @@ impl Parser {
         }
         let callee = match &step.kind {
             ExprKind::Call { name, .. } => format!("'{}'", name),
-            ExprKind::MethodCall {
-                name,
-                dotted: Some(whole),
-                ..
-            } if whole.ends_with(name.as_str()) => format!("'{}'", whole),
+            ExprKind::MethodCall { name, dotted: Some(whole), .. } if whole.ends_with(name.as_str()) => format!("'{}'", whole),
             ExprKind::MethodCall { name, .. } => format!("'{}'", name),
             _ => "the task".to_string(),
         };
         // `x |> make().larger()` would read as if `make` were given the value.
-        if let ExprKind::MethodCall { value: on, .. } | ExprKind::Invoke { callee: on, .. } =
-            &step.kind
-            && matches!(
-                on.kind,
-                ExprKind::Call { .. } | ExprKind::MethodCall { .. } | ExprKind::Invoke { .. }
-            )
+        if let ExprKind::MethodCall { value: on, .. } | ExprKind::Invoke { callee: on, .. } = &step.kind
+            && matches!(on.kind, ExprKind::Call { .. } | ExprKind::MethodCall { .. } | ExprKind::Invoke { .. })
         {
             return Err(Error::at(
                 step.span,
-                format!(
-                    "{} gives the value before it to one call, and this calls what another call gives, which reads as if that one were given the value; to go on from what the pipe gives, put it in parentheses, as in '(x |> f()).g()'",
-                    pipe
-                ),
+                format!("{} gives the value before it to one call, and this calls what another call gives, which reads as if that one were given the value; to go on from what the pipe gives, put it in parentheses, as in '(x |> f()).g()'", pipe),
             ));
         }
         let args = match &mut step.kind {
-            ExprKind::Call { args, .. }
-            | ExprKind::MethodCall { args, .. }
-            | ExprKind::Invoke { args, .. }
-            | ExprKind::Construct { args, .. }
-                if !parenthesized =>
-            {
-                args
-            }
+            ExprKind::Call { args, .. } | ExprKind::MethodCall { args, .. } | ExprKind::Invoke { args, .. } | ExprKind::Construct { args, .. } if !parenthesized => args,
             ExprKind::Var(name) if is_lambda(name) => {
                 return Err(Error::at(
                     step.span,
-                    format!(
-                        "{} gives the value before it to a call, and a lambda written here is called by nothing; name it first, as in 'fixed twice = (n: int) -> int … fi', then write 'x |> twice()'",
-                        pipe
-                    ),
+                    format!("{} gives the value before it to a call, and a lambda written here is called by nothing; name it first, as in 'fixed twice = (n: int) -> int … fi', then write 'x |> twice()'", pipe),
                 ));
             }
             ExprKind::Var(name) => {
-                return Err(Error::at(
-                    step.span,
-                    format!(
-                        "{0} gives the value before it to a call, so '{1}' is written with parentheses, as in '{1}()'",
-                        pipe, name
-                    ),
-                ));
+                return Err(Error::at(step.span, format!("{0} gives the value before it to a call, so '{1}' is written with parentheses, as in '{1}()'", pipe, name)));
             }
             _ => {
                 return Err(Error::at(
                     step.span,
-                    format!(
-                        "{} gives the value before it to the call right after it, as in 'xs |> total()', and this is no call; to go on from what the pipe gives, put it in parentheses, as in '(xs |> total()).str()'",
-                        pipe
-                    ),
+                    format!("{} gives the value before it to the call right after it, as in 'xs |> total()', and this is no call; to go on from what the pipe gives, put it in parentheses, as in '(xs |> total()).str()'", pipe),
                 ));
             }
         };
-        let written = args
-            .iter()
-            .filter(|arg| !matches!(arg.kind, ExprKind::RegionAfter(_)))
-            .count();
+        let written = args.iter().filter(|arg| !matches!(arg.kind, ExprKind::RegionAfter(_))).count();
         if count > written + 1 {
             return Err(Error::at(
                 span,
@@ -5580,39 +4057,21 @@ impl Parser {
             ));
         }
         args.insert(count - 1, Expr::new(ExprKind::Piped(Box::new(value)), span));
-        if Self::binary_op(self.peek())
-            .is_some_and(|(_, precedence)| precedence > Self::PIPE_PRECEDENCE)
-        {
+        if Self::binary_op(self.peek()).is_some_and(|(_, precedence)| precedence > Self::PIPE_PRECEDENCE) {
             let op = self.peek().describe();
             let symbol = op.trim_matches('\'');
             return Err(Error::at(
                 self.peek_span(),
-                format!(
-                    "the call after {0} is the whole of its step, so {1} can't follow it; to work with what the pipe gives, put it in parentheses, as in '(a |> f()) {2} 1'",
-                    pipe, op, symbol
-                ),
+                format!("the call after {0} is the whole of its step, so {1} can't follow it; to work with what the pipe gives, put it in parentheses, as in '(a |> f()) {2} 1'", pipe, op, symbol),
             ));
         }
         if self.check(Token::Range) {
-            return Err(Error::at(
-                self.peek_span(),
-                format!(
-                    "the call after {} is the whole of its step, so '..' can't follow it; put the pipe in parentheses, as in '(a |> f())..b'",
-                    pipe
-                ),
-            ));
+            return Err(Error::at(self.peek_span(), format!("the call after {} is the whole of its step, so '..' can't follow it; put the pipe in parentheses, as in '(a |> f())..b'", pipe)));
         }
         let mut piped = Expr::new(ExprKind::Pipe(Box::new(step)), span);
         for suffix in suffixes.into_iter().rev() {
             piped = match suffix {
-                PipeSuffix::PlanB(error, body, at) => Expr::new(
-                    ExprKind::PlanB {
-                        value: Box::new(piped),
-                        error,
-                        body,
-                    },
-                    at,
-                ),
+                PipeSuffix::PlanB(error, body, at) => Expr::new(ExprKind::PlanB { value: Box::new(piped), error, body }, at),
                 PipeSuffix::Try(at) => Expr::new(ExprKind::Try(Box::new(piped)), at),
             };
         }
@@ -5623,22 +4082,8 @@ impl Parser {
         let span = self.peek_span();
         let pipe = Token::ErrPipe(count).describe();
         self.advance();
-        if matches!(
-            self.peek(),
-            Token::RParen
-                | Token::RBracket
-                | Token::RBrace
-                | Token::Comma
-                | Token::Newline
-                | Token::Eof
-        ) {
-            return Err(Error::at(
-                self.peek_span(),
-                format!(
-                    "{} maps the failure of the value before it, as in 'call() !> Err.new()'",
-                    pipe
-                ),
-            ));
+        if matches!(self.peek(), Token::RParen | Token::RBracket | Token::RBrace | Token::Comma | Token::Newline | Token::Eof) {
+            return Err(Error::at(self.peek_span(), format!("{} maps the failure of the value before it, as in 'call() !> Err.new()'", pipe)));
         }
         if let ExprKind::ErrPipe { propagate, .. } = &mut value.kind {
             *propagate = false;
@@ -5663,8 +4108,7 @@ impl Parser {
                 self.advance();
                 self.advance();
                 binder = Some((name, bspan));
-            } else if (self.check(Token::Underscore)
-                && self.tokens.get(self.pos + 1) == Some(&Token::Arrow))
+            } else if (self.check(Token::Underscore) && self.tokens.get(self.pos + 1) == Some(&Token::Arrow))
                 || (self.check(Token::LParen)
                     && self.tokens.get(self.pos + 1) == Some(&Token::Underscore)
                     && self.tokens.get(self.pos + 2) == Some(&Token::RParen)
@@ -5681,53 +4125,27 @@ impl Parser {
         let step_res = if binder.is_some() {
             self.parse_binary_with(Self::PIPE_PRECEDENCE + 1, false)
         } else {
-            self.parse_postfix().and_then(|s| {
-                if self.check(Token::At) {
-                    self.parse_call_region(s)
-                } else {
-                    Ok(s)
-                }
-            })
+            self.parse_postfix().and_then(|s| if self.check(Token::At) { self.parse_call_region(s) } else { Ok(s) })
         };
         self.in_err_pipe -= 1;
         let mut step = step_res?;
         let mut plans = Vec::new();
         while !parenthesized && matches!(step.kind, ExprKind::PlanB { .. }) {
-            let ExprKind::PlanB {
-                value: inner,
-                error,
-                body,
-            } = step.kind
-            else {
-                break;
-            };
+            let ExprKind::PlanB { value: inner, error, body } = step.kind else { break };
             plans.push((error, body, step.span));
             step = *inner;
         }
         if count > 1 {
             let args = match &step.kind {
-                ExprKind::Call { args, .. }
-                | ExprKind::MethodCall { args, .. }
-                | ExprKind::Invoke { args, .. }
-                | ExprKind::Construct { args, .. }
-                    if !parenthesized =>
-                {
-                    args
-                }
+                ExprKind::Call { args, .. } | ExprKind::MethodCall { args, .. } | ExprKind::Invoke { args, .. } | ExprKind::Construct { args, .. } if !parenthesized => args,
                 _ => {
                     return Err(Error::at(
                         step.span,
-                        format!(
-                            "{} passes the failure as argument {}, so a call with parentheses follows it, as in 'call() !>> Err.new(\"msg\")'",
-                            pipe, count
-                        ),
+                        format!("{} passes the failure as argument {}, so a call with parentheses follows it, as in 'call() !>> Err.new(\"msg\")'", pipe, count),
                     ));
                 }
             };
-            let written = args
-                .iter()
-                .filter(|arg| !matches!(arg.kind, ExprKind::RegionAfter(_)))
-                .count();
+            let written = args.iter().filter(|arg| !matches!(arg.kind, ExprKind::RegionAfter(_))).count();
             if count > written + 1 {
                 return Err(Error::at(
                     span,
@@ -5746,17 +4164,13 @@ impl Parser {
             }
         }
         if !matches!(self.peek(), Token::Newline | Token::Eof)
-            && Self::binary_op(self.peek())
-                .is_some_and(|(_, precedence)| precedence > Self::PIPE_PRECEDENCE)
+            && Self::binary_op(self.peek()).is_some_and(|(_, precedence)| precedence > Self::PIPE_PRECEDENCE)
         {
             let op = self.peek().describe();
             let symbol = op.trim_matches('\'');
             return Err(Error::at(
                 self.peek_span(),
-                format!(
-                    "the step after {0} is the whole of its step, so {1} can't follow it; put the pipeline in parentheses, as in '(a !> f()) {2} 1'",
-                    pipe, op, symbol
-                ),
+                format!("the step after {0} is the whole of its step, so {1} can't follow it; put the pipeline in parentheses, as in '(a !> f()) {2} 1'", pipe, op, symbol),
             ));
         }
         let propagate = plans.is_empty();
@@ -5772,14 +4186,7 @@ impl Parser {
             span,
         );
         for (error, body, at) in plans.into_iter().rev() {
-            piped = Expr::new(
-                ExprKind::PlanB {
-                    value: Box::new(piped),
-                    error,
-                    body,
-                },
-                at,
-            );
+            piped = Expr::new(ExprKind::PlanB { value: Box::new(piped), error, body }, at);
         }
         Ok(piped)
     }
@@ -5797,24 +4204,13 @@ impl Parser {
                     waiting.push(*right);
                     waiting.push(*left);
                 }
-                ExprKind::Join {
-                    parts: pieces,
-                    region: ref missing,
-                    ..
-                } if missing.is_empty() => {
+                ExprKind::Join { parts: pieces, region: ref missing, .. } if missing.is_empty() => {
                     interpolated_parts(pieces, &region, region_span, &mut parts);
                 }
                 _ => parts.push(expr),
             }
         }
-        Ok(Expr::new(
-            ExprKind::Join {
-                parts,
-                region,
-                region_span,
-            },
-            span,
-        ))
+        Ok(Expr::new(ExprKind::Join { parts, region, region_span }, span))
     }
 
     fn parse_call_region(&mut self, mut expr: Expr) -> Result<Expr> {
@@ -5825,9 +4221,7 @@ impl Parser {
         match place_region(&mut expr, &region, region_span, true) {
             Placing::Placed => {}
             Placing::Already => return Err(Error::at(at, REGION_ALREADY_NAMED)),
-            Placing::Nowhere
-                if matches!(expr.kind, ExprKind::Array(_) | ExprKind::Repeat { .. }) =>
-            {
+            Placing::Nowhere if matches!(expr.kind, ExprKind::Array(_) | ExprKind::Repeat { .. }) => {
                 return Err(Error::at(
                     at,
                     "an array holds its values in place and names no region; a slice of them ends with '...', as in '[1, 2, ...] at r'",
@@ -5867,27 +4261,16 @@ impl Parser {
 
     // Outlined from `parse_primary` to keep recursion frames small under `MAX_NESTING`.
     fn parse_interpolated(&mut self, span: Span) -> Result<Expr> {
-        let Token::Interpolated(pieces) = self.peek().clone() else {
-            return Err(Error::internal_at(span, "text holding values that isn't"));
-        };
+        let Token::Interpolated(pieces) = self.peek().clone() else { return Err(Error::internal_at(span, "text holding values that isn't")) };
         self.advance();
         let mut parts = Vec::new();
         for piece in pieces {
             match piece {
                 Piece::Text(text) => parts.push(Expr::new(ExprKind::TextLit(text), span)),
-                Piece::Value { tokens, close, .. } => {
-                    parts.push(self.parse_text_value(tokens, &close)?)
-                }
+                Piece::Value { tokens, close, .. } => parts.push(self.parse_text_value(tokens, &close)?),
             }
         }
-        Ok(Expr::new(
-            ExprKind::Join {
-                parts,
-                region: String::new(),
-                region_span: span,
-            },
-            span,
-        ))
+        Ok(Expr::new(ExprKind::Join { parts, region: String::new(), region_span: span }, span))
     }
 
     fn parse_text_value(&mut self, tokens: Vec<LexToken>, close: &LexToken) -> Result<Expr> {
@@ -5903,13 +4286,7 @@ impl Parser {
         let file_tokens = std::mem::replace(&mut self.tokens, kinds);
         let file_spans = std::mem::replace(&mut self.spans, spans);
         let file_pos = std::mem::replace(&mut self.pos, 0);
-        let value = self.parse_expr().and_then(|value| {
-            if self.check(Token::RBrace) {
-                Ok(value)
-            } else {
-                Err(self.unexpected("'}' to end the value"))
-            }
-        });
+        let value = self.parse_expr().and_then(|value| if self.check(Token::RBrace) { Ok(value) } else { Err(self.unexpected("'}' to end the value")) });
         self.tokens = file_tokens;
         self.spans = file_spans;
         self.pos = file_pos;
@@ -5921,10 +4298,7 @@ impl Parser {
             if self.in_err_pipe > 0 {
                 let span = self.peek_span();
                 self.advance();
-                return self.parse_suffixes(
-                    Expr::new(ExprKind::Var(FAILURE_VAL.to_string()), span),
-                    false,
-                );
+                return self.parse_suffixes(Expr::new(ExprKind::Var(FAILURE_VAL.to_string()), span), false);
             }
             return Err(Error::at(self.peek_span(), FAIL_MAKES));
         }
@@ -6075,16 +4449,8 @@ impl Parser {
         self.parse_suffixes_with(expr, parenthesized, true)
     }
 
-    fn parse_suffixes_with(
-        &mut self,
-        mut expr: Expr,
-        parenthesized: bool,
-        allow_plan_b: bool,
-    ) -> Result<Expr> {
-        if self.check(Token::AtSign)
-            && (pending_region(&expr)
-                || (parenthesized && matches!(expr.kind, ExprKind::Binary(BinaryOp::Add, ..))))
-        {
+    fn parse_suffixes_with(&mut self, mut expr: Expr, parenthesized: bool, allow_plan_b: bool) -> Result<Expr> {
+        if self.check(Token::AtSign) && (pending_region(&expr) || (parenthesized && matches!(expr.kind, ExprKind::Binary(BinaryOp::Add, ..)))) {
             expr = self.parse_join(expr)?;
         }
         let mut levels = 0;
@@ -6095,16 +4461,21 @@ impl Parser {
                     levels += 1;
                     expr = self.parse_suffix(expr)?;
                 }
+                Token::BitXor if Self::cannot_start_expr(self.tokens.get(self.pos + 1)) => {
+                    let span = self.peek_span();
+                    self.advance();
+                    self.enter()?;
+                    self.enter()?;
+                    levels += 2;
+                    expr = Expr::new(ExprKind::Deref(Box::new(Expr::new(ExprKind::Deref(Box::new(expr)), span))), span);
+                }
                 Token::LBrace if allow_plan_b => {
                     self.enter()?;
                     levels += 1;
                     expr = self.parse_suffix(expr)?;
                 }
                 Token::FatArrow
-                    if matches!(
-                        self.tokens.get(self.pos + 1),
-                        Some(Token::LParen | Token::LBrace)
-                    ) =>
+                    if matches!(self.tokens.get(self.pos + 1), Some(Token::LParen | Token::LBrace)) =>
                 {
                     self.enter()?;
                     levels += 1;
@@ -6115,13 +4486,7 @@ impl Parser {
                     levels += 1;
                     let span = self.peek_span();
                     let args = self.parse_arg_list()?;
-                    expr = Expr::new(
-                        ExprKind::Invoke {
-                            callee: Box::new(expr),
-                            args,
-                        },
-                        span,
-                    );
+                    expr = Expr::new(ExprKind::Invoke { callee: Box::new(expr), args }, span);
                 }
                 Token::AtSign if takes_region_after(&expr) => {
                     let at = self.peek_span();
@@ -6137,9 +4502,7 @@ impl Parser {
             }
         }
         self.leave(levels);
-        if self.check(Token::AtSign)
-            && matches!(expr.kind, ExprKind::Array(_) | ExprKind::Repeat { .. })
-        {
+        if self.check(Token::AtSign) && matches!(expr.kind, ExprKind::Array(_) | ExprKind::Repeat { .. }) {
             return Err(Error::at(
                 self.peek_span(),
                 "an array holds its values in place and names no region; a slice of them ends with '...', as in '[1, 2, ...]@r'",
@@ -6165,10 +4528,7 @@ impl Parser {
                 if self.check(Token::Hash) {
                     self.advance();
                     let Token::Int(n) = self.peek() else {
-                        return Err(Error::at(
-                            self.peek_span(),
-                            "'.#' reads a tuple's item in a maybe, by its place written as a number, as in 't.#0'",
-                        ));
+                        return Err(Error::at(self.peek_span(), "'.#' reads a tuple's item in a maybe, by its place written as a number, as in 't.#0'"));
                     };
                     let item = format!("#{}", n);
                     self.advance();
@@ -6186,10 +4546,7 @@ impl Parser {
                 {
                     return self.parse_kind_types_use(kind, span);
                 }
-                if self.check(Token::LParen)
-                    || self.at_type_args()
-                    || (self.check(Token::LBrace) && self.at_shape_literal())
-                {
+                if self.check(Token::LParen) || self.at_type_args() || (self.check(Token::LBrace) && self.at_shape_literal()) {
                     return self.dotted_name_use(expr);
                 }
                 Ok(expr)
@@ -6205,17 +4562,11 @@ impl Parser {
                         ));
                     }
                     self.expect(Token::RBracket)?;
-                    return Ok(Expr::new(
-                        ExprKind::Lookup(Box::new(expr), Box::new(index)),
-                        span,
-                    ));
+                    return Ok(Expr::new(ExprKind::Lookup(Box::new(expr), Box::new(index)), span));
                 }
                 let index = self.parse_expr()?;
                 self.expect(Token::RBracket)?;
-                Ok(Expr::new(
-                    ExprKind::Index(Box::new(expr), Box::new(index)),
-                    span,
-                ))
+                Ok(Expr::new(ExprKind::Index(Box::new(expr), Box::new(index)), span))
             }
             Token::Bang => {
                 self.advance();
@@ -6261,19 +4612,14 @@ impl Parser {
             Token::LBracket if self.at_kept() => self.parse_closure_lambda(),
             Token::LBracket => self.parse_array(),
             Token::LParen if self.at_full_lambda() => self.parse_lambda(),
-            Token::LParen if self.at_shortcut_lambda() => {
-                self.parse_shortcut_lambda_parens(None, span)
-            }
+            Token::LParen if self.at_shortcut_lambda() => self.parse_shortcut_lambda_parens(None, span),
             Token::LParen => self.parse_parenthesized(),
             Token::Match | Token::When => self.parse_choice(span),
             _ if self.at_select() => self.parse_choice(span),
             Token::Loop | Token::Each | Token::Endless => self.parse_loop_value(span, None),
             Token::Ident(name)
                 if matches!(self.tokens.get(self.pos + 1), Some(Token::FatArrow))
-                    && !matches!(
-                        self.tokens.get(self.pos + 2),
-                        Some(Token::LParen | Token::LBrace)
-                    ) =>
+                    && !matches!(self.tokens.get(self.pos + 2), Some(Token::LParen | Token::LBrace)) =>
             {
                 let name = (name.clone(), span);
                 self.advance();
@@ -6281,10 +4627,7 @@ impl Parser {
                 if !matches!(self.peek(), Token::Loop | Token::Each | Token::Endless) {
                     return Err(Error::at(
                         self.peek_span(),
-                        format!(
-                            "'{} =>' names a loop, so 'loop', 'each' or 'endless' follows it",
-                            name.0
-                        ),
+                        format!("'{} =>' names a loop, so 'loop', 'each' or 'endless' follows it", name.0),
                     ));
                 }
                 let at = self.peek_span();
@@ -6299,12 +4642,8 @@ impl Parser {
                 self.advance();
                 self.parse_shortcut_lambda(vec![(DISCARD.to_string(), span)], None, span)
             }
-            Token::Dot
-                if matches!(
-                    self.tokens.get(self.pos + 1),
-                    Some(Token::Ident(_) | Token::Type)
-                ) || (self.tokens.get(self.pos + 1) == Some(&Token::New)
-                    && self.tokens.get(self.pos + 2) == Some(&Token::LParen)) =>
+            Token::Dot if matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(_) | Token::Type))
+                || (self.tokens.get(self.pos + 1) == Some(&Token::New) && self.tokens.get(self.pos + 2) == Some(&Token::LParen)) =>
             {
                 self.parse_member_of_this(span)
             }
@@ -6352,22 +4691,10 @@ impl Parser {
         Ok(self.loop_value(stmt?, name, true, span))
     }
 
-    fn loop_value(
-        &mut self,
-        stmt: Stmt,
-        name: Option<(String, Span)>,
-        gives: bool,
-        span: Span,
-    ) -> Expr {
+    fn loop_value(&mut self, stmt: Stmt, name: Option<(String, Span)>, gives: bool, span: Span) -> Expr {
         self.loop_values = true;
         let arrow = name.is_some();
-        let value = ValueLoop {
-            stmt,
-            name,
-            arrow,
-            gives,
-            open: (false, false),
-        };
+        let value = ValueLoop { stmt, name, arrow, gives, open: (false, false) };
         Expr::new(ExprKind::LoopValue(Box::new(value)), span)
     }
 
@@ -6402,22 +4729,14 @@ impl Parser {
         let kind = if self.at_type_args() {
             let types = self.parse_type_args()?;
             if self.check(Token::LParen) {
-                ExprKind::Call {
-                    name,
-                    types,
-                    args: self.parse_arg_list()?,
-                }
+                ExprKind::Call { name, types, args: self.parse_arg_list()? }
             } else {
                 self.parse_struct_init(name, types)?
             }
         } else if self.check(Token::LBrace) && self.at_shape_literal() {
             self.parse_struct_init(name, Vec::new())?
         } else if self.check(Token::LParen) {
-            ExprKind::Call {
-                name,
-                types: Vec::new(),
-                args: self.parse_arg_list()?,
-            }
+            ExprKind::Call { name, types: Vec::new(), args: self.parse_arg_list()? }
         } else {
             ExprKind::Var(name)
         };
@@ -6429,24 +4748,13 @@ impl Parser {
         let args = self.parse_arg_list()?;
         if self.check(Token::In) {
             let hint = match args.len() {
-                1 => {
-                    "'scan' names its region with 'at', as in 'scan(\"Name: \") at r' (or 'scan(\"Name: \")@r'); 'in' counts through a range"
-                }
-                _ => {
-                    "'scan' reading a number names no region, so nothing follows the call, as in 'scan(\"Age: \", int)'; 'in' counts through a range"
-                }
+                1 => "'scan' names its region with 'at', as in 'scan(\"Name: \") at r' (or 'scan(\"Name: \")@r'); 'in' counts through a range",
+                _ => "'scan' reading a number names no region, so nothing follows the call, as in 'scan(\"Age: \", int)'; 'in' counts through a range",
             };
             return Err(Error::at(self.peek_span(), hint));
         }
         let region_span = self.peek_span();
-        Ok(Expr::new(
-            ExprKind::Scan {
-                args,
-                region: None,
-                region_span,
-            },
-            span,
-        ))
+        Ok(Expr::new(ExprKind::Scan { args, region: None, region_span }, span))
     }
 
     /// Whether the cursor, at `(`, starts a full lambda: parentheses with typed parameters
@@ -6456,8 +4764,7 @@ impl Parser {
         let is_empty = matches!(next, Some(Token::RParen));
         let takes = is_empty
             || matches!(next, Some(Token::Flex | Token::Fixed))
-            || (matches!(next, Some(Token::Ident(_)))
-                && self.tokens.get(self.pos + 2) == Some(&Token::Colon));
+            || (matches!(next, Some(Token::Ident(_))) && self.tokens.get(self.pos + 2) == Some(&Token::Colon));
         if !takes {
             return false;
         }
@@ -6469,8 +4776,7 @@ impl Parser {
                 Token::RParen | Token::RBracket => {
                     depth = depth.saturating_sub(1);
                     if depth == 0 {
-                        if *token == Token::RParen && self.tokens.get(at + 1) == Some(&Token::Arrow)
-                        {
+                        if *token == Token::RParen && self.tokens.get(at + 1) == Some(&Token::Arrow) {
                             arrow_at = Some(at + 1);
                         }
                         break;
@@ -6509,8 +4815,7 @@ impl Parser {
                 Token::RParen | Token::RBracket => {
                     depth = depth.saturating_sub(1);
                     if depth == 0 {
-                        if *token == Token::RParen && self.tokens.get(at + 1) == Some(&Token::Arrow)
-                        {
+                        if *token == Token::RParen && self.tokens.get(at + 1) == Some(&Token::Arrow) {
                             arrow_at = Some(at + 1);
                             rparen_at = Some(at);
                         }
@@ -6521,9 +4826,7 @@ impl Parser {
                 _ => {}
             }
         }
-        let (Some(_arrow), Some(rparen)) = (arrow_at, rparen_at) else {
-            return false;
-        };
+        let (Some(_arrow), Some(rparen)) = (arrow_at, rparen_at) else { return false };
         for token in self.tokens.get(self.pos + 1..rparen).unwrap_or_default() {
             if !matches!(token, Token::Ident(_) | Token::Underscore | Token::Comma) {
                 return false;
@@ -6551,23 +4854,13 @@ impl Parser {
     fn parse_closure_lambda(&mut self) -> Result<Expr> {
         let span = self.peek_span();
         let (region, mode, _, places) = self.parse_kept()?;
-        let kept = Kept {
-            region: region.clone(),
-            mode,
-            places: places.clone(),
-        };
+        let kept = Kept { region: region.clone(), mode, places: places.clone() };
         if self.check(Token::LParen) && self.at_shortcut_lambda() {
             return self.parse_shortcut_lambda_parens(Some(kept), span);
         }
-        if matches!(self.peek(), Token::Ident(_) | Token::Underscore)
-            && self.tokens.get(self.pos + 1) == Some(&Token::Arrow)
-        {
+        if matches!(self.peek(), Token::Ident(_) | Token::Underscore) && self.tokens.get(self.pos + 1) == Some(&Token::Arrow) {
             let p_span = self.peek_span();
-            let name = if self.match_token(Token::Underscore) {
-                DISCARD.to_string()
-            } else {
-                self.expect_ident()?
-            };
+            let name = if self.match_token(Token::Underscore) { DISCARD.to_string() } else { self.expect_ident()? };
             return self.parse_shortcut_lambda(vec![(name, p_span)], Some(kept), span);
         }
         if !(self.check(Token::LParen) && self.at_full_lambda()) {
@@ -6577,13 +4870,7 @@ impl Parser {
                 KeptMode::Bind => "bind ",
             };
             let written = format!("[{}@{}]", mode_word, region);
-            return Err(Error::at(
-                span,
-                format!(
-                    "'{0}' starts a lambda that keeps what it uses, so a lambda's header follows it, as in '{0}(x: int) -> int'",
-                    written
-                ),
-            ));
+            return Err(Error::at(span, format!("'{0}' starts a lambda that keeps what it uses, so a lambda's header follows it, as in '{0}(x: int) -> int'", written)));
         }
         self.enter()?;
         let header = self.peek_span();
@@ -6596,75 +4883,44 @@ impl Parser {
             self.parse_lambda_line(span)?
         };
         self.leave(1);
-        let ExprKind::Var(lambda) = self
-            .add_lambda(span, params, ret, results, body, Some(kept), false)
-            .kind
-        else {
+        let ExprKind::Var(lambda) = self.add_lambda(span, params, ret, results, body, Some(kept), false).kind else {
             return Err(Error::internal_at(span, "a lambda named by no variable"));
         };
-        Ok(Expr::new(
-            ExprKind::Closure {
-                lambda,
-                region,
-                mode,
-                places,
-            },
-            span,
-        ))
+        Ok(Expr::new(ExprKind::Closure { lambda, region, mode, places }, span))
     }
 
-    fn parse_shortcut_lambda(
-        &mut self,
-        params: Vec<(String, Span)>,
-        kept: Option<Kept>,
-        span: Span,
-    ) -> Result<Expr> {
+    fn parse_shortcut_lambda(&mut self, params: Vec<(String, Span)>, kept: Option<Kept>, span: Span) -> Result<Expr> {
         if self.in_generic {
-            return Err(Error::at(
-                span,
-                "a lambda can't be written in a task or method that takes types yet; write a task of its own and name it, as in 'apply(double, x)'",
-            ));
+            return Err(Error::at(span, "a lambda can't be written in a task or method that takes types yet; write a task of its own and name it, as in 'apply(double, x)'"));
         }
         self.enter()?;
         self.expect(Token::Arrow)?;
         let body_expr = self.parse_expr()?;
         self.leave(1);
         let body = vec![Stmt::new(StmtKind::Send(vec![body_expr]), span)];
-        let fields: Vec<Field> = params
-            .into_iter()
-            .map(|(name, p_span)| Field {
-                name,
-                ty: Type::Unknown,
-                span: p_span,
-                ty_span: p_span,
-                private: false,
-                read: false,
-                default_region: false,
-                passing: Passing::Copy,
-                default: None,
-            })
-            .collect();
+        let fields: Vec<Field> = params.into_iter().map(|(name, p_span)| Field {
+            name,
+            ty: Type::Unknown,
+            span: p_span,
+            ty_span: p_span,
+            private: false,
+            read: false,
+            default_region: false,
+            passing: Passing::Copy,
+            default: None,
+        }).collect();
         let is_closure = kept.is_some();
         let (region, mode, places) = if let Some(k) = &kept {
             (k.region.clone(), k.mode, k.places.clone())
         } else {
             (String::new(), KeptMode::Plain, Vec::new())
         };
-        let lambda_expr =
-            self.add_lambda(span, fields, Type::Unknown, Vec::new(), body, kept, true);
+        let lambda_expr = self.add_lambda(span, fields, Type::Unknown, Vec::new(), body, kept, true);
         if is_closure {
             let ExprKind::Var(lambda) = lambda_expr.kind else {
                 return Err(Error::internal_at(span, "a lambda named by no variable"));
             };
-            Ok(Expr::new(
-                ExprKind::Closure {
-                    lambda,
-                    region,
-                    mode,
-                    places,
-                },
-                span,
-            ))
+            Ok(Expr::new(ExprKind::Closure { lambda, region, mode, places }, span))
         } else {
             Ok(lambda_expr)
         }
@@ -6693,10 +4949,7 @@ impl Parser {
 
     fn parse_lambda_header(&mut self, span: Span) -> Result<(Vec<Field>, Type, Vec<ResultDef>)> {
         if self.in_generic {
-            return Err(Error::at(
-                span,
-                "a lambda can't be written in a task or method that takes types yet; write a task of its own and name it, as in 'apply(double, x)'",
-            ));
+            return Err(Error::at(span, "a lambda can't be written in a task or method that takes types yet; write a task of its own and name it, as in 'apply(double, x)'"));
         }
         let params = self.parse_field_list(Slot::Param)?;
         if let Some(value) = params.iter().find_map(|param| param.default.as_ref()) {
@@ -6708,39 +4961,21 @@ impl Parser {
         let arrow = self.peek_span();
         self.expect(Token::Arrow)?;
         if matches!(self.peek(), Token::Newline | Token::Fi | Token::Eof) {
-            return Err(Error::at(
-                arrow,
-                "a lambda names what it sends after '->', or 'nothing', as in '(x: int) -> int'",
-            ));
+            return Err(Error::at(arrow, "a lambda names what it sends after '->', or 'nothing', as in '(x: int) -> int'"));
         }
         let mut results = Vec::new();
         let ret = self.parse_results(&mut results)?;
         if matches!(ret, Type::Results(_)) {
-            return Err(Error::at(
-                arrow,
-                "a lambda sends one value or nothing, as a task value does; send a tuple for several, as in '-> (int, int)'",
-            ));
+            return Err(Error::at(arrow, "a lambda sends one value or nothing, as a task value does; send a tuple for several, as in '-> (int, int)'"));
         }
         if self.check(Token::LBrace) {
-            return Err(Error::at(
-                self.peek_span(),
-                "a lambda's body follows its header, on its line or the lines after it, and closes with 'fi'",
-            ));
+            return Err(Error::at(self.peek_span(), "a lambda's body follows its header, on its line or the lines after it, and closes with 'fi'"));
         }
         Ok((params, ret, results))
     }
 
     #[allow(clippy::too_many_arguments)]
-    fn add_lambda(
-        &mut self,
-        span: Span,
-        params: Vec<Field>,
-        ret: Type,
-        results: Vec<ResultDef>,
-        body: Block,
-        kept: Option<Kept>,
-        shortcut: bool,
-    ) -> Expr {
+    fn add_lambda(&mut self, span: Span, params: Vec<Field>, ret: Type, results: Vec<ResultDef>, body: Block, kept: Option<Kept>, shortcut: bool) -> Expr {
         self.lambda_count += 1;
         let name = lambda_name(self.lambda_count);
         self.lambdas.push(Item::Task(TaskDef {
@@ -6800,16 +5035,10 @@ impl Parser {
         if self.check(Token::Ellipsis) {
             self.advance();
             if !self.check(Token::RParen) {
-                return Err(Error::at(
-                    self.peek_span(),
-                    "a group's values make a tuple on their own, as in '(args...)'",
-                ));
+                return Err(Error::at(self.peek_span(), "a group's values make a tuple on their own, as in '(args...)'"));
             }
             self.advance();
-            return Ok(Expr::new(
-                ExprKind::Field(Box::new(first), GROUP_TUPLE_WRITTEN.to_string()),
-                span,
-            ));
+            return Ok(Expr::new(ExprKind::Field(Box::new(first), GROUP_TUPLE_WRITTEN.to_string()), span));
         }
         if !self.check(Token::Comma) {
             self.expect(Token::RParen)?;
@@ -6823,10 +5052,7 @@ impl Parser {
                 break self.expect(Token::RParen);
             }
             if self.check(Token::Newline) {
-                break Err(Error::at(
-                    self.peek_span(),
-                    "a tuple is written on one line, as in '(1, \"Ada\")'",
-                ));
+                break Err(Error::at(self.peek_span(), "a tuple is written on one line, as in '(1, \"Ada\")'"));
             }
             if self.check(Token::RParen) {
                 break Err(match values.as_slice() {
@@ -6855,34 +5081,19 @@ impl Parser {
         let span = self.peek_span();
         self.advance();
         if self.check(Token::RBracket) {
-            return Err(Error::at(
-                span,
-                "an array holds at least one value, as in '[0#4]'",
-            ));
+            return Err(Error::at(span, "an array holds at least one value, as in '[0#4]'"));
         }
         if self.check(Token::Ellipsis) {
-            return Err(Error::at(
-                span,
-                "a slice of no values can't tell what type its items are; name it, as in 'new [int]() at r'",
-            ));
+            return Err(Error::at(span, "a slice of no values can't tell what type its items are; name it, as in 'new [int]() at r'"));
         }
         if self.check(Token::Colon) {
-            return Err(Error::at(
-                span,
-                "a map written by its pairs holds at least one; an empty map names its types, as in 'new [text: int]() at r'",
-            ));
+            return Err(Error::at(span, "a map written by its pairs holds at least one; an empty map names its types, as in 'new [text: int]() at r'"));
         }
         let first = self.parse_expr()?;
         if self.match_token(Token::Hash) {
             let count = self.parse_expr()?;
             self.expect_array_end(span, false)?;
-            return Ok(Expr::new(
-                ExprKind::Repeat {
-                    value: Box::new(first),
-                    count: Box::new(count),
-                },
-                span,
-            ));
+            return Ok(Expr::new(ExprKind::Repeat { value: Box::new(first), count: Box::new(count) }, span));
         }
         if self.match_token(Token::Colon) {
             let value = self.parse_expr()?;
@@ -6892,10 +5103,7 @@ impl Parser {
         let mut values = vec![first];
         while self.match_token(Token::Comma) {
             if self.check(Token::Newline) {
-                return Err(Error::at(
-                    self.peek_span(),
-                    "an array is written on one line, as in '[1, 2, 3]'",
-                ));
+                return Err(Error::at(self.peek_span(), "an array is written on one line, as in '[1, 2, 3]'"));
             }
             if self.match_token(Token::Ellipsis) {
                 self.expect_array_end(span, false)?;
@@ -6910,24 +5118,12 @@ impl Parser {
         Ok(Expr::new(ExprKind::Array(values), span))
     }
 
-    fn parse_pairs_after(
-        &mut self,
-        mut pairs: Vec<(Expr, Expr)>,
-        opened: Span,
-        names: bool,
-    ) -> Result<Vec<(Expr, Expr)>> {
+    fn parse_pairs_after(&mut self, mut pairs: Vec<(Expr, Expr)>, opened: Span, names: bool) -> Result<Vec<(Expr, Expr)>> {
         while self.match_token(Token::Comma) {
             if self.check(Token::Newline) {
-                return Err(Error::at(
-                    self.peek_span(),
-                    "a map's pairs are written on one line, as in '[\"a\": 1, \"b\": 2]'",
-                ));
+                return Err(Error::at(self.peek_span(), "a map's pairs are written on one line, as in '[\"a\": 1, \"b\": 2]'"));
             }
-            let key = if names {
-                self.parse_named_key()?
-            } else {
-                self.parse_expr()?
-            };
+            let key = if names { self.parse_named_key()? } else { self.parse_expr()? };
             if !self.match_token(Token::Colon) {
                 return Err(self.unexpected("':' and the value that goes with the key"));
             }
@@ -6935,13 +5131,7 @@ impl Parser {
         }
         if !self.match_token(Token::RBracket) {
             if matches!(self.peek(), Token::Newline | Token::Eof) {
-                return Err(Error::at(
-                    self.peek_span(),
-                    format!(
-                        "expected ']' to close the map at {}:{}; a map's pairs are written on one line",
-                        opened.line, opened.col
-                    ),
-                ));
+                return Err(Error::at(self.peek_span(), format!("expected ']' to close the map at {}:{}; a map's pairs are written on one line", opened.line, opened.col)));
             }
             return Err(self.unexpected("',' and another pair, or ']'"));
         }
@@ -6959,10 +5149,7 @@ impl Parser {
                 self.advance();
                 Ok(Expr::new(ExprKind::TextLit(text), span))
             }
-            _ => Err(Error::at(
-                span,
-                "a key of a '[:V]' map is a name, which is its own text, or text in quotes, as in '[width: 1.5, \"full name\": 2.0]'",
-            )),
+            _ => Err(Error::at(span, "a key of a '[:V]' map is a name, which is its own text, or text in quotes, as in '[width: 1.5, \"full name\": 2.0]'")),
         }
     }
 
@@ -6975,21 +5162,13 @@ impl Parser {
     }
 
     fn parse_shortcut(&mut self, value: Expr, span: Span) -> Result<Expr> {
-        let (region, region_span) =
-            if self.match_token(Token::At) || self.match_token(Token::AtSign) {
-                let region_span = self.peek_span();
-                (Some(self.expect_ident()?), region_span)
-            } else {
-                (None, self.peek_span())
-            };
-        Ok(Expr::new(
-            ExprKind::Shortcut {
-                value: Box::new(value),
-                region,
-                region_span,
-            },
-            span,
-        ))
+        let (region, region_span) = if self.match_token(Token::At) || self.match_token(Token::AtSign) {
+            let region_span = self.peek_span();
+            (Some(self.expect_ident()?), region_span)
+        } else {
+            (None, self.peek_span())
+        };
+        Ok(Expr::new(ExprKind::Shortcut { value: Box::new(value), region, region_span }, span))
     }
 
     fn expect_array_end(&mut self, opened: Span, one: bool) -> Result<()> {
@@ -6997,32 +5176,18 @@ impl Parser {
             return Ok(());
         }
         if matches!(self.peek(), Token::Newline | Token::Eof) {
-            let count = if one {
-                ", with a count after '#', as in '[0#4]' (';' starts a comment)"
-            } else {
-                ""
-            };
-            return Err(Error::at(
-                self.peek_span(),
-                format!(
-                    "expected ']' to close the array at {}:{}; an array is written on one line{}",
-                    opened.line, opened.col, count
-                ),
-            ));
+            let count = if one { ", with a count after '#', as in '[0#4]' (';' starts a comment)" } else { "" };
+            return Err(Error::at(self.peek_span(), format!("expected ']' to close the array at {}:{}; an array is written on one line{}", opened.line, opened.col, count)));
         }
         Err(self.unexpected("']'"))
     }
 
     /// Parses method/variant calls and shape literals after field chains, retaining dotted forms for module resolution.
     fn dotted_name_use(&mut self, expr: Expr) -> Result<Expr> {
-        if matches!(&expr.kind, ExprKind::Field(_, word) if word == COPY)
-            && self.check(Token::LParen)
-        {
+        if matches!(&expr.kind, ExprKind::Field(_, word) if word == COPY) && self.check(Token::LParen) {
             return self.parse_copy(expr);
         }
-        if matches!(&expr.kind, ExprKind::Field(_, word) if word == STR)
-            && self.check(Token::LParen)
-        {
+        if matches!(&expr.kind, ExprKind::Field(_, word) if word == STR) && self.check(Token::LParen) {
             return self.parse_str(expr);
         }
         if let ExprKind::Field(_, word) = &expr.kind
@@ -7030,28 +5195,13 @@ impl Parser {
             && self.check(Token::LParen)
         {
             let args = self.parse_arg_list()?;
-            let ExprKind::Field(items, _) = expr.kind else {
-                return Err(Error::internal_at(expr.span, "a change without its slice"));
-            };
+            let ExprKind::Field(items, _) = expr.kind else { return Err(Error::internal_at(expr.span, "a change without its slice")) };
             let edit = Expr::new(ExprKind::Edit { items, op, args }, expr.span);
             if op.makes_copy() {
                 if self.check(Token::In) {
-                    return Err(Error::at(
-                        self.peek_span(),
-                        format!(
-                            "'{0}' names its region with 'at', as in 'xs.{0}(v) at r' (or 'xs.{0}(v)@r'); 'in' counts through a range",
-                            op.word()
-                        ),
-                    ));
+                    return Err(Error::at(self.peek_span(), format!("'{0}' names its region with 'at', as in 'xs.{0}(v) at r' (or 'xs.{0}(v)@r'); 'in' counts through a range", op.word())));
                 }
-                return Ok(Expr::new(
-                    ExprKind::Copy {
-                        value: Box::new(edit),
-                        region: None,
-                        region_span: expr.span,
-                    },
-                    expr.span,
-                ));
+                return Ok(Expr::new(ExprKind::Copy { value: Box::new(edit), region: None, region_span: expr.span }, expr.span));
             }
             return Ok(edit);
         }
@@ -7069,27 +5219,12 @@ impl Parser {
         }
         if self.check(Token::LParen) {
             let span = expr.span;
-            let ExprKind::Field(value, name) = expr.kind else {
-                return Err(Error::internal_at(
-                    span,
-                    "a call without the value it is on",
-                ));
-            };
+            let ExprKind::Field(value, name) = expr.kind else { return Err(Error::internal_at(span, "a call without the value it is on")) };
             let dotted = dotted.map(|(whole, _)| whole);
             let args = self.parse_arg_list()?;
-            return Ok(Expr::new(
-                ExprKind::MethodCall {
-                    value,
-                    name,
-                    args,
-                    dotted,
-                },
-                span,
-            ));
+            return Ok(Expr::new(ExprKind::MethodCall { value, name, args, dotted }, span));
         }
-        let Some((name, span)) = dotted else {
-            return Ok(expr);
-        };
+        let Some((name, span)) = dotted else { return Ok(expr) };
         let kind = if self.at_type_args() {
             let types = self.parse_type_args()?;
             self.parse_struct_init(name, types)?
@@ -7108,12 +5243,7 @@ impl Parser {
         if self.check(Token::NotSimilar) {
             return matches!(self.tokens.get(self.pos + 1), Some(Token::LBrace));
         }
-        self.type_args_close().is_some_and(|close| {
-            matches!(
-                self.tokens.get(close + 1),
-                Some(Token::LParen | Token::LBrace)
-            )
-        })
+        self.type_args_close().is_some_and(|close| matches!(self.tokens.get(close + 1), Some(Token::LParen | Token::LBrace)))
     }
 
     /// Whether the cursor is at the `<` of the types a kind is given, before
@@ -7127,9 +5257,7 @@ impl Parser {
                 (Some(gt), Some(dot)) => gt.line == dot.line && gt.col + 1 == dot.col,
                 _ => false,
             };
-            touching
-                && self.tokens.get(close + 1) == Some(&Token::Dot)
-                && matches!(self.tokens.get(close + 2), Some(Token::Ident(_)))
+            touching && self.tokens.get(close + 1) == Some(&Token::Dot) && matches!(self.tokens.get(close + 2), Some(Token::Ident(_)))
         })
     }
 
@@ -7148,6 +5276,9 @@ impl Parser {
                 Some(Token::Gt) if depth == 0 => return Some(p),
                 Some(Token::Lt) => depth += 1,
                 Some(Token::Gt) => depth -= 1,
+                Some(Token::Shr) if grouped > 0 && depth <= 1 => return None,
+                Some(Token::Shr) if depth <= 1 => return Some(p),
+                Some(Token::Shr) => depth -= 2,
                 Some(Token::LParen) => grouped += 1,
                 Some(Token::RParen) if grouped == 0 => return None,
                 Some(Token::RParen) => grouped -= 1,
@@ -7163,36 +5294,15 @@ impl Parser {
         self.expect(Token::Dot)?;
         let tag = self.expect_ident()?;
         if self.at_type_args() {
-            return Err(Error::at(
-                self.peek_span(),
-                format!(
-                    "'{}' already names the types of '{}', and a variant takes none of its own",
-                    kind, tag
-                ),
-            ));
+            return Err(Error::at(self.peek_span(), format!("'{}' already names the types of '{}', and a variant takes none of its own", kind, tag)));
         }
-        let args = if self.check(Token::LParen) {
-            self.parse_arg_list()?
-        } else {
-            Vec::new()
-        };
-        Ok(Expr::new(
-            ExprKind::Construct {
-                kind,
-                tag,
-                args,
-                types,
-            },
-            span,
-        ))
+        let args = if self.check(Token::LParen) { self.parse_arg_list()? } else { Vec::new() };
+        Ok(Expr::new(ExprKind::Construct { kind, tag, args, types }, span))
     }
 
     fn parse_type_args(&mut self) -> Result<Vec<TypeArg>> {
         if self.check(Token::NotSimilar) {
-            return Err(Error::at(
-                self.peek_span(),
-                "'< … >' names the types a use gives, as in '<int>'; leave it out to let the values say which they are",
-            ));
+            return Err(Error::at(self.peek_span(), "'< … >' names the types a use gives, as in '<int>'; leave it out to let the values say which they are"));
         }
         self.advance();
         let mut types = Vec::new();
@@ -7206,7 +5316,7 @@ impl Parser {
                 break;
             }
         }
-        if !self.match_token(Token::Gt) {
+        if !self.match_gt() {
             return Err(self.unexpected("',' and another type, or '>' to close the types"));
         }
         Ok(types)
@@ -7215,79 +5325,35 @@ impl Parser {
     fn parse_str(&mut self, expr: Expr) -> Result<Expr> {
         let dotted = dotted_name(&expr).map(|(whole, _)| whole);
         let span = expr.span;
-        let ExprKind::Field(value, name) = expr.kind else {
-            return Err(Error::internal_at(span, "a 'str' without its value"));
-        };
+        let ExprKind::Field(value, name) = expr.kind else { return Err(Error::internal_at(span, "a 'str' without its value")) };
         let args = self.parse_arg_list()?;
-        Ok(Expr::new(
-            ExprKind::MethodCall {
-                value,
-                name,
-                args,
-                dotted,
-            },
-            span,
-        ))
+        Ok(Expr::new(ExprKind::MethodCall { value, name, args, dotted }, span))
     }
 
     fn parse_text_cast(&mut self, span: Span) -> Result<Expr> {
         let args = self.parse_arg_list()?;
         let [value] = <[Expr; 1]>::try_from(args).map_err(|args| {
-            let got = if args.len() == 1 {
-                "1 value".to_string()
-            } else {
-                format!("{} values", args.len())
-            };
-            Error::at(
-                span,
-                format!(
-                    "'text(…)' turns one value into text, as in 'text(n) at r', got {}",
-                    got
-                ),
-            )
+            let got = if args.len() == 1 { "1 value".to_string() } else { format!("{} values", args.len()) };
+            Error::at(span, format!("'text(…)' turns one value into text, as in 'text(n) at r', got {}", got))
         })?;
-        Ok(Expr::new(
-            ExprKind::MethodCall {
-                value: Box::new(value),
-                name: STR.to_string(),
-                args: Vec::new(),
-                dotted: None,
-            },
-            span,
-        ))
+        Ok(Expr::new(ExprKind::MethodCall { value: Box::new(value), name: STR.to_string(), args: Vec::new(), dotted: None }, span))
     }
 
     fn parse_copy(&mut self, expr: Expr) -> Result<Expr> {
-        let ExprKind::Field(value, _) = expr.kind else {
-            return Err(Error::internal_at(expr.span, "a copy without its value"));
-        };
+        let ExprKind::Field(value, _) = expr.kind else { return Err(Error::internal_at(expr.span, "a copy without its value")) };
         let args = self.parse_arg_list()?;
         if let Some(first) = args.first() {
-            return Err(Error::at(
-                first.span,
-                "'copy' takes no arguments; name the region to copy into after it, as in 'x.copy() at r' or 'x.copy()@r'",
-            ));
+            return Err(Error::at(first.span, "'copy' takes no arguments; name the region to copy into after it, as in 'x.copy() at r' or 'x.copy()@r'"));
         }
         if self.check(Token::In) {
-            return Err(Error::at(
-                self.peek_span(),
-                "a copy names its region with 'at', as in 'x.copy() at r' (or 'x.copy()@r'); 'in' counts through a range",
-            ));
+            return Err(Error::at(self.peek_span(), "a copy names its region with 'at', as in 'x.copy() at r' (or 'x.copy()@r'); 'in' counts through a range"));
         }
-        Ok(Expr::new(
-            ExprKind::Copy {
-                value,
-                region: None,
-                region_span: expr.span,
-            },
-            expr.span,
-        ))
+        Ok(Expr::new(ExprKind::Copy { value, region: None, region_span: expr.span }, expr.span))
     }
 
     fn at_shape_literal(&self) -> bool {
         let after = |n: usize| self.tokens.get(self.pos + n).unwrap_or(&Token::Eof);
-        matches!(after(1), Token::RBrace)
-            || (matches!(after(1), Token::Ident(_)) && matches!(after(2), Token::Colon))
+        matches!(after(1), Token::RBrace) || (matches!(after(1), Token::Ident(_)) && matches!(after(2), Token::Colon))
     }
 
     fn parse_plan_b(&mut self, value: Expr) -> Result<Expr> {
@@ -7297,35 +5363,22 @@ impl Parser {
         self.skip_newlines();
         let next = self.tokens.get(self.pos + 1).unwrap_or(&Token::Eof);
         if !same_line && matches!(self.peek(), Token::Ident(_)) && matches!(next, Token::Colon) {
-            let example = dotted_name(&value).map_or_else(
-                || "Point { ".to_string(),
-                |(name, _)| format!("{} {{ ", name),
-            );
+            let example = dotted_name(&value).map_or_else(|| "Point { ".to_string(), |(name, _)| format!("{} {{ ", name));
             return Err(Error::at(
                 self.peek_span(),
-                format!(
-                    "a shape literal is written on one line, starting after its '{{', as in '{}x: 1 }}'",
-                    example
-                ),
+                format!("a shape literal is written on one line, starting after its '{{', as in '{}x: 1 }}'", example),
             ));
         }
         if self.check(Token::Fail) && matches!(next, Token::Ident(_) | Token::Underscore) {
             return Err(Error::at(self.peek_span(), PLAN_B_NAMES));
         }
-        let error =
-            if self.check(Token::Failure) && matches!(next, Token::Ident(_) | Token::Underscore) {
-                self.advance();
-                Some(self.parse_bound_name()?)
-            } else {
-                None
-            };
-        let body = self.parse_block_until(&[
-            Token::RBrace,
-            Token::Fi,
-            Token::Else,
-            Token::Case,
-            Token::Otherwise,
-        ])?;
+        let error = if self.check(Token::Failure) && matches!(next, Token::Ident(_) | Token::Underscore) {
+            self.advance();
+            Some(self.parse_bound_name()?)
+        } else {
+            None
+        };
+        let body = self.parse_block_until(&[Token::RBrace, Token::Fi, Token::Else, Token::Case, Token::Otherwise])?;
         if !self.match_token(Token::RBrace) {
             return Err(Error::at(
                 self.peek_span(),
@@ -7337,14 +5390,7 @@ impl Parser {
                 ),
             ));
         }
-        Ok(Expr::new(
-            ExprKind::PlanB {
-                value: Box::new(value),
-                error,
-                body,
-            },
-            opened,
-        ))
+        Ok(Expr::new(ExprKind::PlanB { value: Box::new(value), error, body }, opened))
     }
 
     fn parse_then_suffix(&mut self, value: Expr, allow_plan_b: bool) -> Result<Expr> {
@@ -7387,10 +5433,7 @@ impl Parser {
             ));
         }
         if matches!(body.last().map(|s| &s.kind), Some(StmtKind::Expr(_)))
-            && let Some(Stmt {
-                kind: StmtKind::Expr(last_expr),
-                span: lspan,
-            }) = body.pop()
+            && let Some(Stmt { kind: StmtKind::Expr(last_expr), span: lspan }) = body.pop()
         {
             body.push(Stmt::new(StmtKind::Send(vec![last_expr]), lspan));
         }
@@ -7437,14 +5480,13 @@ impl Parser {
             self.advance();
             self.skip_newlines();
             let next = self.tokens.get(self.pos + 1).unwrap_or(&Token::Eof);
-            let err_bound = if self.check(Token::Failure)
-                && matches!(next, Token::Ident(_) | Token::Underscore)
-            {
-                self.advance();
-                Some(self.parse_bound_name()?)
-            } else {
-                None
-            };
+            let err_bound =
+                if self.check(Token::Failure) && matches!(next, Token::Ident(_) | Token::Underscore) {
+                    self.advance();
+                    Some(self.parse_bound_name()?)
+                } else {
+                    None
+                };
             let mut catch_body = self.parse_block_until(&[
                 Token::RBrace,
                 Token::Fi,
@@ -7462,10 +5504,7 @@ impl Parser {
                 ));
             }
             if matches!(catch_body.last().map(|s| &s.kind), Some(StmtKind::Expr(_)))
-                && let Some(Stmt {
-                    kind: StmtKind::Expr(last_expr),
-                    span: lspan,
-                }) = catch_body.pop()
+                && let Some(Stmt { kind: StmtKind::Expr(last_expr), span: lspan }) = catch_body.pop()
             {
                 catch_body.push(Stmt::new(StmtKind::Send(vec![last_expr]), lspan));
             }
@@ -7560,36 +5599,19 @@ impl Parser {
             let region_span = self.peek_span();
             let region = self.expect_ident()?;
             if self.check(Token::LParen) {
-                return Err(Error::at(
-                    region_span,
-                    format!(
-                        "after 'new@', write the region and then the type, as in 'new@r {}(…)'",
-                        region
-                    ),
-                ));
+                return Err(Error::at(region_span, format!("after 'new@', write the region and then the type, as in 'new@r {}(…)'", region)));
             }
             Some((region, region_span))
         } else {
             None
         };
         let ty_span = self.peek_span();
-        let named_keys =
-            self.check(Token::LBracket) && self.tokens.get(self.pos + 1) == Some(&Token::Colon);
+        let named_keys = self.check(Token::LBracket) && self.tokens.get(self.pos + 1) == Some(&Token::Colon);
         let ty = self.parse_type()?;
         let bare = !self.check(Token::LParen);
         if bare && self.check(Token::LBrace) {
-            let example = if matches!(ty, Type::Named(..) | Type::Applied(..)) {
-                format!("{0}({0} {{ … }})", ty)
-            } else {
-                format!("{}(…)", ty)
-            };
-            return Err(Error::at(
-                self.peek_span(),
-                format!(
-                    "'new' takes its value in '( )', as in 'new {}'; a 'new' never fails, so no plan B follows it",
-                    example
-                ),
-            ));
+            let example = if matches!(ty, Type::Named(..) | Type::Applied(..)) { format!("{0}({0} {{ … }})", ty) } else { format!("{}(…)", ty) };
+            return Err(Error::at(self.peek_span(), format!("'new' takes its value in '( )', as in 'new {}'; a 'new' never fails, so no plan B follows it", example)));
         }
         if !bare {
             self.advance();
@@ -7600,28 +5622,12 @@ impl Parser {
             Expr::new(ExprKind::Array(Vec::new()), empty_at)
         } else if empty && matches!(ty, Type::Map(..)) {
             Expr::new(ExprKind::Pairs(Vec::new()), empty_at)
-        } else if empty
-            && let Some((name, types)) = match &ty {
-                Type::Named(name, _) => Some((name.clone(), Vec::new())),
-                Type::Applied(applied) => Some((
-                    applied.name.clone(),
-                    applied
-                        .types
-                        .iter()
-                        .map(|given| (given.clone(), ty_span))
-                        .collect(),
-                )),
-                _ => None,
-            }
-        {
-            Expr::new(
-                ExprKind::StructInit {
-                    name,
-                    types,
-                    fields: Vec::new(),
-                },
-                ty_span,
-            )
+        } else if empty && let Some((name, types)) = match &ty {
+            Type::Named(name, _) => Some((name.clone(), Vec::new())),
+            Type::Applied(applied) => Some((applied.name.clone(), applied.types.iter().map(|given| (given.clone(), ty_span)).collect())),
+            _ => None,
+        } {
+            Expr::new(ExprKind::StructInit { name, types, fields: Vec::new() }, ty_span)
         } else if named_keys && self.check(Token::LBracket) {
             let opened = self.peek_span();
             self.advance();
@@ -7647,19 +5653,13 @@ impl Parser {
             self.expect(Token::RParen)?;
         }
         if self.check(Token::In) {
-            return Err(Error::at(
-                self.peek_span(),
-                "a 'new' names its region with 'at', as in 'new T(v) at r' (or 'new@r T(v)'); 'in' counts through a range",
-            ));
+            return Err(Error::at(self.peek_span(), "a 'new' names its region with 'at', as in 'new T(v) at r' (or 'new@r T(v)'); 'in' counts through a range"));
         }
         let after = if self.check(Token::At) {
             let at_span = self.peek_span();
             self.advance();
             if before.is_some() {
-                return Err(Error::at(
-                    at_span,
-                    "the region is already named after 'new@'; write one of 'new T(v) at r' or 'new@r T(v)'",
-                ));
+                return Err(Error::at(at_span, "the region is already named after 'new@'; write one of 'new T(v) at r' or 'new@r T(v)'"));
             }
             let region_span = self.peek_span();
             let region = self.expect_ident()?;
@@ -7671,16 +5671,7 @@ impl Parser {
             Some((region, at)) => (Some(region), at),
             None => (None, self.peek_span()),
         };
-        Ok(Expr::new(
-            ExprKind::New {
-                ty: Box::new(ty),
-                ty_span,
-                value: Box::new(value),
-                region,
-                region_span,
-            },
-            span,
-        ))
+        Ok(Expr::new(ExprKind::New { ty: Box::new(ty), ty_span, value: Box::new(value), region, region_span }, span))
     }
 
     fn parse_struct_init(&mut self, name: String, types: Vec<TypeArg>) -> Result<ExprKind> {
@@ -7693,32 +5684,20 @@ impl Parser {
                 let name = self.expect_ident()?;
                 self.expect(Token::Colon)?;
                 let value = self.parse_expr()?;
-                fields.push(FieldInit {
-                    name,
-                    span,
-                    value,
-                    filled: false,
-                });
+                fields.push(FieldInit { name, span, value, filled: false });
                 if !self.match_token(Token::Comma) {
                     break;
                 }
                 if self.check(Token::Newline) {
                     return Err(Error::at(
                         self.peek_span(),
-                        format!(
-                            "a shape literal is written on one line, as in '{} {{ x: 1, y: 2 }}'",
-                            shape_name
-                        ),
+                        format!("a shape literal is written on one line, as in '{} {{ x: 1, y: 2 }}'", shape_name),
                     ));
                 }
             }
         }
         self.expect(Token::RBrace)?;
-        Ok(ExprKind::StructInit {
-            name,
-            types,
-            fields,
-        })
+        Ok(ExprKind::StructInit { name, types, fields })
     }
 
     fn parse_arg_list(&mut self) -> Result<Vec<Expr>> {
@@ -7730,14 +5709,8 @@ impl Parser {
                 if self.check(Token::Ellipsis) {
                     let at = self.peek_span();
                     self.advance();
-                    if args
-                        .iter()
-                        .any(|arg: &Expr| matches!(arg.kind, ExprKind::Spread(_)))
-                    {
-                        return Err(Error::at(
-                            at,
-                            "a call gives one group's values, as in 'next(r, args...)'; give the values of another one by one",
-                        ));
+                    if args.iter().any(|arg: &Expr| matches!(arg.kind, ExprKind::Spread(_))) {
+                        return Err(Error::at(at, "a call gives one group's values, as in 'next(r, args...)'; give the values of another one by one"));
                     }
                     args.push(Expr::new(ExprKind::Spread(Box::new(arg)), at));
                 } else {
@@ -7769,19 +5742,9 @@ impl Parser {
 
     fn expect_ident(&mut self) -> Result<String> {
         match self.peek() {
-            Token::Ident(s) => {
-                let v = s.clone();
-                self.advance();
-                Ok(v)
-            }
-            Token::Own => {
-                self.advance();
-                Ok("own".to_string())
-            }
-            Token::Event => {
-                self.advance();
-                Ok("event".to_string())
-            }
+            Token::Ident(s) => { let v = s.clone(); self.advance(); Ok(v) }
+            Token::Own => { self.advance(); Ok("own".to_string()) }
+            Token::Event => { self.advance(); Ok("event".to_string()) }
             _ => Err(self.name_expected()),
         }
     }
@@ -7793,11 +5756,7 @@ impl Parser {
                 format!(
                     "expected a name, got '{}', which is a reserved word{}",
                     word,
-                    if *word == TYPE_WORD {
-                        "; every value has '.type', its type as code writes it, so nothing else takes the name"
-                    } else {
-                        ""
-                    }
+                    if *word == TYPE_WORD { "; every value has '.type', its type as code writes it, so nothing else takes the name" } else { "" }
                 ),
             ),
             None => self.unexpected("a name"),
@@ -7822,16 +5781,7 @@ fn two_headers(called: &str, method: &str) -> String {
 }
 
 pub fn needs_list() -> String {
-    let words: Vec<String> = [
-        Need::Frozen,
-        Need::Same,
-        Need::Similar,
-        Need::Shown,
-        Need::Ordered,
-    ]
-    .iter()
-    .map(|need| format!("'{}'", need.word()))
-    .collect();
+    let words: Vec<String> = [Need::Frozen, Need::Same, Need::Similar, Need::Shown, Need::Ordered].iter().map(|need| format!("'{}'", need.word())).collect();
     words.join(", ")
 }
 
@@ -7865,10 +5815,7 @@ fn keeps_no_region(ty: &Type) -> bool {
 fn mentions_region(ty: &Type) -> bool {
     match ty {
         Type::Region => true,
-        Type::Ptr(inner, _)
-        | Type::Maybe(inner)
-        | Type::Array(inner, _)
-        | Type::Slice(inner, _) => mentions_region(inner),
+        Type::Ptr(inner, _) | Type::Maybe(inner) | Type::Array(inner, _) | Type::Slice(inner, _) => mentions_region(inner),
         Type::Map(key, value, _) => mentions_region(key) || mentions_region(value),
         Type::Tuple(items) => items.iter().any(mentions_region),
         _ => false,
@@ -7881,34 +5828,14 @@ pub fn receiver(owner: &str, types: &[TypeParam], span: Span) -> Field {
     let ty = if types.is_empty() {
         Type::Named(owner.to_string(), region)
     } else {
-        let given = types
-            .iter()
-            .map(|param| Type::Named(param.name.clone(), None))
-            .collect();
-        Type::Applied(Box::new(Applied {
-            name: owner.to_string(),
-            types: given,
-            region,
-        }))
+        let given = types.iter().map(|param| Type::Named(param.name.clone(), None)).collect();
+        Type::Applied(Box::new(Applied { name: owner.to_string(), types: given, region }))
     };
-    Field {
-        name: THIS.to_string(),
-        ty,
-        span,
-        ty_span: span,
-        private: false,
-        read: false,
-        default_region: false,
-        passing: Passing::Copy,
-        default: None,
-    }
+    Field { name: THIS.to_string(), ty, span, ty_span: span, private: false, read: false, default_region: false, passing: Passing::Copy, default: None }
 }
 
 fn new_only_shared(owner: &str) -> String {
-    format!(
-        "'new' names only a shared method, one called on '{0}' itself, as in 'shared new(…) -> {0}', then '{0}.new(…)'",
-        owner
-    )
+    format!("'new' names only a shared method, one called on '{0}' itself, as in 'shared new(…) -> {0}', then '{0}.new(…)'", owner)
 }
 
 const SHARED_NEVER_ALTERS: &str = "a shared method is called on its shape or kind, with no value it could change, so it is never 'alters'";
@@ -7923,14 +5850,7 @@ fn decorate(task: &mut TaskDef, decorators: Vec<Decorator>, wrappers: Vec<Expr>)
         .map(|(name, args, span, _)| {
             let mut given = vec![Expr::new(ExprKind::Var(task.name.clone()), span)];
             given.extend(args);
-            Expr::new(
-                ExprKind::Call {
-                    name,
-                    types: Vec::new(),
-                    args: given,
-                },
-                span,
-            )
+            Expr::new(ExprKind::Call { name, types: Vec::new(), args: given }, span)
         })
         .collect();
 }
@@ -7943,18 +5863,9 @@ struct Above<'a> {
 }
 
 fn reject_same_name(field: &Field, fields: &[Field], shared: &[SharedField]) -> Result<()> {
-    let before = fields
-        .iter()
-        .chain(shared.iter().map(|member| &member.field))
-        .find(|before| before.name == field.name);
+    let before = fields.iter().chain(shared.iter().map(|member| &member.field)).find(|before| before.name == field.name);
     match before {
-        Some(before) => Err(Error::at(
-            field.span,
-            format!(
-                "field '{}' is already defined at {}:{}",
-                field.name, before.span.line, before.span.col
-            ),
-        )),
+        Some(before) => Err(Error::at(field.span, format!("field '{}' is already defined at {}:{}", field.name, before.span.line, before.span.col))),
         None => Ok(()),
     }
 }
@@ -7965,10 +5876,7 @@ fn reject_member_named_this(name: &str, span: Span, what: &str) -> Result<()> {
     }
     Err(Error::at(
         span,
-        format!(
-            "'{0}' is the value a method is called on, written '{1}', so {2} can't take the name",
-            THIS_WORD, THIS, what
-        ),
+        format!("'{0}' is the value a method is called on, written '{1}', so {2} can't take the name", THIS_WORD, THIS, what),
     ))
 }
 
@@ -7981,8 +5889,7 @@ fn dotted_name(expr: &Expr) -> Option<(String, Span)> {
     match &expr.kind {
         ExprKind::Var(name) if name == THIS => None,
         ExprKind::Var(name) => Some((name.clone(), expr.span)),
-        ExprKind::Field(base, field) => dotted_name(base)
-            .map(|(name, span)| (format!("{}{}{}", name, MODULE_SEPARATOR, field), span)),
+        ExprKind::Field(base, field) => dotted_name(base).map(|(name, span)| (format!("{}{}{}", name, MODULE_SEPARATOR, field), span)),
         _ => None,
     }
 }
@@ -7991,12 +5898,7 @@ pub(crate) fn pending_region(expr: &Expr) -> bool {
     matches!(&expr.kind, ExprKind::Join { region, .. } if region.is_empty())
 }
 
-pub(crate) fn interpolated_parts(
-    pieces: Vec<Expr>,
-    region: &str,
-    region_span: Span,
-    parts: &mut Vec<Expr>,
-) {
+pub(crate) fn interpolated_parts(pieces: Vec<Expr>, region: &str, region_span: Span, parts: &mut Vec<Expr>) {
     for piece in pieces {
         if pending_region(&piece) {
             if let ExprKind::Join { parts: inner, .. } = piece.kind {
@@ -8010,25 +5912,13 @@ pub(crate) fn interpolated_parts(
         }
         let span = piece.span;
         let into = Expr::new(ExprKind::Var(region.to_string()), region_span);
-        parts.push(Expr::new(
-            ExprKind::MethodCall {
-                value: Box::new(piece),
-                name: STR.to_string(),
-                args: vec![into],
-                dotted: None,
-            },
-            span,
-        ));
+        parts.push(Expr::new(ExprKind::MethodCall { value: Box::new(piece), name: STR.to_string(), args: vec![into], dotted: None }, span));
     }
 }
 
 fn calls_value(expr: &Expr) -> bool {
     match &expr.kind {
-        ExprKind::Index(..)
-        | ExprKind::Call { .. }
-        | ExprKind::Invoke { .. }
-        | ExprKind::Deref(_)
-        | ExprKind::MethodCall { .. } => true,
+        ExprKind::Index(..) | ExprKind::Call { .. } | ExprKind::Invoke { .. } | ExprKind::Deref(_) | ExprKind::MethodCall { .. } => true,
         ExprKind::Try(inner) => calls_value(inner),
         ExprKind::Field(_, item) => item.bytes().all(|b| b.is_ascii_digit()),
         _ => false,
@@ -8078,9 +5968,7 @@ fn nests(tokens: &impl LineTokens, p: usize, depth: &mut usize, blocks: &mut usi
         }
         Some(Token::LParen | Token::LBracket | Token::LBrace) => *depth += 1,
         Some(Token::When) if p > 0 && tokens.token_at(p - 1) == Some(&Token::Else) => {}
-        Some(
-            Token::When | Token::Match | Token::Block | Token::Loop | Token::Each | Token::Endless,
-        ) => {
+        Some(Token::When | Token::Match | Token::Block | Token::Loop | Token::Each | Token::Endless) => {
             *depth += 1;
             *blocks += 1;
         }
@@ -8103,36 +5991,16 @@ pub fn empty_lambda_has_results(line: &[&Token]) -> bool {
     if line.is_empty() {
         return true;
     }
-    if line
-        .iter()
-        .any(|tok| matches!(tok, Token::Send | Token::Fi))
-    {
+    if line.iter().any(|tok| matches!(tok, Token::Send | Token::Fi)) {
         return true;
     }
     let is_type_ident = |name: &str| {
         matches!(
             name,
-            "int"
-                | "int8"
-                | "int16"
-                | "int32"
-                | "int64"
-                | "int512"
-                | "Int512"
-                | "uint"
-                | "uint8"
-                | "uint16"
-                | "uint32"
-                | "uint64"
-                | "float"
-                | "float32"
-                | "float64"
-                | "bool"
-                | "char"
-                | "unit"
-                | "text"
-                | "nothing"
-                | "region"
+            "int" | "int8" | "int16" | "int32" | "int64" | "int512" | "Int512"
+                | "uint" | "uint8" | "uint16" | "uint32" | "uint64"
+                | "float" | "float32" | "float64"
+                | "bool" | "char" | "unit" | "text" | "nothing" | "region"
         ) || name.chars().next().is_some_and(|c| c.is_ascii_uppercase())
     };
     let first_after_arrow = line.first();
@@ -8197,8 +6065,7 @@ fn lambda_at(tokens: &impl LineTokens, p: usize) -> bool {
         return false;
     }
     let next = tokens.token_at(p + 1);
-    let takes = matches!(next, Some(Token::RParen | Token::Flex | Token::Fixed))
-        || (matches!(next, Some(Token::Ident(_))) && tokens.token_at(p + 2) == Some(&Token::Colon));
+    let takes = matches!(next, Some(Token::RParen | Token::Flex | Token::Fixed)) || (matches!(next, Some(Token::Ident(_))) && tokens.token_at(p + 2) == Some(&Token::Colon));
     if !takes {
         return false;
     }
@@ -8210,15 +6077,11 @@ fn lambda_at(tokens: &impl LineTokens, p: usize) -> bool {
             Some(Token::RParen | Token::RBracket) => {
                 depth = depth.saturating_sub(1);
                 if depth == 0 {
-                    let arrow = tokens.token_at(q) == Some(&Token::RParen)
-                        && tokens.token_at(q + 1) == Some(&Token::Arrow);
+                    let arrow = tokens.token_at(q) == Some(&Token::RParen) && tokens.token_at(q + 1) == Some(&Token::Arrow);
                     if !arrow || next != Some(&Token::RParen) {
                         return arrow;
                     }
-                    let line: Vec<&Token> = (q + 2..)
-                        .map_while(|at| tokens.token_at(at))
-                        .take_while(|token| !matches!(token, Token::Newline | Token::Eof))
-                        .collect();
+                    let line: Vec<&Token> = (q + 2..).map_while(|at| tokens.token_at(at)).take_while(|token| !matches!(token, Token::Newline | Token::Eof)).collect();
                     return empty_lambda_has_results(&line);
                 }
             }
@@ -8249,13 +6112,19 @@ pub fn types_close(tokens: &impl LineTokens, p: usize) -> Option<usize> {
             Some(Token::Gt) if depth == 0 => {
                 let next = tokens.token_at(q + 1);
                 let opens = matches!(next, Some(Token::LParen | Token::LBrace))
-                    || (tokens.gt_touches_next(q)
-                        && next == Some(&Token::Dot)
-                        && matches!(tokens.token_at(q + 2), Some(Token::Ident(_))));
+                    || (tokens.gt_touches_next(q) && next == Some(&Token::Dot) && matches!(tokens.token_at(q + 2), Some(Token::Ident(_))));
                 return opens.then_some(q);
             }
             Some(Token::Lt) => depth += 1,
             Some(Token::Gt) => depth -= 1,
+            Some(Token::Shr) if grouped > 0 && depth <= 1 => return None,
+            Some(Token::Shr) if depth <= 1 => {
+                let next = tokens.token_at(q + 1);
+                let opens = matches!(next, Some(Token::LParen | Token::LBrace))
+                    || (tokens.gt_touches_next(q) && next == Some(&Token::Dot) && matches!(tokens.token_at(q + 2), Some(Token::Ident(_))));
+                return opens.then_some(q);
+            }
+            Some(Token::Shr) => depth -= 2,
             Some(token) if token.writes_type() => {}
             _ => return None,
         }
@@ -8284,6 +6153,7 @@ pub fn loop_items(tokens: &impl LineTokens, first: usize, last: usize) -> Vec<(u
             match token {
                 Some(Token::Lt) => typed = typed.map(|open| open + 1),
                 Some(Token::Gt) => typed = typed.map(|open| open.saturating_sub(1)),
+                Some(Token::Shr) => typed = typed.map(|open| open.saturating_sub(2)),
                 Some(Token::Comma) if typed > Some(0) => {}
                 _ => {}
             }
@@ -8293,22 +6163,13 @@ pub fn loop_items(tokens: &impl LineTokens, first: usize, last: usize) -> Vec<(u
             }
         }
         match token {
-            Some(Token::Lt)
-                if depth == 0
-                    && let Some(close) = types_close(tokens, p) =>
-            {
-                p = close
-            }
+            Some(Token::Lt) if depth == 0 && let Some(close) = types_close(tokens, p) => p = close,
             _ if nests(tokens, p, &mut depth, &mut blocks) => {}
             _ if depth > 0 => {}
             Some(Token::Colon) if values.is_none() => typed = Some(0),
             Some(Token::Assign) if values.is_none() => values = Some(1),
             Some(token) if values.is_none() && step_operator(token).is_some() => {
-                values = Some(if matches!(token, Token::Increment | Token::Decrement) {
-                    places
-                } else {
-                    1
-                });
+                values = Some(if matches!(token, Token::Increment | Token::Decrement) { places } else { 1 });
             }
             Some(Token::Comma) => {
                 let parts = match values {
@@ -8353,15 +6214,7 @@ fn sets_places(tokens: &impl LineTokens, first: usize, last: usize) -> bool {
             }
             _ if depth > 0 => true,
             Some(Token::Flex | Token::Fixed) => p == first,
-            Some(
-                Token::Ident(_)
-                | Token::Dot
-                | Token::Int(_)
-                | Token::Caret
-                | Token::Underscore
-                | Token::Comma,
-            )
-            | None => true,
+            Some(Token::Ident(_) | Token::Dot | Token::Int(_) | Token::Caret | Token::BitXor | Token::Underscore | Token::Comma) | None => true,
             _ => false,
         })
 }
@@ -8375,12 +6228,7 @@ fn starts_loop_item(tokens: &impl LineTokens, p: usize, last: usize) -> bool {
     while q < last {
         let token = tokens.token_at(q);
         match token {
-            Some(Token::Lt)
-                if depth == 0
-                    && let Some(close) = types_close(tokens, q) =>
-            {
-                q = close
-            }
+            Some(Token::Lt) if depth == 0 && let Some(close) = types_close(tokens, q) => q = close,
             _ if nests(tokens, q, &mut depth, &mut blocks) => {}
             _ if depth > 0 => {}
             Some(Token::Comma) => return false,

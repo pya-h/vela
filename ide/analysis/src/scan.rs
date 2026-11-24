@@ -706,10 +706,12 @@ impl<'a> Tokens<'a> {
                 Some(Token::Eof) | None => return false,
                 Some(Token::LParen | Token::LBracket | Token::Lt) => depth += 1,
                 Some(Token::RParen | Token::RBracket | Token::Gt) if depth > 0 => depth -= 1,
+                Some(Token::Shr) if depth > 0 => depth = depth.saturating_sub(2),
                 Some(
                     Token::Ident(_)
                     | Token::Dot
                     | Token::Caret
+                    | Token::BitXor
                     | Token::Maybe
                     | Token::AtSign
                     | Token::Tilde
@@ -848,6 +850,7 @@ impl<'a> Tokens<'a> {
                         | Token::Arrow
                         | Token::Maybe
                         | Token::Caret
+                        | Token::BitXor
                         | Token::LBracket
                         | Token::Lt
                         | Token::Tilde
@@ -874,6 +877,7 @@ impl<'a> Tokens<'a> {
                             | Token::Colon
                             | Token::Maybe
                             | Token::Caret
+                            | Token::BitXor
                             | Token::LBracket
                             | Token::Lt
                             | Token::Tilde
@@ -1189,6 +1193,7 @@ pub(crate) fn ends_value(token: &Token) -> bool {
             | Token::RBracket
             | Token::RBrace
             | Token::Caret
+            | Token::BitXor
             | Token::Bang
     )
 }
@@ -2117,7 +2122,7 @@ impl<'a> Classifier<'a> {
                         lambda_results = true;
                     }
                 }
-                Token::Caret => {
+                Token::Caret | Token::BitXor => {
                     self.push(range, TokenClass::Operator, None);
                     in_type = was_type;
                 }
@@ -2217,6 +2222,11 @@ impl<'a> Classifier<'a> {
                 Token::Gt if type_angles > 0 => {
                     self.push(range, TokenClass::Punctuation, None);
                     type_angles -= 1;
+                    after_type = true;
+                }
+                Token::Shr if type_angles > 0 => {
+                    self.push(range, TokenClass::Punctuation, None);
+                    type_angles = type_angles.saturating_sub(2);
                     after_type = true;
                 }
                 Token::Amp if type_angles > 0 => {
@@ -3324,7 +3334,8 @@ impl<'a> Classifier<'a> {
 }
 
 fn header_paren(tokens: &Tokens<'_>, q: usize) -> bool {
-    tokens.ident(q.wrapping_sub(1)).is_some() || tokens.before(q) == Some(&Token::Gt)
+    tokens.ident(q.wrapping_sub(1)).is_some()
+        || matches!(tokens.before(q), Some(Token::Gt | Token::Shr))
 }
 
 fn names_paren(tokens: &Tokens<'_>, q: usize) -> bool {

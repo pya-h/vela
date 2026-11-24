@@ -163,7 +163,7 @@
  98 | fi
     | keyword:fi
 100 | task sum_floats<I: Iterator<float>>(flex it: I) -> float
-    | keyword:task  task:sum_floats  punctuation:<  type:I  punctuation::  type:Iterator  punctuation:<  type:float  keyword:>>  punctuation:(  keyword:flex  parameter:it  punctuation::  type:I  punctuation:)  operator:->  type-builtin:float
+    | keyword:task  task:sum_floats  punctuation:<  type:I  punctuation::  type:Iterator  punctuation:<  type:float  punctuation:>>  punctuation:(  keyword:flex  parameter:it  punctuation::  type:I  punctuation:)  operator:->  type-builtin:float
 101 |     <- it.fold(0.0, plus)
     | keyword:<-  parameter:it  punctuation:.  field:fold  punctuation:(  number:0.0  punctuation:,  task:plus  punctuation:)
 102 | fi
@@ -177,7 +177,7 @@
 108 | ; An adapter made inside a generic task, its types told by the bound.
     | comment:; An adapter made inside a generic task, its types told by the bound.
 109 | task first_doubled<I: Iterator<int>>(it: I) -> int
-    | keyword:task  task:first_doubled  punctuation:<  type:I  punctuation::  type:Iterator  punctuation:<  type:int  keyword:>>  punctuation:(  parameter:it  punctuation::  type:I  punctuation:)  operator:->  type-builtin:int
+    | keyword:task  task:first_doubled  punctuation:<  type:I  punctuation::  type:Iterator  punctuation:<  type:int  punctuation:>>  punctuation:(  parameter:it  punctuation::  type:I  punctuation:)  operator:->  type-builtin:int
 110 |     flex m = MapIter { inner: it, f: double }
     | keyword:flex  variable:m  operator:=  type:MapIter  punctuation:{  field:inner  punctuation::  parameter:it  punctuation:,  field:f  punctuation::  task:double  punctuation:}
 111 |     <- m.next() { 0 }

@@ -51,7 +51,7 @@
  30 |     show("or:  ", flags | mask)
     | builtin-fn:show  punctuation:(  string:"or:  "  punctuation:,  variable:flags  keyword:|  variable:mask  punctuation:)
  31 |     show("xor: ", flags ^^ mask)
-    | builtin-fn:show  punctuation:(  string:"xor: "  punctuation:,  variable:flags  keyword:^^  variable:mask  punctuation:)
+    | builtin-fn:show  punctuation:(  string:"xor: "  punctuation:,  variable:flags  operator:^^  variable:mask  punctuation:)
  32 |     show("shl: ", flags << 2)
     | builtin-fn:show  punctuation:(  string:"shl: "  punctuation:,  variable:flags  keyword:<<  number:2  punctuation:)
  33 |     show("shr: ", flags >> 1)

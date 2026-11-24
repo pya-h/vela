@@ -307,7 +307,7 @@
 177 |     flex outer = new ^int(inner) at trees
     | keyword:flex  variable:outer  operator:=  keyword:new  operator:^  type-builtin:int  punctuation:(  variable:inner  punctuation:)  keyword:at  region:trees
 178 |     outer^^ = outer^^ + 1
-    | variable:outer  keyword:^^  operator:=  variable:outer  keyword:^^  operator:+  number:1
+    | variable:outer  operator:^^  operator:=  variable:outer  operator:^^  operator:+  number:1
 179 |     show(inner^)
     | builtin-fn:show  punctuation:(  variable:inner  operator:^  punctuation:)
 180 | fi

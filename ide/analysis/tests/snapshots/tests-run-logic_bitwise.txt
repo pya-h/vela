@@ -43,7 +43,7 @@
  25 |     show("or: ", a | b)
     | builtin-fn:show  punctuation:(  string:"or: "  punctuation:,  variable:a  keyword:|  variable:b  punctuation:)
  26 |     show("xor: ", a ^^ b)
-    | builtin-fn:show  punctuation:(  string:"xor: "  punctuation:,  variable:a  keyword:^^  variable:b  punctuation:)
+    | builtin-fn:show  punctuation:(  string:"xor: "  punctuation:,  variable:a  operator:^^  variable:b  punctuation:)
  27 |     show("nand: ", a ~& b)
     | builtin-fn:show  punctuation:(  string:"nand: "  punctuation:,  variable:a  keyword:~&  variable:b  punctuation:)
  28 |     show("nor: ", a ~| b)

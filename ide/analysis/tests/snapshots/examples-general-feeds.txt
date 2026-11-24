@@ -103,13 +103,13 @@
  60 | ; The first item a feed of numbers gives above `limit`.
     | comment:; The first item a feed of numbers gives above `limit`.
  61 | task first_above<F: Feed<int>>(flex feed: F, limit: int) -> maybe int
-    | keyword:task  task:first_above  punctuation:<  type:F  punctuation::  type:Feed  punctuation:<  type:int  keyword:>>  punctuation:(  keyword:flex  parameter:feed  punctuation::  type:F  punctuation:,  type:limit  punctuation::  type:int  punctuation:)  operator:->  keyword:maybe  type-builtin:int
+    | keyword:task  task:first_above  punctuation:<  type:F  punctuation::  type:Feed  punctuation:<  type:int  punctuation:>>  punctuation:(  keyword:flex  parameter:feed  punctuation::  type:F  punctuation:,  parameter:limit  punctuation::  type-builtin:int  punctuation:)  operator:->  keyword:maybe  type-builtin:int
  62 |     endless
     | keyword:endless
  63 |         fixed n = feed.next() { break }
     | keyword:fixed  variable:n  operator:=  parameter:feed  punctuation:.  field:next  punctuation:(  punctuation:)  punctuation:{  keyword:break  punctuation:}
  64 |         when n > limit
-    | keyword:when  variable:n  operator:>  variable:limit
+    | keyword:when  variable:n  operator:>  parameter:limit
  65 |             <- n
     | keyword:<-  variable:n
  66 |         fi
