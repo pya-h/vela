@@ -1,0 +1,41 @@
+include std/random
+
+task main()
+    fixed n = random.random_int(10, 20)
+    show("range_ok=", n >= 10 and n <= 20)
+
+    fixed f = random.random_float()
+    show("float_ok=", f >= 0.0 and f < 1.0)
+
+    fixed b = random.random_bool()
+    show("bool_ok=", b == true or b == false)
+
+    ; Deterministic reproducibility
+    flex rng1 = random.Rng.new(12345)
+    flex rng2 = random.Rng.new(12345)
+
+    fixed i1 = rng1.next_int(0, 100000)
+    fixed i2 = rng2.next_int(0, 100000)
+    fixed f1 = rng1.next_float()
+    fixed f2 = rng2.next_float()
+    fixed b1 = rng1.next_bool()
+    fixed b2 = rng2.next_bool()
+
+    show("reproducible=", i1 == i2 and f1 == f2 and b1 == b2)
+
+    region r default
+    flex xs = [1, 2, 3, 4, 5, ...] at r
+    random.shuffle(xs)
+    show("shuffled_len=", xs.len)
+    when random.choice(xs) is {val}
+        show("choice_ok=true")
+    else
+        show("choice_ok=false")
+    fi
+    fixed empty = new [int]() at r
+    when random.choice(empty) is none
+        show("empty_choice=true")
+    else
+        show("empty_choice=false")
+    fi
+fi

@@ -1,0 +1,71 @@
+include std/collections
+
+task cmp_desc(a: int, b: int) -> int
+    when a > b
+        <- -1
+    else when a < b
+        <- 1
+    fi
+    <- 0
+fi
+
+task cmp_asc(a: int, b: int) -> int
+    when a < b
+        <- -1
+    else when a > b
+        <- 1
+    fi
+    <- 0
+fi
+
+task main()
+    region r default
+
+    ; In-place sort on ints
+    flex ints = [5, 2, 8, 1, 9, 3, ...] at r
+    collections.sort(ints)
+    show("ints_sorted=", ints[0], " ", ints[1], " ", ints[2], " ", ints[3], " ", ints[4], " ", ints[5])
+
+    ; In-place sort on texts
+    flex words = ["cherry", "apple", "date", "banana", ...] at r
+    collections.sort(words)
+    show("words_sorted=", words[0], " ", words[1], " ", words[2], " ", words[3])
+
+    ; Sort by custom comparator (descending)
+    collections.sort_by(ints, cmp_desc)
+    show("ints_desc=", ints[0], " ", ints[1], " ", ints[2], " ", ints[3], " ", ints[4], " ", ints[5])
+
+    ; Non-destructive sorted
+    fixed asc = collections.sorted(ints, cmp_asc, r)
+    show("sorted_asc=", asc[0], " ", asc[5])
+
+    ; In-place reverse
+    collections.reverse(ints)
+    show("reversed=", ints[0], " ", ints[5])
+
+    ; Non-destructive reversed
+    fixed rev = collections.reversed(ints, r)
+    show("rev_copy=", rev[0], " ", rev[5])
+
+    ; Binary search on sorted asc
+    when collections.binary_search(asc, 8, cmp_asc) is {idx}
+        show("bsearch_found=", idx, " val=", asc[idx])
+    fi
+    when collections.binary_search(asc, 99, cmp_asc) is none
+        show("bsearch_missing=true")
+    else
+        show("bsearch_missing=false")
+    fi
+
+    ; Contains & index_of
+    show("contains_5=", collections.contains(ints, 5))
+    show("contains_99=", collections.contains(ints, 99))
+    when collections.index_of(words, "banana") is {w_idx}
+        show("index_of_banana=", w_idx)
+    fi
+    when collections.index_of(words, "orange") is none
+        show("index_of_missing=true")
+    else
+        show("index_of_missing=false")
+    fi
+fi

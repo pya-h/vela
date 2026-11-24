@@ -1,0 +1,27 @@
+include std/txt
+include std/collections
+include std/random
+
+task main()
+    region r default
+
+    ; Text manipulation with std/txt
+    fixed greeting = "  Hello, Vela Developers!  "
+    fixed clean = txt.trim(greeting)
+    show("clean=", clean)
+    show("starts_with_hello=", txt.starts_with(clean, "Hello"))
+    show("contains_vela=", txt.contains(clean, "Vela"))
+
+    flex words = txt.split(clean, " ", r)
+    show("word_count=", words.len)
+
+    ; Sorting words in-place with std/collections
+    collections.sort(words)
+    fixed sorted_text = txt.join(words, " | ", r)
+    show("sorted=", sorted_text)
+
+    ; Deterministic random with std/random
+    flex rng = random.Rng.new(42)
+    show("rand_int=", rng.next_int(1, 10))
+    show("rand_bool=", rng.next_bool())
+fi

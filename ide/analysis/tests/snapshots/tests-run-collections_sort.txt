@@ -1,0 +1,120 @@
+  1 | include std/collections
+    | keyword:include  module:std  operator:/  module:collections
+  3 | task cmp_desc(a: int, b: int) -> int
+    | keyword:task  task:cmp_desc  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+  4 |     when a > b
+    | keyword:when  parameter:a  operator:>  parameter:b
+  5 |         <- -1
+    | keyword:<-  operator:-  number:1
+  6 |     else when a < b
+    | keyword:else  keyword:when  parameter:a  operator:<  parameter:b
+  7 |         <- 1
+    | keyword:<-  number:1
+  8 |     fi
+    | keyword:fi
+  9 |     <- 0
+    | keyword:<-  number:0
+ 10 | fi
+    | keyword:fi
+ 12 | task cmp_asc(a: int, b: int) -> int
+    | keyword:task  task:cmp_asc  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int
+ 13 |     when a < b
+    | keyword:when  parameter:a  operator:<  parameter:b
+ 14 |         <- -1
+    | keyword:<-  operator:-  number:1
+ 15 |     else when a > b
+    | keyword:else  keyword:when  parameter:a  operator:>  parameter:b
+ 16 |         <- 1
+    | keyword:<-  number:1
+ 17 |     fi
+    | keyword:fi
+ 18 |     <- 0
+    | keyword:<-  number:0
+ 19 | fi
+    | keyword:fi
+ 21 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 22 |     region r default
+    | keyword:region  region:r  keyword:default
+ 24 |     ; In-place sort on ints
+    | comment:; In-place sort on ints
+ 25 |     flex ints = [5, 2, 8, 1, 9, 3, ...] at r
+    | keyword:flex  variable:ints  operator:=  punctuation:[  number:5  punctuation:,  number:2  punctuation:,  number:8  punctuation:,  number:1  punctuation:,  number:9  punctuation:,  number:3  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 26 |     collections.sort(ints)
+    | module:collections  punctuation:.  task:sort  punctuation:(  variable:ints  punctuation:)
+ 27 |     show("ints_sorted=", ints[0], " ", ints[1], " ", ints[2], " ", ints[3], " ", ints[4], " ", ints[5])
+    | builtin-fn:show  punctuation:(  string:"ints_sorted="  punctuation:,  variable:ints  punctuation:[  number:0  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:ints  punctuation:[  number:1  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:ints  punctuation:[  number:2  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:ints  punctuation:[  number:3  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:ints  punctuation:[  number:4  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:ints  punctuation:[  number:5  punctuation:]  punctuation:)
+ 29 |     ; In-place sort on texts
+    | comment:; In-place sort on texts
+ 30 |     flex words = ["cherry", "apple", "date", "banana", ...] at r
+    | keyword:flex  variable:words  operator:=  punctuation:[  string:"cherry"  punctuation:,  string:"apple"  punctuation:,  string:"date"  punctuation:,  string:"banana"  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 31 |     collections.sort(words)
+    | module:collections  punctuation:.  task:sort  punctuation:(  variable:words  punctuation:)
+ 32 |     show("words_sorted=", words[0], " ", words[1], " ", words[2], " ", words[3])
+    | builtin-fn:show  punctuation:(  string:"words_sorted="  punctuation:,  variable:words  punctuation:[  number:0  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:words  punctuation:[  number:1  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:words  punctuation:[  number:2  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:words  punctuation:[  number:3  punctuation:]  punctuation:)
+ 34 |     ; Sort by custom comparator (descending)
+    | comment:; Sort by custom comparator (descending)
+ 35 |     collections.sort_by(ints, cmp_desc)
+    | module:collections  punctuation:.  task:sort_by  punctuation:(  variable:ints  punctuation:,  task:cmp_desc  punctuation:)
+ 36 |     show("ints_desc=", ints[0], " ", ints[1], " ", ints[2], " ", ints[3], " ", ints[4], " ", ints[5])
+    | builtin-fn:show  punctuation:(  string:"ints_desc="  punctuation:,  variable:ints  punctuation:[  number:0  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:ints  punctuation:[  number:1  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:ints  punctuation:[  number:2  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:ints  punctuation:[  number:3  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:ints  punctuation:[  number:4  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:ints  punctuation:[  number:5  punctuation:]  punctuation:)
+ 38 |     ; Non-destructive sorted
+    | comment:; Non-destructive sorted
+ 39 |     fixed asc = collections.sorted(ints, cmp_asc, r)
+    | keyword:fixed  variable:asc  operator:=  module:collections  punctuation:.  task:sorted  punctuation:(  variable:ints  punctuation:,  task:cmp_asc  punctuation:,  region:r  punctuation:)
+ 40 |     show("sorted_asc=", asc[0], " ", asc[5])
+    | builtin-fn:show  punctuation:(  string:"sorted_asc="  punctuation:,  variable:asc  punctuation:[  number:0  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:asc  punctuation:[  number:5  punctuation:]  punctuation:)
+ 42 |     ; In-place reverse
+    | comment:; In-place reverse
+ 43 |     collections.reverse(ints)
+    | module:collections  punctuation:.  task:reverse  punctuation:(  variable:ints  punctuation:)
+ 44 |     show("reversed=", ints[0], " ", ints[5])
+    | builtin-fn:show  punctuation:(  string:"reversed="  punctuation:,  variable:ints  punctuation:[  number:0  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:ints  punctuation:[  number:5  punctuation:]  punctuation:)
+ 46 |     ; Non-destructive reversed
+    | comment:; Non-destructive reversed
+ 47 |     fixed rev = collections.reversed(ints, r)
+    | keyword:fixed  variable:rev  operator:=  module:collections  punctuation:.  task:reversed  punctuation:(  variable:ints  punctuation:,  region:r  punctuation:)
+ 48 |     show("rev_copy=", rev[0], " ", rev[5])
+    | builtin-fn:show  punctuation:(  string:"rev_copy="  punctuation:,  variable:rev  punctuation:[  number:0  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:rev  punctuation:[  number:5  punctuation:]  punctuation:)
+ 50 |     ; Binary search on sorted asc
+    | comment:; Binary search on sorted asc
+ 51 |     when collections.binary_search(asc, 8, cmp_asc) is {idx}
+    | keyword:when  module:collections  punctuation:.  task:binary_search  punctuation:(  variable:asc  punctuation:,  number:8  punctuation:,  task:cmp_asc  punctuation:)  keyword:is  punctuation:{  variable:idx  punctuation:}
+ 52 |         show("bsearch_found=", idx, " val=", asc[idx])
+    | builtin-fn:show  punctuation:(  string:"bsearch_found="  punctuation:,  variable:idx  punctuation:,  string:" val="  punctuation:,  variable:asc  punctuation:[  variable:idx  punctuation:]  punctuation:)
+ 53 |     fi
+    | keyword:fi
+ 54 |     when collections.binary_search(asc, 99, cmp_asc) is none
+    | keyword:when  module:collections  punctuation:.  task:binary_search  punctuation:(  variable:asc  punctuation:,  number:99  punctuation:,  task:cmp_asc  punctuation:)  keyword:is  keyword:none
+ 55 |         show("bsearch_missing=true")
+    | builtin-fn:show  punctuation:(  string:"bsearch_missing=true"  punctuation:)
+ 56 |     else
+    | keyword:else
+ 57 |         show("bsearch_missing=false")
+    | builtin-fn:show  punctuation:(  string:"bsearch_missing=false"  punctuation:)
+ 58 |     fi
+    | keyword:fi
+ 60 |     ; Contains & index_of
+    | comment:; Contains & index_of
+ 61 |     show("contains_5=", collections.contains(ints, 5))
+    | builtin-fn:show  punctuation:(  string:"contains_5="  punctuation:,  module:collections  punctuation:.  task:contains  punctuation:(  variable:ints  punctuation:,  number:5  punctuation:)  punctuation:)
+ 62 |     show("contains_99=", collections.contains(ints, 99))
+    | builtin-fn:show  punctuation:(  string:"contains_99="  punctuation:,  module:collections  punctuation:.  task:contains  punctuation:(  variable:ints  punctuation:,  number:99  punctuation:)  punctuation:)
+ 63 |     when collections.index_of(words, "banana") is {w_idx}
+    | keyword:when  module:collections  punctuation:.  task:index_of  punctuation:(  variable:words  punctuation:,  string:"banana"  punctuation:)  keyword:is  punctuation:{  variable:w_idx  punctuation:}
+ 64 |         show("index_of_banana=", w_idx)
+    | builtin-fn:show  punctuation:(  string:"index_of_banana="  punctuation:,  variable:w_idx  punctuation:)
+ 65 |     fi
+    | keyword:fi
+ 66 |     when collections.index_of(words, "orange") is none
+    | keyword:when  module:collections  punctuation:.  task:index_of  punctuation:(  variable:words  punctuation:,  string:"orange"  punctuation:)  keyword:is  keyword:none
+ 67 |         show("index_of_missing=true")
+    | builtin-fn:show  punctuation:(  string:"index_of_missing=true"  punctuation:)
+ 68 |     else
+    | keyword:else
+ 69 |         show("index_of_missing=false")
+    | builtin-fn:show  punctuation:(  string:"index_of_missing=false"  punctuation:)
+ 70 |     fi
+    | keyword:fi
+ 71 | fi
+    | keyword:fi

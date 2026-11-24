@@ -1,0 +1,68 @@
+  1 | include std/random
+    | keyword:include  module:std  operator:/  module:random
+  3 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  4 |     fixed n = random.random_int(10, 20)
+    | keyword:fixed  variable:n  operator:=  module:random  punctuation:.  task:random_int  punctuation:(  number:10  punctuation:,  number:20  punctuation:)
+  5 |     show("range_ok=", n >= 10 and n <= 20)
+    | builtin-fn:show  punctuation:(  string:"range_ok="  punctuation:,  variable:n  operator:>=  number:10  keyword:and  variable:n  operator:<=  number:20  punctuation:)
+  7 |     fixed f = random.random_float()
+    | keyword:fixed  variable:f  operator:=  module:random  punctuation:.  task:random_float  punctuation:(  punctuation:)
+  8 |     show("float_ok=", f >= 0.0 and f < 1.0)
+    | builtin-fn:show  punctuation:(  string:"float_ok="  punctuation:,  variable:f  operator:>=  number:0.0  keyword:and  variable:f  operator:<  number:1.0  punctuation:)
+ 10 |     fixed b = random.random_bool()
+    | keyword:fixed  variable:b  operator:=  module:random  punctuation:.  task:random_bool  punctuation:(  punctuation:)
+ 11 |     show("bool_ok=", b == true or b == false)
+    | builtin-fn:show  punctuation:(  string:"bool_ok="  punctuation:,  variable:b  operator:==  keyword:true  keyword:or  variable:b  operator:==  keyword:false  punctuation:)
+ 13 |     ; Deterministic reproducibility
+    | comment:; Deterministic reproducibility
+ 14 |     flex rng1 = random.Rng.new(12345)
+    | keyword:flex  variable:rng1  operator:=  module:random  punctuation:.  type:Rng  punctuation:.  method:new  punctuation:(  number:12345  punctuation:)
+ 15 |     flex rng2 = random.Rng.new(12345)
+    | keyword:flex  variable:rng2  operator:=  module:random  punctuation:.  type:Rng  punctuation:.  method:new  punctuation:(  number:12345  punctuation:)
+ 17 |     fixed i1 = rng1.next_int(0, 100000)
+    | keyword:fixed  variable:i1  operator:=  variable:rng1  punctuation:.  method:next_int  punctuation:(  number:0  punctuation:,  number:100000  punctuation:)
+ 18 |     fixed i2 = rng2.next_int(0, 100000)
+    | keyword:fixed  variable:i2  operator:=  variable:rng2  punctuation:.  method:next_int  punctuation:(  number:0  punctuation:,  number:100000  punctuation:)
+ 19 |     fixed f1 = rng1.next_float()
+    | keyword:fixed  variable:f1  operator:=  variable:rng1  punctuation:.  method:next_float  punctuation:(  punctuation:)
+ 20 |     fixed f2 = rng2.next_float()
+    | keyword:fixed  variable:f2  operator:=  variable:rng2  punctuation:.  method:next_float  punctuation:(  punctuation:)
+ 21 |     fixed b1 = rng1.next_bool()
+    | keyword:fixed  variable:b1  operator:=  variable:rng1  punctuation:.  method:next_bool  punctuation:(  punctuation:)
+ 22 |     fixed b2 = rng2.next_bool()
+    | keyword:fixed  variable:b2  operator:=  variable:rng2  punctuation:.  method:next_bool  punctuation:(  punctuation:)
+ 24 |     show("reproducible=", i1 == i2 and f1 == f2 and b1 == b2)
+    | builtin-fn:show  punctuation:(  string:"reproducible="  punctuation:,  variable:i1  operator:==  variable:i2  keyword:and  variable:f1  operator:==  variable:f2  keyword:and  variable:b1  operator:==  variable:b2  punctuation:)
+ 26 |     region r default
+    | keyword:region  region:r  keyword:default
+ 27 |     flex xs = [1, 2, 3, 4, 5, ...] at r
+    | keyword:flex  variable:xs  operator:=  punctuation:[  number:1  punctuation:,  number:2  punctuation:,  number:3  punctuation:,  number:4  punctuation:,  number:5  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+ 28 |     random.shuffle(xs)
+    | module:random  punctuation:.  task:shuffle  punctuation:(  variable:xs  punctuation:)
+ 29 |     show("shuffled_len=", xs.len)
+    | builtin-fn:show  punctuation:(  string:"shuffled_len="  punctuation:,  variable:xs  punctuation:.  field:len  punctuation:)
+ 30 |     when random.choice(xs) is {val}
+    | keyword:when  module:random  punctuation:.  task:choice  punctuation:(  variable:xs  punctuation:)  keyword:is  punctuation:{  variable:val  punctuation:}
+ 31 |         show("choice_ok=true")
+    | builtin-fn:show  punctuation:(  string:"choice_ok=true"  punctuation:)
+ 32 |     else
+    | keyword:else
+ 33 |         show("choice_ok=false")
+    | builtin-fn:show  punctuation:(  string:"choice_ok=false"  punctuation:)
+ 34 |     fi
+    | keyword:fi
+ 35 |     fixed empty = new [int]() at r
+    | keyword:fixed  variable:empty  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 36 |     when random.choice(empty) is none
+    | keyword:when  module:random  punctuation:.  task:choice  punctuation:(  variable:empty  punctuation:)  keyword:is  keyword:none
+ 37 |         show("empty_choice=true")
+    | builtin-fn:show  punctuation:(  string:"empty_choice=true"  punctuation:)
+ 38 |     else
+    | keyword:else
+ 39 |         show("empty_choice=false")
+    | builtin-fn:show  punctuation:(  string:"empty_choice=false"  punctuation:)
+ 40 |     fi
+    | keyword:fi
+ 41 | fi
+    | keyword:fi

@@ -1,0 +1,7 @@
+clean=Hello, Vela Developers!
+starts_with_hello=true
+contains_vela=true
+word_count=3
+sorted=Developers! | Hello, | Vela
+rand_int=2
+rand_bool=true

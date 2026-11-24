@@ -1,0 +1,12 @@
+ints_sorted=1 2 3 5 8 9
+words_sorted=apple banana cherry date
+ints_desc=9 8 5 3 2 1
+sorted_asc=1 9
+reversed=1 9
+rev_copy=9 1
+bsearch_found=4 val=8
+bsearch_missing=true
+contains_5=true
+contains_99=false
+index_of_banana=1
+index_of_missing=true

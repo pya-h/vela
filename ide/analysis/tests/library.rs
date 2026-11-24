@@ -70,7 +70,7 @@ fn completion_offers_the_library() {
     let at_path = labels("include @@\n");
     assert!(at_path.contains(&"std/files".to_string()), "{:?}", at_path);
     let after_root = labels("include std/@@\n");
-    assert_eq!(after_root, ["collections", "files", "gui", "int512", "json", "loops", "math", "sync", "sys", "time", "web"]);
+    assert_eq!(after_root, ["collections", "files", "gui", "int512", "json", "loops", "math", "random", "sync", "sys", "time", "txt", "web"]);
 }
 
 #[test]

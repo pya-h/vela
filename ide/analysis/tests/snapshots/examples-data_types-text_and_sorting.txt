@@ -1,0 +1,44 @@
+  1 | include std/txt
+    | keyword:include  module:std  operator:/  module:txt
+  2 | include std/collections
+    | keyword:include  module:std  operator:/  module:collections
+  3 | include std/random
+    | keyword:include  module:std  operator:/  module:random
+  5 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  6 |     region r default
+    | keyword:region  region:r  keyword:default
+  8 |     ; Text manipulation with std/txt
+    | comment:; Text manipulation with std/txt
+  9 |     fixed greeting = "  Hello, Vela Developers!  "
+    | keyword:fixed  variable:greeting  operator:=  string:"  Hello, Vela Developers!  "
+ 10 |     fixed clean = txt.trim(greeting)
+    | keyword:fixed  variable:clean  operator:=  module:txt  punctuation:.  task:trim  punctuation:(  variable:greeting  punctuation:)
+ 11 |     show("clean=", clean)
+    | builtin-fn:show  punctuation:(  string:"clean="  punctuation:,  variable:clean  punctuation:)
+ 12 |     show("starts_with_hello=", txt.starts_with(clean, "Hello"))
+    | builtin-fn:show  punctuation:(  string:"starts_with_hello="  punctuation:,  module:txt  punctuation:.  task:starts_with  punctuation:(  variable:clean  punctuation:,  string:"Hello"  punctuation:)  punctuation:)
+ 13 |     show("contains_vela=", txt.contains(clean, "Vela"))
+    | builtin-fn:show  punctuation:(  string:"contains_vela="  punctuation:,  module:txt  punctuation:.  task:contains  punctuation:(  variable:clean  punctuation:,  string:"Vela"  punctuation:)  punctuation:)
+ 15 |     flex words = txt.split(clean, " ", r)
+    | keyword:flex  variable:words  operator:=  module:txt  punctuation:.  task:split  punctuation:(  variable:clean  punctuation:,  string:" "  punctuation:,  region:r  punctuation:)
+ 16 |     show("word_count=", words.len)
+    | builtin-fn:show  punctuation:(  string:"word_count="  punctuation:,  variable:words  punctuation:.  field:len  punctuation:)
+ 18 |     ; Sorting words in-place with std/collections
+    | comment:; Sorting words in-place with std/collections
+ 19 |     collections.sort(words)
+    | module:collections  punctuation:.  task:sort  punctuation:(  variable:words  punctuation:)
+ 20 |     fixed sorted_text = txt.join(words, " | ", r)
+    | keyword:fixed  variable:sorted_text  operator:=  module:txt  punctuation:.  task:join  punctuation:(  variable:words  punctuation:,  string:" | "  punctuation:,  region:r  punctuation:)
+ 21 |     show("sorted=", sorted_text)
+    | builtin-fn:show  punctuation:(  string:"sorted="  punctuation:,  variable:sorted_text  punctuation:)
+ 23 |     ; Deterministic random with std/random
+    | comment:; Deterministic random with std/random
+ 24 |     flex rng = random.Rng.new(42)
+    | keyword:flex  variable:rng  operator:=  module:random  punctuation:.  type:Rng  punctuation:.  method:new  punctuation:(  number:42  punctuation:)
+ 25 |     show("rand_int=", rng.next_int(1, 10))
+    | builtin-fn:show  punctuation:(  string:"rand_int="  punctuation:,  variable:rng  punctuation:.  method:next_int  punctuation:(  number:1  punctuation:,  number:10  punctuation:)  punctuation:)
+ 26 |     show("rand_bool=", rng.next_bool())
+    | builtin-fn:show  punctuation:(  string:"rand_bool="  punctuation:,  variable:rng  punctuation:.  method:next_bool  punctuation:(  punctuation:)  punctuation:)
+ 27 | fi
+    | keyword:fi

@@ -1,0 +1,54 @@
+include std/txt
+
+task main()
+    region r default
+    fixed s = "  Hello, Vela World!  "
+    show(txt.starts_with("hello world", "hello"), " ", txt.starts_with("hello", "world"))
+    show(txt.ends_with("hello world", "world"), " ", txt.ends_with("hello", "world"))
+    show(txt.contains("hello world", "lo w"), " ", txt.contains("hello", "xyz"))
+    show(txt.eq_ignore_case("AbCd", "aBcD"), " ", txt.eq_ignore_case("abc", "def"))
+
+    when txt.find("banana", "na") is {p1}
+        show("find1=", p1)
+    fi
+    when txt.find("banana", "na", 3) is {p2}
+        show("find2=", p2)
+    fi
+    when txt.rfind("banana", "na") is {p3}
+        show("rfind=", p3)
+    fi
+    when txt.find("banana", "xyz") is none
+        show("missing=true")
+    else
+        show("missing=false")
+    fi
+
+    show("trim=[", txt.trim(s), "]")
+    show("trim_start=[", txt.trim_start(s), "]")
+    show("trim_end=[", txt.trim_end(s), "]")
+
+    when txt.strip_prefix("https://vela-lang.org", "https://") is {domain}
+        show("domain=", domain)
+    fi
+    when txt.strip_suffix("document.pdf", ".pdf") is {stem}
+        show("stem=", stem)
+    fi
+
+    fixed parts = txt.split("one,two,three", ",", r)
+    show("parts=", parts.len, " [0]=", parts[0], " [1]=", parts[1], " [2]=", parts[2])
+
+    fixed l = txt.lines("first\nsecond\r\nthird", r)
+    show("lines=", l.len, " [0]=", l[0], " [1]=", l[1], " [2]=", l[2])
+
+    fixed rep = txt.replace("apple banana apple", "apple", "orange", r)
+    show("replace=", rep)
+
+    fixed joined = txt.join(["alpha", "beta", "gamma", ...] at r, " -> ", r)
+    show("join=", joined)
+
+    show("repeat=", txt.repeat("ha", 3, r))
+    show("lower=", txt.to_lower("Vela Lang 2026", r))
+    show("upper=", txt.to_upper("Vela Lang 2026", r))
+
+    show(txt.is_digit('7'), " ", txt.is_alpha('k'), " ", txt.is_alnum('!'), " ", txt.is_space(' '))
+fi

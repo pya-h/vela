@@ -1,0 +1,56 @@
+; std/random: pseudo-random number generator, range selection, and Fisher-Yates shuffling.
+
+shape Rng
+    handle: int
+
+    shared new(seed: int = 0) -> Rng
+        <- Rng { handle: native_rng_new(seed) }
+    fi
+
+    alters next_int(min_v: int, max_v: int) -> int
+        <- native_rng_next_int(.handle, min_v, max_v)
+    fi
+
+    alters next_float() -> float
+        <- native_rng_next_float(.handle)
+    fi
+
+    alters next_bool() -> bool
+        <- native_rng_next_bool(.handle)
+    fi
+fi
+
+task random_int(min_v: int, max_v: int) -> int
+    <- native_random_int(min_v, max_v)
+fi
+
+task random_float() -> float
+    <- native_random_float()
+fi
+
+task random_bool() -> bool
+    <- native_random_bool()
+fi
+
+task shuffle<T>(flex xs: [T]@a)
+    each i in 1..xs.len
+        fixed j = random_int(0, i)
+        xs[i], xs[j] = xs[j], xs[i]
+    fi
+fi
+
+task choice<T>(xs: [T]@a) -> maybe T
+    when xs.len == 0
+        <- none
+    fi
+    fixed idx = random_int(0, xs.len - 1)
+    <- xs[idx]
+fi
+
+priv native task native_random_int(min_v: int, max_v: int) -> int
+priv native task native_random_float() -> float
+priv native task native_random_bool() -> bool
+priv native task native_rng_new(seed: int) -> int
+priv native task native_rng_next_int(handle: int, min_v: int, max_v: int) -> int
+priv native task native_rng_next_float(handle: int) -> float
+priv native task native_rng_next_bool(handle: int) -> bool

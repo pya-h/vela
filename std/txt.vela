@@ -1,0 +1,179 @@
+; std/txt: text search, transformation, slicing, trimming, case conversions, and ASCII char classification.
+
+task starts_with(s: text@p, prefix: text@q) -> bool
+    when prefix.len > s.len
+        <- false
+    fi
+    <- cut(s, 0, prefix.len) == prefix
+fi
+
+task ends_with(s: text@p, suffix: text@q) -> bool
+    when suffix.len > s.len
+        <- false
+    fi
+    <- cut(s, s.len - suffix.len, s.len) == suffix
+fi
+
+task contains(s: text@p, sub: text@q) -> bool
+    <- native_text_find(s, sub, 0) >= 0
+fi
+
+task eq_ignore_case(a: text@p, b: text@q) -> bool
+    <- native_text_eq_ignore_case(a, b)
+fi
+
+task find(s: text@p, sub: text@q, from: int = 0) -> maybe int
+    fixed pos = native_text_find(s, sub, from)
+    when pos < 0
+        <- none
+    fi
+    <- pos
+fi
+
+task rfind(s: text@p, sub: text@q) -> maybe int
+    fixed pos = native_text_rfind(s, sub)
+    when pos < 0
+        <- none
+    fi
+    <- pos
+fi
+
+task trim(s: text@p) -> text@p
+    <- native_text_trim(s)
+fi
+
+task trim_start(s: text@p) -> text@p
+    <- native_text_trim_start(s)
+fi
+
+task trim_end(s: text@p) -> text@p
+    <- native_text_trim_end(s)
+fi
+
+task strip_prefix(s: text@p, prefix: text@q) -> maybe text@p
+    when starts_with(s, prefix)
+        <- cut(s, prefix.len, s.len)
+    fi
+    <- none
+fi
+
+task strip_suffix(s: text@p, suffix: text@q) -> maybe text@p
+    when ends_with(s, suffix)
+        <- cut(s, 0, s.len - suffix.len)
+    fi
+    <- none
+fi
+
+task split(s: text@p, sep: text@q, r: region default) -> [text]@r
+    flex parts = new [text]() at r
+    when sep.len == 0
+        each i in 0..s.len
+            parts.add("{cut(s, i, i + 1)}" at r)
+        fi
+        <- parts
+    fi
+    flex from = 0
+    loop from <= s.len
+        fixed next = native_text_find(s, sep, from)
+        when next < 0
+            parts.add("{cut(s, from, s.len)}" at r)
+            break
+        fi
+        parts.add("{cut(s, from, next)}" at r)
+        from = next + sep.len
+    fi
+    <- parts
+fi
+
+task lines(s: text@p, r: region default) -> [text]@r
+    flex parts = new [text]() at r
+    flex from = 0
+    loop from < s.len
+        fixed next = native_text_find(s, "\n", from)
+        when next < 0
+            fixed rest = cut(s, from, s.len)
+            when ends_with(rest, "\r")
+                parts.add("{cut(rest, 0, rest.len - 1)}" at r)
+            else
+                parts.add("{rest}" at r)
+            fi
+            break
+        fi
+        fixed line = cut(s, from, next)
+        when ends_with(line, "\r")
+            parts.add("{cut(line, 0, line.len - 1)}" at r)
+        else
+            parts.add("{line}" at r)
+        fi
+        from = next + 1
+    fi
+    <- parts
+fi
+
+task replace(s: text@p, old: text@q, replacement: text@t, r: region default) -> text@r
+    <- native_text_replace(s, old, replacement, r)
+fi
+
+task join(parts: [text]@p, sep: text@q, r: region default) -> text@r
+    when parts.len == 0
+        <- ""
+    fi
+    when parts.len == 1
+        <- "{parts[0]}" at r
+    fi
+    flex out: text@r = "{parts[0]}" at r
+    each i in 1..parts.len
+        out = "{out}{sep}{parts[i]}" at r
+    fi
+    <- out
+fi
+
+task repeat(s: text@p, count: int, r: region default) -> text@r
+    when count <= 0 or s.len == 0
+        <- ""
+    fi
+    flex out: text@r = ""
+    each i in 0..count
+        out = "{out}{s}" at r
+    fi
+    <- out
+fi
+
+task to_lower(s: text@p, r: region default) -> text@r
+    <- native_text_lower(s, r)
+fi
+
+task to_upper(s: text@p, r: region default) -> text@r
+    <- native_text_upper(s, r)
+fi
+
+task is_digit(c: char) -> bool
+    <- c >= '0' and c <= '9'
+fi
+
+task is_alpha(c: char) -> bool
+    <- (c >= 'a' and c <= 'z') or (c >= 'A' and c <= 'Z')
+fi
+
+task is_alnum(c: char) -> bool
+    <- is_digit(c) or is_alpha(c)
+fi
+
+task is_space(c: char) -> bool
+    <- c == ' ' or c == '\t' or c == '\n' or c == '\r'
+fi
+
+priv task cut(s: text@p, from: int, to: int) -> text@p
+    <- native_text_bytes(s, from, to)
+fi
+
+priv native task native_text_find(haystack: text@p, needle: text@q, from: int) -> int
+priv native task native_text_rfind(haystack: text@p, needle: text@q) -> int
+priv native task native_text_lower(s: text@p, into: region) -> text@into
+priv native task native_text_upper(s: text@p, into: region) -> text@into
+priv native task native_text_trim(s: text@p) -> text@p
+priv native task native_text_trim_start(s: text@p) -> text@p
+priv native task native_text_trim_end(s: text@p) -> text@p
+priv native task native_text_replace(s: text@p, old: text@q, replacement: text@t, into: region) -> text@into
+priv native task native_text_eq_ignore_case(a: text@p, b: text@q) -> bool
+priv native task native_text_bytes(s: text@p, from: int, to: int) -> text@p

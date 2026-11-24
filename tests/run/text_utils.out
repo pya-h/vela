@@ -1,0 +1,21 @@
+true false
+true false
+true false
+true false
+find1=2
+find2=4
+rfind=4
+missing=true
+trim=[Hello, Vela World!]
+trim_start=[Hello, Vela World!  ]
+trim_end=[  Hello, Vela World!]
+domain=vela-lang.org
+stem=document
+parts=3 [0]=one [1]=two [2]=three
+lines=3 [0]=first [1]=second [2]=third
+replace=orange banana orange
+join=alpha -> beta -> gamma
+repeat=hahaha
+lower=vela lang 2026
+upper=VELA LANG 2026
+true true false true

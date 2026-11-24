@@ -257,6 +257,156 @@ task any<T>(xs: [T]@a, test: (T) -> bool) -> bool
     <- false
 fi
 
+task sort<T: ordered>(flex xs: [T]@a)
+    when xs.len <= 1
+        <-
+    fi
+    qsort_range(xs, 0, xs.len - 1)
+fi
+
+task sort_by<T>(flex xs: [T]@a, cmp: (T, T) -> int)
+    when xs.len <= 1
+        <-
+    fi
+    qsort_by_range(xs, 0, xs.len - 1, cmp)
+fi
+
+task sorted<T: frozen>(xs: [T]@a, cmp: (T, T) -> int, r: region default) -> [T]@r
+    flex copy = new [T]() at r
+    each x in xs
+        copy.add(x)
+    fi
+    sort_by(copy, cmp)
+    <- copy
+fi
+
+task reverse<T>(flex xs: [T]@a)
+    flex i = 0
+    flex j = xs.len - 1
+    loop i < j
+        xs[i], xs[j] = xs[j], xs[i]
+        i++
+        j--
+    fi
+fi
+
+task reversed<T: frozen>(xs: [T]@a, r: region default) -> [T]@r
+    flex copy = new [T]() at r
+    flex i = xs.len - 1
+    loop i >= 0
+        copy.add(xs[i])
+        i--
+    fi
+    <- copy
+fi
+
+task binary_search<T>(xs: [T]@a, target: T, cmp: (T, T) -> int) -> maybe int
+    flex low = 0
+    flex high = xs.len - 1
+    loop low <= high
+        fixed mid = low + (high - low) / 2
+        fixed c = cmp(xs[mid], target)
+        when c == 0
+            <- mid
+        else when c < 0
+            low = mid + 1
+        else
+            high = mid - 1
+        fi
+    fi
+    <- none
+fi
+
+task contains<T: same>(xs: [T]@a, target: T) -> bool
+    each item in xs
+        when item == target
+            <- true
+        fi
+    fi
+    <- false
+fi
+
+task index_of<T: same>(xs: [T]@a, target: T) -> maybe int
+    flex i = 0
+    each item in xs
+        when item == target
+            <- i
+        fi
+        i++
+    fi
+    <- none
+fi
+
+priv task qsort_range<T: ordered>(flex xs: [T]@a, low: int, high: int)
+    when low < high
+        when high - low < 16
+            insertion_sort(xs, low, high)
+            <-
+        fi
+        fixed pivot_idx = low + (high - low) / 2
+        fixed pivot = xs[pivot_idx]
+        xs[pivot_idx], xs[high] = xs[high], xs[pivot_idx]
+        flex i = low - 1
+        flex j = low
+        loop j < high
+            when xs[j] <= pivot
+                i++
+                xs[i], xs[j] = xs[j], xs[i]
+            fi
+            j++
+        fi
+        xs[i + 1], xs[high] = xs[high], xs[i + 1]
+        fixed pi = i + 1
+        qsort_range(xs, low, pi - 1)
+        qsort_range(xs, pi + 1, high)
+    fi
+fi
+
+priv task insertion_sort<T: ordered>(flex xs: [T]@a, low: int, high: int)
+    each i in (low + 1)..(high + 1)
+        flex j = i
+        loop j > low and xs[j - 1] > xs[j]
+            xs[j - 1], xs[j] = xs[j], xs[j - 1]
+            j--
+        fi
+    fi
+fi
+
+priv task qsort_by_range<T>(flex xs: [T]@a, low: int, high: int, cmp: (T, T) -> int)
+    when low < high
+        when high - low < 16
+            insertion_sort_by(xs, low, high, cmp)
+            <-
+        fi
+        fixed pivot_idx = low + (high - low) / 2
+        fixed pivot = xs[pivot_idx]
+        xs[pivot_idx], xs[high] = xs[high], xs[pivot_idx]
+        flex i = low - 1
+        flex j = low
+        loop j < high
+            when cmp(xs[j], pivot) <= 0
+                i++
+                xs[i], xs[j] = xs[j], xs[i]
+            fi
+            j++
+        fi
+        xs[i + 1], xs[high] = xs[high], xs[i + 1]
+        fixed pi = i + 1
+        qsort_by_range(xs, low, pi - 1, cmp)
+        qsort_by_range(xs, pi + 1, high, cmp)
+    fi
+fi
+
+priv task insertion_sort_by<T>(flex xs: [T]@a, low: int, high: int, cmp: (T, T) -> int)
+    each i in (low + 1)..(high + 1)
+        flex j = i
+        loop j > low and cmp(xs[j - 1], xs[j]) > 0
+            xs[j - 1], xs[j] = xs[j], xs[j - 1]
+            j--
+        fi
+    fi
+fi
+
 priv task within(n: int, count: int) -> int
     when n < 0
         <- 0

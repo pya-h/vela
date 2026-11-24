@@ -1,0 +1,7 @@
+range_ok=true
+float_ok=true
+bool_ok=true
+reproducible=true
+shuffled_len=5
+choice_ok=true
+empty_choice=true

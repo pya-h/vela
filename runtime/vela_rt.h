@@ -3449,6 +3449,85 @@ static inline bool vela__rt__web_text_eq_ignore_case(vela__rt__text a, vela__rt_
     return true;
 }
 
+static inline int64_t vela__rt__text_rfind(vela__rt__text haystack, vela__rt__text needle) {
+    if (needle.len < 0 || haystack.len < 0) return -1;
+    if (needle.len == 0) return haystack.len;
+    if (haystack.len < needle.len) return -1;
+    for (int64_t i = haystack.len - needle.len; i >= 0; i--) {
+        if (haystack.bytes[i] == needle.bytes[0] &&
+            memcmp(haystack.bytes + i, needle.bytes, (size_t)needle.len) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+static inline vela__rt__text vela__rt__text_upper(vela__rt__text s, vela__rt__region* into) {
+    if (s.len <= 0) {
+        return (vela__rt__text){ "", 0 };
+    }
+    char* buf = vela__rt__region_alloc(into, (size_t)s.len, 1);
+    for (int64_t i = 0; i < s.len; i++) {
+        char c = s.bytes[i];
+        buf[i] = (c >= 'a' && c <= 'z') ? (char)(c - ('a' - 'A')) : c;
+    }
+    return (vela__rt__text){ buf, s.len };
+}
+
+static inline vela__rt__text vela__rt__text_trim_start(vela__rt__text s) {
+    int64_t start = 0;
+    while (start < s.len && ((unsigned char)s.bytes[start] <= ' ')) {
+        start++;
+    }
+    return (vela__rt__text){ s.bytes + start, s.len - start };
+}
+
+static inline vela__rt__text vela__rt__text_trim_end(vela__rt__text s) {
+    int64_t end = s.len;
+    while (end > 0 && ((unsigned char)s.bytes[end - 1] <= ' ')) {
+        end--;
+    }
+    return (vela__rt__text){ s.bytes, end };
+}
+
+static inline vela__rt__text vela__rt__text_replace(vela__rt__text s, vela__rt__text old_t, vela__rt__text new_t, vela__rt__region* into) {
+    if (s.len <= 0 || old_t.len <= 0) {
+        return s;
+    }
+    int64_t count = 0;
+    int64_t pos = 0;
+    while (pos <= s.len - old_t.len) {
+        if (memcmp(s.bytes + pos, old_t.bytes, (size_t)old_t.len) == 0) {
+            count++;
+            pos += old_t.len;
+        } else {
+            pos++;
+        }
+    }
+    if (count == 0) {
+        return s;
+    }
+    int64_t new_len = s.len + count * (new_t.len - old_t.len);
+    if (new_len <= 0) {
+        return (vela__rt__text){ "", 0 };
+    }
+    char* buf = vela__rt__region_alloc(into, (size_t)new_len, 1);
+    size_t out = 0;
+    pos = 0;
+    while (pos < s.len) {
+        if (pos <= s.len - old_t.len && memcmp(s.bytes + pos, old_t.bytes, (size_t)old_t.len) == 0) {
+            if (new_t.len > 0) {
+                memcpy(buf + out, new_t.bytes, (size_t)new_t.len);
+                out += (size_t)new_t.len;
+            }
+            pos += old_t.len;
+        } else {
+            buf[out++] = s.bytes[pos++];
+        }
+    }
+    return (vela__rt__text){ buf, (int64_t)out };
+}
+
 static inline bool vela__rt__is_interactive(void) {
     if (getenv("VELA_TEST") != NULL) {
         return false;
@@ -3593,6 +3672,116 @@ static inline void vela__rt__time_sleep_ms(int64_t ms) {
     req.tv_nsec = (long)((ms % 1000) * 1000000L);
     while (nanosleep(&req, &req) == -1 && errno == EINTR) {
     }
+}
+
+typedef struct vela__rt__rng {
+    uint64_t s[2];
+} vela__rt__rng;
+
+static inline uint64_t vela__rt__splitmix64(uint64_t* x) {
+    uint64_t z = (*x += UINT64_C(0x9e3779b97f4a7c15));
+    z = (z ^ (z >> 30)) * UINT64_C(0xbf58476d1ce4e5b9);
+    z = (z ^ (z >> 27)) * UINT64_C(0x94d049bb133111eb);
+    return z ^ (z >> 31);
+}
+
+static inline void vela__rt__rng_seed(vela__rt__rng* rng, uint64_t seed) {
+    uint64_t sm = seed == 0 ? UINT64_C(0x853c49e6748fea9b) : seed;
+    rng->s[0] = vela__rt__splitmix64(&sm);
+    rng->s[1] = vela__rt__splitmix64(&sm);
+    if (rng->s[0] == 0 && rng->s[1] == 0) {
+        rng->s[0] = UINT64_C(0x853c49e6748fea9b);
+    }
+}
+
+static inline uint64_t vela__rt__rng_next_u64(vela__rt__rng* rng) {
+    const uint64_t s0 = rng->s[0];
+    uint64_t s1 = rng->s[1];
+    const uint64_t result = ((s0 + s1) << 17 | (s0 + s1) >> (64 - 17)) + s0;
+    s1 ^= s0;
+    rng->s[0] = (s0 << 49 | s0 >> (64 - 49)) ^ s1 ^ (s1 << 21);
+    rng->s[1] = (s1 << 28 | s1 >> (64 - 28));
+    return result;
+}
+
+static inline vela__rt__rng* vela__rt__get_global_rng(void) {
+    static _Thread_local vela__rt__rng global_rng = { { 0, 0 } };
+    static _Thread_local bool global_inited = false;
+    if (!global_inited) {
+        uint64_t seed = vela__rt__hash_seed();
+        vela__rt__rng_seed(&global_rng, seed);
+        global_inited = true;
+    }
+    return &global_rng;
+}
+
+static inline int64_t vela__rt__random_u64_range(uint64_t rand_val, int64_t min_v, int64_t max_v) {
+    if (min_v >= max_v) return min_v;
+    uint64_t range = (uint64_t)(max_v - min_v + 1);
+    return min_v + (int64_t)(rand_val % range);
+}
+
+static inline int64_t vela__rt__random_int(int64_t min_v, int64_t max_v) {
+    if (min_v > max_v) {
+        vela__rt__int_trap("random_int: min is greater than max", "random_int");
+    }
+    return vela__rt__random_u64_range(vela__rt__rng_next_u64(vela__rt__get_global_rng()), min_v, max_v);
+}
+
+static inline double vela__rt__random_float(void) {
+    uint64_t v = vela__rt__rng_next_u64(vela__rt__get_global_rng());
+    return (double)(v >> 11) * (1.0 / 9007199254740992.0);
+}
+
+static inline bool vela__rt__random_bool(void) {
+    return (vela__rt__rng_next_u64(vela__rt__get_global_rng()) & 1) != 0;
+}
+
+typedef struct vela__rt__rng_slot {
+    vela__rt__rng rng;
+    bool active;
+} vela__rt__rng_slot;
+
+static inline vela__rt__rng_slot* vela__rt__rng_slots(void) {
+    static vela__rt__rng_slot slots[64] = { { { { 0, 0 } }, false } };
+    return slots;
+}
+
+static inline int64_t vela__rt__rng_new(int64_t seed) {
+    vela__rt__rng_slot* slots = vela__rt__rng_slots();
+    for (int i = 0; i < 64; i++) {
+        if (!slots[i].active) {
+            slots[i].active = true;
+            uint64_t s = seed == 0 ? vela__rt__hash_seed() : (uint64_t)seed;
+            vela__rt__rng_seed(&slots[i].rng, s);
+            return (int64_t)i;
+        }
+    }
+    uint64_t s = seed == 0 ? vela__rt__hash_seed() : (uint64_t)seed;
+    vela__rt__rng_seed(&slots[0].rng, s);
+    return 0;
+}
+
+static inline int64_t vela__rt__rng_next_int(int64_t handle, int64_t min_v, int64_t max_v) {
+    if (min_v > max_v) {
+        vela__rt__int_trap("random_int: min is greater than max", "random_int");
+    }
+    vela__rt__rng_slot* slots = vela__rt__rng_slots();
+    int idx = (handle >= 0 && handle < 64 && slots[handle].active) ? (int)handle : 0;
+    return vela__rt__random_u64_range(vela__rt__rng_next_u64(&slots[idx].rng), min_v, max_v);
+}
+
+static inline double vela__rt__rng_next_float(int64_t handle) {
+    vela__rt__rng_slot* slots = vela__rt__rng_slots();
+    int idx = (handle >= 0 && handle < 64 && slots[handle].active) ? (int)handle : 0;
+    uint64_t v = vela__rt__rng_next_u64(&slots[idx].rng);
+    return (double)(v >> 11) * (1.0 / 9007199254740992.0);
+}
+
+static inline bool vela__rt__rng_next_bool(int64_t handle) {
+    vela__rt__rng_slot* slots = vela__rt__rng_slots();
+    int idx = (handle >= 0 && handle < 64 && slots[handle].active) ? (int)handle : 0;
+    return (vela__rt__rng_next_u64(&slots[idx].rng) & 1) != 0;
 }
 
 static inline bool vela__rt__gui_is_interactive(void) {

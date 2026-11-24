@@ -1,0 +1,88 @@
+  1 | include std/txt
+    | keyword:include  module:std  operator:/  module:txt
+  3 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  4 |     region r default
+    | keyword:region  region:r  keyword:default
+  5 |     fixed s = "  Hello, Vela World!  "
+    | keyword:fixed  variable:s  operator:=  string:"  Hello, Vela World!  "
+  6 |     show(txt.starts_with("hello world", "hello"), " ", txt.starts_with("hello", "world"))
+    | builtin-fn:show  punctuation:(  module:txt  punctuation:.  task:starts_with  punctuation:(  string:"hello world"  punctuation:,  string:"hello"  punctuation:)  punctuation:,  string:" "  punctuation:,  module:txt  punctuation:.  task:starts_with  punctuation:(  string:"hello"  punctuation:,  string:"world"  punctuation:)  punctuation:)
+  7 |     show(txt.ends_with("hello world", "world"), " ", txt.ends_with("hello", "world"))
+    | builtin-fn:show  punctuation:(  module:txt  punctuation:.  task:ends_with  punctuation:(  string:"hello world"  punctuation:,  string:"world"  punctuation:)  punctuation:,  string:" "  punctuation:,  module:txt  punctuation:.  task:ends_with  punctuation:(  string:"hello"  punctuation:,  string:"world"  punctuation:)  punctuation:)
+  8 |     show(txt.contains("hello world", "lo w"), " ", txt.contains("hello", "xyz"))
+    | builtin-fn:show  punctuation:(  module:txt  punctuation:.  task:contains  punctuation:(  string:"hello world"  punctuation:,  string:"lo w"  punctuation:)  punctuation:,  string:" "  punctuation:,  module:txt  punctuation:.  task:contains  punctuation:(  string:"hello"  punctuation:,  string:"xyz"  punctuation:)  punctuation:)
+  9 |     show(txt.eq_ignore_case("AbCd", "aBcD"), " ", txt.eq_ignore_case("abc", "def"))
+    | builtin-fn:show  punctuation:(  module:txt  punctuation:.  task:eq_ignore_case  punctuation:(  string:"AbCd"  punctuation:,  string:"aBcD"  punctuation:)  punctuation:,  string:" "  punctuation:,  module:txt  punctuation:.  task:eq_ignore_case  punctuation:(  string:"abc"  punctuation:,  string:"def"  punctuation:)  punctuation:)
+ 11 |     when txt.find("banana", "na") is {p1}
+    | keyword:when  module:txt  punctuation:.  task:find  punctuation:(  string:"banana"  punctuation:,  string:"na"  punctuation:)  keyword:is  punctuation:{  variable:p1  punctuation:}
+ 12 |         show("find1=", p1)
+    | builtin-fn:show  punctuation:(  string:"find1="  punctuation:,  variable:p1  punctuation:)
+ 13 |     fi
+    | keyword:fi
+ 14 |     when txt.find("banana", "na", 3) is {p2}
+    | keyword:when  module:txt  punctuation:.  task:find  punctuation:(  string:"banana"  punctuation:,  string:"na"  punctuation:,  number:3  punctuation:)  keyword:is  punctuation:{  variable:p2  punctuation:}
+ 15 |         show("find2=", p2)
+    | builtin-fn:show  punctuation:(  string:"find2="  punctuation:,  variable:p2  punctuation:)
+ 16 |     fi
+    | keyword:fi
+ 17 |     when txt.rfind("banana", "na") is {p3}
+    | keyword:when  module:txt  punctuation:.  task:rfind  punctuation:(  string:"banana"  punctuation:,  string:"na"  punctuation:)  keyword:is  punctuation:{  variable:p3  punctuation:}
+ 18 |         show("rfind=", p3)
+    | builtin-fn:show  punctuation:(  string:"rfind="  punctuation:,  variable:p3  punctuation:)
+ 19 |     fi
+    | keyword:fi
+ 20 |     when txt.find("banana", "xyz") is none
+    | keyword:when  module:txt  punctuation:.  task:find  punctuation:(  string:"banana"  punctuation:,  string:"xyz"  punctuation:)  keyword:is  keyword:none
+ 21 |         show("missing=true")
+    | builtin-fn:show  punctuation:(  string:"missing=true"  punctuation:)
+ 22 |     else
+    | keyword:else
+ 23 |         show("missing=false")
+    | builtin-fn:show  punctuation:(  string:"missing=false"  punctuation:)
+ 24 |     fi
+    | keyword:fi
+ 26 |     show("trim=[", txt.trim(s), "]")
+    | builtin-fn:show  punctuation:(  string:"trim=["  punctuation:,  module:txt  punctuation:.  task:trim  punctuation:(  variable:s  punctuation:)  punctuation:,  string:"]"  punctuation:)
+ 27 |     show("trim_start=[", txt.trim_start(s), "]")
+    | builtin-fn:show  punctuation:(  string:"trim_start=["  punctuation:,  module:txt  punctuation:.  task:trim_start  punctuation:(  variable:s  punctuation:)  punctuation:,  string:"]"  punctuation:)
+ 28 |     show("trim_end=[", txt.trim_end(s), "]")
+    | builtin-fn:show  punctuation:(  string:"trim_end=["  punctuation:,  module:txt  punctuation:.  task:trim_end  punctuation:(  variable:s  punctuation:)  punctuation:,  string:"]"  punctuation:)
+ 30 |     when txt.strip_prefix("https://vela-lang.org", "https://") is {domain}
+    | keyword:when  module:txt  punctuation:.  task:strip_prefix  punctuation:(  string:"https://vela-lang.org"  punctuation:,  string:"https://"  punctuation:)  keyword:is  punctuation:{  variable:domain  punctuation:}
+ 31 |         show("domain=", domain)
+    | builtin-fn:show  punctuation:(  string:"domain="  punctuation:,  variable:domain  punctuation:)
+ 32 |     fi
+    | keyword:fi
+ 33 |     when txt.strip_suffix("document.pdf", ".pdf") is {stem}
+    | keyword:when  module:txt  punctuation:.  task:strip_suffix  punctuation:(  string:"document.pdf"  punctuation:,  string:".pdf"  punctuation:)  keyword:is  punctuation:{  variable:stem  punctuation:}
+ 34 |         show("stem=", stem)
+    | builtin-fn:show  punctuation:(  string:"stem="  punctuation:,  variable:stem  punctuation:)
+ 35 |     fi
+    | keyword:fi
+ 37 |     fixed parts = txt.split("one,two,three", ",", r)
+    | keyword:fixed  variable:parts  operator:=  module:txt  punctuation:.  task:split  punctuation:(  string:"one,two,three"  punctuation:,  string:","  punctuation:,  region:r  punctuation:)
+ 38 |     show("parts=", parts.len, " [0]=", parts[0], " [1]=", parts[1], " [2]=", parts[2])
+    | builtin-fn:show  punctuation:(  string:"parts="  punctuation:,  variable:parts  punctuation:.  field:len  punctuation:,  string:" [0]="  punctuation:,  variable:parts  punctuation:[  number:0  punctuation:]  punctuation:,  string:" [1]="  punctuation:,  variable:parts  punctuation:[  number:1  punctuation:]  punctuation:,  string:" [2]="  punctuation:,  variable:parts  punctuation:[  number:2  punctuation:]  punctuation:)
+ 40 |     fixed l = txt.lines("first\nsecond\r\nthird", r)
+    | keyword:fixed  variable:l  operator:=  module:txt  punctuation:.  task:lines  punctuation:(  string:"first  escape:\n  string:second  escape:\r  escape:\n  string:third"  punctuation:,  region:r  punctuation:)
+ 41 |     show("lines=", l.len, " [0]=", l[0], " [1]=", l[1], " [2]=", l[2])
+    | builtin-fn:show  punctuation:(  string:"lines="  punctuation:,  variable:l  punctuation:.  field:len  punctuation:,  string:" [0]="  punctuation:,  variable:l  punctuation:[  number:0  punctuation:]  punctuation:,  string:" [1]="  punctuation:,  variable:l  punctuation:[  number:1  punctuation:]  punctuation:,  string:" [2]="  punctuation:,  variable:l  punctuation:[  number:2  punctuation:]  punctuation:)
+ 43 |     fixed rep = txt.replace("apple banana apple", "apple", "orange", r)
+    | keyword:fixed  variable:rep  operator:=  module:txt  punctuation:.  task:replace  punctuation:(  string:"apple banana apple"  punctuation:,  string:"apple"  punctuation:,  string:"orange"  punctuation:,  region:r  punctuation:)
+ 44 |     show("replace=", rep)
+    | builtin-fn:show  punctuation:(  string:"replace="  punctuation:,  variable:rep  punctuation:)
+ 46 |     fixed joined = txt.join(["alpha", "beta", "gamma", ...] at r, " -> ", r)
+    | keyword:fixed  variable:joined  operator:=  module:txt  punctuation:.  task:join  punctuation:(  punctuation:[  string:"alpha"  punctuation:,  string:"beta"  punctuation:,  string:"gamma"  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:,  string:" -> "  punctuation:,  region:r  punctuation:)
+ 47 |     show("join=", joined)
+    | builtin-fn:show  punctuation:(  string:"join="  punctuation:,  variable:joined  punctuation:)
+ 49 |     show("repeat=", txt.repeat("ha", 3, r))
+    | builtin-fn:show  punctuation:(  string:"repeat="  punctuation:,  module:txt  punctuation:.  task:repeat  punctuation:(  string:"ha"  punctuation:,  number:3  punctuation:,  region:r  punctuation:)  punctuation:)
+ 50 |     show("lower=", txt.to_lower("Vela Lang 2026", r))
+    | builtin-fn:show  punctuation:(  string:"lower="  punctuation:,  module:txt  punctuation:.  task:to_lower  punctuation:(  string:"Vela Lang 2026"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 51 |     show("upper=", txt.to_upper("Vela Lang 2026", r))
+    | builtin-fn:show  punctuation:(  string:"upper="  punctuation:,  module:txt  punctuation:.  task:to_upper  punctuation:(  string:"Vela Lang 2026"  punctuation:,  region:r  punctuation:)  punctuation:)
+ 53 |     show(txt.is_digit('7'), " ", txt.is_alpha('k'), " ", txt.is_alnum('!'), " ", txt.is_space(' '))
+    | builtin-fn:show  punctuation:(  module:txt  punctuation:.  task:is_digit  punctuation:(  string:'7'  punctuation:)  punctuation:,  string:" "  punctuation:,  module:txt  punctuation:.  task:is_alpha  punctuation:(  string:'k'  punctuation:)  punctuation:,  string:" "  punctuation:,  module:txt  punctuation:.  task:is_alnum  punctuation:(  string:'!'  punctuation:)  punctuation:,  string:" "  punctuation:,  module:txt  punctuation:.  task:is_space  punctuation:(  string:' '  punctuation:)  punctuation:)
+ 54 | fi
+    | keyword:fi
