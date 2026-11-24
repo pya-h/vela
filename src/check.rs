@@ -8005,6 +8005,14 @@ impl Checker {
                 ),
             ),
             ExprKind::Pipe(_) => Ok(()),
+            ExprKind::Try(_) => Ok(()),
+            ExprKind::ErrPipe { propagate, .. } => {
+                if !*propagate && matches!(e.ty, Some(Type::Or(..))) {
+                    err(e.span, "the mapped error from '!>' is ignored; handle it with a plan B '{ failure e ... }' or remove '!' / '{ ... }'")
+                } else {
+                    Ok(())
+                }
+            }
             ExprKind::Call { name, .. } if number_cast(name).is_some() => err(
                 e.span,
                 format!(
@@ -8987,6 +8995,8 @@ impl Checker {
             | ExprKind::Widen(value)
             | ExprKind::Pipe(value)
             | ExprKind::Piped(value)
+            | ExprKind::Try(value)
+            | ExprKind::ErrPipe { value, .. }
             | ExprKind::Kept { value, .. }
             | ExprKind::Shortcut { value, .. }
             | ExprKind::Spread(value)
@@ -9145,6 +9155,8 @@ impl Checker {
             | ExprKind::Widen(value)
             | ExprKind::Pipe(value)
             | ExprKind::Piped(value)
+            | ExprKind::Try(value)
+            | ExprKind::ErrPipe { value, .. }
             | ExprKind::Kept { value, .. } => self.value_text(value),
             ExprKind::Lookup(base, index) => match index.kind {
                 ExprKind::IntLit(n) => format!("{}[#{}]", self.value_text(base), n),
@@ -13649,6 +13661,8 @@ impl Checker {
                 .ty
                 .clone()
                 .ok_or_else(|| Error::internal_at(span, "a piped value outside its pipe")),
+            ExprKind::Try(inner) => self.check_try(inner, span),
+            ExprKind::ErrPipe { .. } => self.check_err_pipe(expr),
             ExprKind::MethodCall { value, args, .. }
                 if value.ty.as_ref().is_some_and(Type::unknown) =>
             {
@@ -15325,6 +15339,443 @@ impl Checker {
         )
     }
 
+    fn check_try(&mut self, inner: &mut Expr, span: Span) -> Result<Type> {
+        if let Some(what) = self.at_start {
+            return err(
+                span,
+                format!(
+                    "'!' leaves a task on failure, and {} are worked out where the program starts, outside every task; handle it with a plan B instead",
+                    what
+                ),
+            );
+        }
+        if self.in_actor.is_some() {
+            return err(
+                span,
+                "'!' cannot propagate a failure from inside an actor handler; handle the failure with a plan B '{ failure e ... }' instead",
+            );
+        }
+        let inner_ty = self.check_expr(inner)?;
+        let (ok_ty, err_inner) = match &inner_ty {
+            Type::Or(ok, err_ty) => ((**ok).clone(), (**err_ty).clone()),
+            Type::Maybe(_) => {
+                return err(
+                    span,
+                    format!(
+                        "'!' unwraps a 'T ~ E' failure, but this value is {}; handle absence with a plan B, as in 'x {{ fallback }}'",
+                        inner_ty
+                    ),
+                );
+            }
+            _ if inner_ty.unknown() => return Ok(Type::Unknown),
+            other => {
+                return err(
+                    span,
+                    format!(
+                        "'!' unwraps a 'T ~ E' failure, but this value is {}, which cannot fail",
+                        other
+                    ),
+                );
+            }
+        };
+        let ret = self.current_ret.clone().unwrap_or(Type::Nothing);
+        let err_task = match &ret {
+            Type::Or(_, err_ty) => (**err_ty).clone(),
+            _ => {
+                return err(
+                    span,
+                    format!(
+                        "'!' propagates a '{}' failure, so this task must return a failure too (such as '-> R ~ {}')",
+                        err_inner, err_inner
+                    ),
+                );
+            }
+        };
+        if !err_inner.unknown()
+            && !err_task.unknown()
+            && !fits_regions(&err_inner, &err_task)
+            && !self.widens(&err_inner, &err_task)
+        {
+            return err(
+                span,
+                format!(
+                    "'!' cannot propagate failure of type '{}' from a task returning '{}'; map it with '!>' or make '{}' imitate '{}'",
+                    err_inner, err_task, err_task, err_inner
+                ),
+            );
+        }
+        self.note_sent(std::slice::from_ref(inner));
+        Ok(ok_ty)
+    }
+
+    fn err_pipe_wants_prepend(
+        &self,
+        task_name: &str,
+        info: &TaskInfo,
+        args: &[Expr],
+        err_in: &Type,
+        skip: usize,
+    ) -> bool {
+        let Some((_, first_param)) = info.params.get(skip) else {
+            return false;
+        };
+        if matches!(first_param, Type::Region) {
+            return false;
+        }
+        let accepts_err = err_in.unknown()
+            || first_param.unknown()
+            || !first_param.params().is_empty()
+            || fits_regions(err_in, first_param)
+            || self.widens(err_in, first_param)
+            || matches!(first_param, Type::Maybe(inner) if fits_regions(err_in, inner) || self.widens(err_in, inner));
+        if !accepts_err {
+            return false;
+        }
+        let last_is_region_arg = info
+            .params
+            .last()
+            .is_some_and(|(_, ty)| *ty == Type::Region)
+            && args.last().is_some_and(|a| match &a.kind {
+                ExprKind::RegionAfter(_) => true,
+                ExprKind::Var(n) => self.lookup(n).is_some_and(|b| b.ty == Type::Region),
+                _ => false,
+            });
+        let has_trailing_region = info
+            .params
+            .last()
+            .is_some_and(|(_, ty)| *ty == Type::Region);
+        let written = args
+            .iter()
+            .enumerate()
+            .filter(|(i, a)| {
+                !matches!(a.kind, ExprKind::RegionAfter(_))
+                    && !(last_is_region_arg && *i + 1 == args.len())
+            })
+            .count();
+        let value_slots = info
+            .params
+            .len()
+            .saturating_sub(skip)
+            .saturating_sub(usize::from(has_trailing_region));
+        if written + 1 > value_slots {
+            return false;
+        }
+        if written == 0 {
+            return true;
+        }
+        let defaults = self.param_defaults.get(task_name);
+        let first_default = defaults
+            .and_then(|d| d.iter().position(Option::is_some))
+            .unwrap_or(info.params.len());
+        let min_required = first_default
+            .min(info.params.len().saturating_sub(usize::from(has_trailing_region)))
+            .saturating_sub(skip);
+        written < min_required
+    }
+
+    fn prepare_err_pipe_step(
+        &mut self,
+        step: &mut Expr,
+        err_in: &Type,
+        count: usize,
+        binder: Option<&Binding>,
+        pipe_span: Span,
+    ) -> Result<()> {
+        if count > 1 {
+            let failure_arg = Expr::new(ExprKind::Var(FAILURE_VAL.to_string()), pipe_span);
+            if let ExprKind::MethodCall { args, .. }
+            | ExprKind::Call { args, .. }
+            | ExprKind::Invoke { args, .. }
+            | ExprKind::Construct { args, .. } = &mut step.kind
+            {
+                args.insert(count - 1, failure_arg);
+            }
+            return Ok(());
+        }
+        if binder.is_some() || Self::mentions_failure_val(step) {
+            return Ok(());
+        }
+        let failure_arg = Expr::new(ExprKind::Var(FAILURE_VAL.to_string()), pipe_span);
+        match &mut step.kind {
+            ExprKind::Var(name) => {
+                if let Some(local) = self.lookup(name).cloned() {
+                    let param_len = match &local.ty {
+                        Type::Task(t) => Some(t.params.len()),
+                        Type::Closure(c) => Some(c.task.params.len()),
+                        _ => None,
+                    };
+                    if let Some(plen) = param_len {
+                        let callee = Box::new(step.clone());
+                        let args = if plen == 0 { Vec::new() } else { vec![failure_arg] };
+                        step.kind = ExprKind::Invoke { callee, args };
+                    }
+                    return Ok(());
+                }
+                if let Some(vinfo) = self
+                    .variants
+                    .get(name.as_str())
+                    .or_else(|| self.variant_in_scope(name))
+                    .cloned()
+                {
+                    if !vinfo.variant.payload.is_empty() {
+                        step.kind = ExprKind::Construct {
+                            kind: vinfo.kind,
+                            tag: vinfo.variant.tag,
+                            args: vec![failure_arg],
+                            types: Vec::new(),
+                        };
+                    }
+                    return Ok(());
+                }
+                let task_key = if self.tasks.contains_key(name.as_str()) {
+                    Some(name.clone())
+                } else {
+                    let full = self.full_name(name);
+                    self.tasks.contains_key(&full).then_some(full)
+                };
+                if let Some(tkey) = task_key
+                    && let Some(info) = self.tasks.get(&tkey).cloned()
+                {
+                    let args = if self.err_pipe_wants_prepend(&tkey, &info, &[], err_in, 0) {
+                        vec![failure_arg]
+                    } else {
+                        Vec::new()
+                    };
+                    step.kind = ExprKind::Call {
+                        name: tkey,
+                        types: Vec::new(),
+                        args,
+                    };
+                }
+            }
+            ExprKind::Call { name, args, .. } => {
+                let tkey = if self.tasks.contains_key(name.as_str()) {
+                    Some(name.clone())
+                } else {
+                    let full = self.full_name(name);
+                    self.tasks.contains_key(&full).then_some(full)
+                };
+                if let Some(tkey) = tkey
+                    && let Some(info) = self.tasks.get(&tkey).cloned()
+                {
+                    if self.err_pipe_wants_prepend(&tkey, &info, args, err_in, 0) {
+                        args.insert(0, failure_arg);
+                    }
+                } else if let Some(vinfo) = self
+                    .variants
+                    .get(name.as_str())
+                    .or_else(|| self.variant_in_scope(name))
+                    .cloned()
+                {
+                    let written = args
+                        .iter()
+                        .filter(|a| !matches!(a.kind, ExprKind::RegionAfter(_)))
+                        .count();
+                    if written < vinfo.variant.payload.len() {
+                        args.insert(0, failure_arg);
+                    }
+                }
+            }
+            ExprKind::Construct {
+                kind, tag, args, ..
+            } => {
+                let kind_key = if self.kinds.contains_key(kind.as_str()) {
+                    kind.clone()
+                } else {
+                    self.full_name(kind)
+                };
+                if let Some(kdef) = self.kinds.get(&kind_key)
+                    && let Some(variant) = kdef.variants.iter().find(|v| v.tag == *tag)
+                {
+                    let written = args
+                        .iter()
+                        .filter(|a| !matches!(a.kind, ExprKind::RegionAfter(_)))
+                        .count();
+                    if written < variant.payload.len() {
+                        args.insert(0, failure_arg);
+                    }
+                }
+            }
+            ExprKind::MethodCall {
+                value, name, args, ..
+            } => {
+                let recv_ty = self.check_expr(value)?;
+                if let Some(owner) = self.owner_of(&recv_ty) {
+                    let mname = method_name(&owner, name);
+                    if let Some(info) = self.tasks.get(&mname).cloned()
+                        && self.err_pipe_wants_prepend(&mname, &info, args, err_in, 1)
+                    {
+                        args.insert(0, failure_arg);
+                    }
+                }
+            }
+            ExprKind::Invoke { callee, args } => {
+                let cty = self.check_expr(callee)?;
+                let plen = match &cty {
+                    Type::Task(t) => Some(t.params.len()),
+                    Type::Closure(c) => Some(c.task.params.len()),
+                    _ => None,
+                };
+                if let Some(plen) = plen {
+                    let written = args
+                        .iter()
+                        .filter(|a| !matches!(a.kind, ExprKind::RegionAfter(_)))
+                        .count();
+                    if written + 1 == plen {
+                        args.insert(0, failure_arg);
+                    }
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn check_err_pipe(&mut self, expr: &mut Expr) -> Result<Type> {
+        let span = expr.span;
+        let ExprKind::ErrPipe {
+            value,
+            step,
+            binder,
+            count,
+            propagate,
+            prepared,
+        } = &mut expr.kind
+        else {
+            return Err(Error::internal_at(span, "an error pipe that is no error pipe"));
+        };
+        let val_ty = self.check_expr_multi(value)?;
+        let (ok_ty, err_in) = match &val_ty {
+            Type::Or(ok, err_ty) => ((**ok).clone(), (**err_ty).clone()),
+            Type::Results(types) => {
+                return err(
+                    value.span,
+                    format!(
+                        "this call sends {} values, and '!>' maps failures on one; receive them first with 'fixed {} = …'",
+                        types.len(),
+                        example_names(types.len())
+                    ),
+                );
+            }
+            Type::Maybe(_) => {
+                return err(
+                    value.span,
+                    format!(
+                        "'!>' maps failures of 'T ~ E', but this value is {}; handle absence with a plan B, as in 'x {{ fallback }}'",
+                        val_ty
+                    ),
+                );
+            }
+            _ if val_ty.unknown() => return Ok(Type::Unknown),
+            other => {
+                return err(
+                    value.span,
+                    format!(
+                        "'!>' maps failures of 'T ~ E', but this value is {}, which cannot fail",
+                        other
+                    ),
+                );
+            }
+        };
+        if !*prepared {
+            self.prepare_err_pipe_step(step, &err_in, *count, binder.as_ref(), span)?;
+            *prepared = true;
+        }
+        let entry = self.unset.clone();
+        self.push_scope();
+        let mut defs = vec![(FAILURE_VAL.to_string(), span, err_in.clone(), Mode::Fixed)];
+        if let Some((bname, bspan)) = binder.as_ref()
+            && bname != DISCARD
+        {
+            defs.push((bname.clone(), *bspan, err_in, Mode::Fixed));
+        }
+        let step_res = defs
+            .into_iter()
+            .try_for_each(|(n, at, t, m)| self.define(&n, t, m, at))
+            .and_then(|()| self.check_expr_multi(step));
+        self.pop_scope();
+        self.unset = entry;
+        let step_ty = step_res?;
+        if step_ty.unknown() {
+            return Ok(if *propagate { ok_ty } else { Type::Unknown });
+        }
+        if matches!(
+            step_ty,
+            Type::Nothing
+                | Type::None
+                | Type::Fail(_)
+                | Type::Maybe(_)
+                | Type::Or(..)
+                | Type::Results(_)
+        ) {
+            return err(
+                step.span,
+                format!(
+                    "a '!>' failure mapper must return a failure value (type E), not {}",
+                    step_ty
+                ),
+            );
+        }
+        if !*propagate {
+            return Ok(Type::Or(Box::new(ok_ty), Box::new(step_ty)));
+        }
+        if let Some(what) = self.at_start {
+            return err(
+                span,
+                format!(
+                    "'!>' leaves a task on failure, and {} are worked out where the program starts, outside every task; handle it with a plan B instead",
+                    what
+                ),
+            );
+        }
+        if self.in_actor.is_some() {
+            return err(
+                span,
+                "'!>' cannot propagate a failure from inside an actor handler; handle the failure with a plan B '{ failure e ... }' instead",
+            );
+        }
+        let ret = self.current_ret.clone().unwrap_or(Type::Nothing);
+        let err_task = match &ret {
+            Type::Or(_, err_ty) => (**err_ty).clone(),
+            _ => {
+                return err(
+                    span,
+                    format!(
+                        "'!>' propagates mapped failure '{}' from this task, so this task must return a failure (such as '-> R ~ {}') or catch it with a plan B '{{ failure e ... }}'",
+                        step_ty, step_ty
+                    ),
+                );
+            }
+        };
+        if !step_ty.unknown()
+            && !err_task.unknown()
+            && !fits_regions(&step_ty, &err_task)
+            && !self.widens(&step_ty, &err_task)
+        {
+            return err(
+                span,
+                format!(
+                    "'!>' mapped the failure to '{}', which does not match this task's failure type '{}'; return '{}' or make '{}' imitate '{}'",
+                    step_ty, err_task, step_ty, err_task, step_ty
+                ),
+            );
+        }
+        self.note_sent(std::slice::from_ref(step));
+        Ok(ok_ty)
+    }
+
+    fn mentions_failure_val(e: &Expr) -> bool {
+        let mut found = false;
+        visit_expr(e, &mut |inner| {
+            if matches!(&inner.kind, ExprKind::Var(name) if name == FAILURE_VAL) {
+                found = true;
+                return false;
+            }
+            true
+        });
+        found
+    }
+
     fn check_then_builtin(&mut self, args: &mut [Expr], span: Span) -> Result<Type> {
         let [arg0, arg1] = args else {
             return err(
@@ -15549,6 +16000,12 @@ impl Checker {
             return err(
                 span,
                 "'rush' cannot be used inside an actor handler; call tasks concurrently from a task instead",
+            );
+        }
+        if matches!(inner.kind, ExprKind::Try(_) | ExprKind::ErrPipe { .. }) {
+            return err(
+                inner.span,
+                "cannot use '!' or '!>' directly inside 'rush'; await the commitment first with '(<<- c)!' instead",
             );
         }
         if !matches!(
@@ -24027,8 +24484,13 @@ impl Checker {
             | ExprKind::Widen(inner)
             | ExprKind::Pipe(inner)
             | ExprKind::Piped(inner)
+            | ExprKind::Try(inner)
             | ExprKind::Copy { value: inner, .. }
             | ExprKind::Shortcut { value: inner, .. } => self.substitute_expr(inner, given, made),
+            ExprKind::ErrPipe { value, step, .. } => {
+                self.substitute_expr(value, given, made)?;
+                self.substitute_expr(step, given, made)
+            }
             ExprKind::Pairs(pairs) => pairs.iter_mut().try_for_each(|(key, value)| {
                 self.substitute_expr(key, given, made)?;
                 self.substitute_expr(value, given, made)
@@ -26913,7 +27375,12 @@ fn visit_expr(e: &Expr, f: &mut dyn FnMut(&Expr) -> bool) {
         | ExprKind::Wrap(inner)
         | ExprKind::Widen(inner)
         | ExprKind::Pipe(inner)
-        | ExprKind::Piped(inner) => visit_expr(inner, f),
+        | ExprKind::Piped(inner)
+        | ExprKind::Try(inner) => visit_expr(inner, f),
+        ExprKind::ErrPipe { value, step, .. } => {
+            visit_expr(value, f);
+            visit_expr(step, f);
+        }
         ExprKind::New { value, .. }
         | ExprKind::Copy { value, .. }
         | ExprKind::Shortcut { value, .. }

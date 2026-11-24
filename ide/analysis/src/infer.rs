@@ -720,6 +720,10 @@ impl<'a> Knowledge<'a> {
                 }
             }),
             Token::Caret => exact(q).or_else(|| self.expression_type(q.checked_sub(1)?, depth + 1)?.ptr_inner().cloned()),
+            Token::Bang => exact(q).or_else(|| match self.expression_type(q.checked_sub(1)?, depth + 1)? {
+                Type::Or(ok, _) => Some(*ok),
+                _ => None,
+            }),
             Token::RBracket => {
                 let open = self.matching_open(q, &Token::LBracket, &Token::RBracket)?;
                 // Checker records bracket expression types at the opening `[`.

@@ -43,6 +43,9 @@ enum Placing {
 }
 
 fn place_region(expr: &mut Expr, region: &str, span: Span, through_prefix: bool) -> Placing {
+    if let ExprKind::Try(inner) = &mut expr.kind {
+        return place_region(inner, region, span, through_prefix);
+    }
     if let ExprKind::Field(_, word) = &expr.kind
         && let Some(op @ (MapOp::Keys | MapOp::Values)) = MapOp::from_word(word)
     {
@@ -75,6 +78,9 @@ fn place_region(expr: &mut Expr, region: &str, span: Span, through_prefix: bool)
 }
 
 fn takes_region_after(expr: &Expr) -> bool {
+    if let ExprKind::Try(inner) = &expr.kind {
+        return takes_region_after(inner);
+    }
     matches!(expr.kind, ExprKind::Call { .. } | ExprKind::MethodCall { .. } | ExprKind::Scan { .. } | ExprKind::Copy { .. })
         || matches!(&expr.kind, ExprKind::Field(_, word) if matches!(MapOp::from_word(word), Some(MapOp::Keys | MapOp::Values)))
 }
@@ -107,6 +113,7 @@ pub struct Parser {
     in_generic: bool,
     send_after_header: Option<usize>,
     loop_values: bool,
+    in_err_pipe: usize,
     /// Whether the block being read is a task's body, where an `event`
     /// declaration is a statement, not the start of a new item.
     in_task_body: bool,
@@ -116,7 +123,7 @@ const IS_WITH_OR: &str = "an 'is' is joined with 'and', not 'or': with 'or', the
 
 impl Parser {
     pub fn new(tokens: Vec<Token>, spans: Vec<Span>, ends: Vec<Span>) -> Self {
-        Parser { tokens, spans, ends, pos: 0, depth: 0, operators: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new(), type_aliases: Vec::new(), patterns: Vec::new(), in_pattern: false, methods: Vec::new(), lambdas: Vec::new(), lambda_count: 0, in_generic: false, send_after_header: None, loop_values: false, in_task_body: false }
+        Parser { tokens, spans, ends, pos: 0, depth: 0, operators: 0, type_places: TypePlaces::new(), type_parts: Vec::new(), includes: Vec::new(), type_aliases: Vec::new(), patterns: Vec::new(), in_pattern: false, methods: Vec::new(), lambdas: Vec::new(), lambda_count: 0, in_generic: false, send_after_header: None, loop_values: false, in_err_pipe: 0, in_task_body: false }
     }
 
     pub fn loop_values(&self) -> bool {
@@ -3112,7 +3119,7 @@ impl Parser {
             // `loop a || b`: a start that only gives a value is a condition,
             // and `||` was meant as 'or'.
             if let StmtKind::Expr(e) = &item.kind
-                && !matches!(e.kind, ExprKind::Call { .. } | ExprKind::MethodCall { .. } | ExprKind::Invoke { .. } | ExprKind::PlanB { .. } | ExprKind::Pipe(_))
+                && !matches!(e.kind, ExprKind::Call { .. } | ExprKind::MethodCall { .. } | ExprKind::Invoke { .. } | ExprKind::PlanB { .. } | ExprKind::Pipe(_) | ExprKind::Try(_) | ExprKind::ErrPipe { .. })
             {
                 let bar = if n + 1 == items { last } else { first };
                 return Err(Error::at(
@@ -3798,6 +3805,15 @@ impl Parser {
                 left = self.parse_pipe(left, count)?;
                 continue;
             }
+            if let Token::ErrPipe(count) = *self.peek()
+                && min <= Self::PIPE_PRECEDENCE
+                && !ranged
+            {
+                self.enter_operator()?;
+                levels += 1;
+                left = self.parse_err_pipe(left, count)?;
+                continue;
+            }
             let span = self.peek_span();
             if self.check(Token::Range) && min <= Self::RANGE_PRECEDENCE && !ranged {
                 self.enter_operator()?;
@@ -3847,7 +3863,7 @@ impl Parser {
         while self.tokens.get(at) == Some(&Token::Newline) {
             at += 1;
         }
-        matches!(self.tokens.get(at), Some(Token::Pipe(_)))
+        matches!(self.tokens.get(at), Some(Token::Pipe(_) | Token::ErrPipe(_)))
     }
 
     fn parse_pipe(&mut self, value: Expr, count: usize) -> Result<Expr> {
@@ -3862,11 +3878,23 @@ impl Parser {
         if self.check(Token::At) {
             step = self.parse_call_region(step)?;
         }
-        let mut plans = Vec::new();
-        while !parenthesized && matches!(step.kind, ExprKind::PlanB { .. }) {
-            let ExprKind::PlanB { value, error, body } = step.kind else { break };
-            plans.push((error, body, step.span));
-            step = *value;
+        enum PipeSuffix {
+            PlanB(Option<(String, Span)>, Block, Span),
+            Try(Span),
+        }
+        let mut suffixes = Vec::new();
+        while !parenthesized && matches!(step.kind, ExprKind::PlanB { .. } | ExprKind::Try(_)) {
+            match step.kind {
+                ExprKind::PlanB { value, error, body } => {
+                    suffixes.push(PipeSuffix::PlanB(error, body, step.span));
+                    step = *value;
+                }
+                ExprKind::Try(inner) => {
+                    suffixes.push(PipeSuffix::Try(step.span));
+                    step = *inner;
+                }
+                _ => break,
+            }
         }
         let callee = match &step.kind {
             ExprKind::Call { name, .. } => format!("'{}'", name),
@@ -3932,6 +3960,122 @@ impl Parser {
             return Err(Error::at(self.peek_span(), format!("the call after {} is the whole of its step, so '..' can't follow it; put the pipe in parentheses, as in '(a |> f())..b'", pipe)));
         }
         let mut piped = Expr::new(ExprKind::Pipe(Box::new(step)), span);
+        for suffix in suffixes.into_iter().rev() {
+            piped = match suffix {
+                PipeSuffix::PlanB(error, body, at) => Expr::new(ExprKind::PlanB { value: Box::new(piped), error, body }, at),
+                PipeSuffix::Try(at) => Expr::new(ExprKind::Try(Box::new(piped)), at),
+            };
+        }
+        Ok(piped)
+    }
+
+    fn parse_err_pipe(&mut self, mut value: Expr, count: usize) -> Result<Expr> {
+        let span = self.peek_span();
+        let pipe = Token::ErrPipe(count).describe();
+        self.advance();
+        if matches!(self.peek(), Token::RParen | Token::RBracket | Token::RBrace | Token::Comma | Token::Newline | Token::Eof) {
+            return Err(Error::at(self.peek_span(), format!("{} maps the failure of the value before it, as in 'call() !> Err.new()'", pipe)));
+        }
+        if let ExprKind::ErrPipe { propagate, .. } = &mut value.kind {
+            *propagate = false;
+        }
+        let mut binder = None;
+        if count == 1 {
+            if let Token::Ident(name) = self.peek().clone()
+                && self.tokens.get(self.pos + 1) == Some(&Token::Arrow)
+            {
+                let bspan = self.peek_span();
+                self.advance();
+                self.advance();
+                binder = Some((name, bspan));
+            } else if self.check(Token::LParen)
+                && let Some(Token::Ident(name)) = self.tokens.get(self.pos + 1).cloned()
+                && self.tokens.get(self.pos + 2) == Some(&Token::RParen)
+                && self.tokens.get(self.pos + 3) == Some(&Token::Arrow)
+            {
+                self.advance();
+                let bspan = self.peek_span();
+                self.advance();
+                self.advance();
+                self.advance();
+                binder = Some((name, bspan));
+            } else if (self.check(Token::Underscore) && self.tokens.get(self.pos + 1) == Some(&Token::Arrow))
+                || (self.check(Token::LParen)
+                    && self.tokens.get(self.pos + 1) == Some(&Token::Underscore)
+                    && self.tokens.get(self.pos + 2) == Some(&Token::RParen)
+                    && self.tokens.get(self.pos + 3) == Some(&Token::Arrow))
+            {
+                return Err(Error::at(
+                    self.peek_span(),
+                    "in '!>', the error value is optional, so write 'call() !> MyErr.Fixed' or 'call() !> e -> ...' instead of '_'",
+                ));
+            }
+        }
+        self.in_err_pipe += 1;
+        let parenthesized = self.check(Token::LParen);
+        let step_res = if binder.is_some() {
+            self.parse_binary_with(Self::PIPE_PRECEDENCE + 1, false)
+        } else {
+            self.parse_postfix().and_then(|s| if self.check(Token::At) { self.parse_call_region(s) } else { Ok(s) })
+        };
+        self.in_err_pipe -= 1;
+        let mut step = step_res?;
+        let mut plans = Vec::new();
+        while !parenthesized && matches!(step.kind, ExprKind::PlanB { .. }) {
+            let ExprKind::PlanB { value: inner, error, body } = step.kind else { break };
+            plans.push((error, body, step.span));
+            step = *inner;
+        }
+        if count > 1 {
+            let args = match &step.kind {
+                ExprKind::Call { args, .. } | ExprKind::MethodCall { args, .. } | ExprKind::Invoke { args, .. } | ExprKind::Construct { args, .. } if !parenthesized => args,
+                _ => {
+                    return Err(Error::at(
+                        step.span,
+                        format!("{} passes the failure as argument {}, so a call with parentheses follows it, as in 'call() !>> Err.new(\"msg\")'", pipe, count),
+                    ));
+                }
+            };
+            let written = args.iter().filter(|arg| !matches!(arg.kind, ExprKind::RegionAfter(_))).count();
+            if count > written + 1 {
+                return Err(Error::at(
+                    span,
+                    format!(
+                        "{0} passes the failure as argument {1}, but the call writes {2}, so argument {3} would be missing; write the arguments before it, or fewer '>'",
+                        pipe,
+                        count,
+                        match written {
+                            0 => "none".to_string(),
+                            1 => "only 1".to_string(),
+                            n => format!("only {}", n),
+                        },
+                        written + 1
+                    ),
+                ));
+            }
+        }
+        if !matches!(self.peek(), Token::Newline | Token::Eof)
+            && Self::binary_op(self.peek()).is_some_and(|(_, precedence)| precedence > Self::PIPE_PRECEDENCE)
+        {
+            let op = self.peek().describe();
+            let symbol = op.trim_matches('\'');
+            return Err(Error::at(
+                self.peek_span(),
+                format!("the step after {0} is the whole of its step, so {1} can't follow it; put the pipeline in parentheses, as in '(a !> f()) {2} 1'", pipe, op, symbol),
+            ));
+        }
+        let propagate = plans.is_empty();
+        let mut piped = Expr::new(
+            ExprKind::ErrPipe {
+                value: Box::new(value),
+                step: Box::new(step),
+                binder,
+                count,
+                propagate,
+                prepared: false,
+            },
+            span,
+        );
         for (error, body, at) in plans.into_iter().rev() {
             piped = Expr::new(ExprKind::PlanB { value: Box::new(piped), error, body }, at);
         }
@@ -4042,6 +4186,11 @@ impl Parser {
 
     fn parse_unary(&mut self) -> Result<Expr> {
         if self.check(Token::Failure) {
+            if self.in_err_pipe > 0 {
+                let span = self.peek_span();
+                self.advance();
+                return self.parse_suffixes(Expr::new(ExprKind::Var(FAILURE_VAL.to_string()), span), false);
+            }
             return Err(Error::at(self.peek_span(), FAIL_MAKES));
         }
         if matches!(self.peek(), Token::Fail | Token::Minus | Token::Not | Token::Amp | Token::ChanRecv) {
@@ -4187,7 +4336,7 @@ impl Parser {
         let mut levels = 0;
         loop {
             match self.peek() {
-                Token::Dot | Token::LBracket | Token::Caret => {
+                Token::Dot | Token::LBracket | Token::Caret | Token::Bang => {
                     self.enter()?;
                     levels += 1;
                     expr = self.parse_suffix(expr)?;
@@ -4291,6 +4440,10 @@ impl Parser {
                 self.expect(Token::RBracket)?;
                 Ok(Expr::new(ExprKind::Index(Box::new(expr), Box::new(index)), span))
             }
+            Token::Bang => {
+                self.advance();
+                Ok(Expr::new(ExprKind::Try(Box::new(expr)), span))
+            }
             _ => {
                 self.advance();
                 Ok(Expr::new(ExprKind::Deref(Box::new(expr)), span))
@@ -4302,11 +4455,19 @@ impl Parser {
         // Outlined primary arm to keep `parse_primary` stack frames small under `MAX_NESTING`.
         let span = self.peek_span();
         match self.peek() {
+            Token::Bang => Err(Error::at(span, "unexpected '!'; Vela negates with 'not'")),
             Token::Parts => Err(Error::at(span, PARTS_AS_OR)),
             Token::Pipe(_) => Err(Error::at(
                 span,
                 format!(
                     "{} gives the value before it to the call after it, so a value comes first, as in 'xs |> total()'; a line starting with it goes on with the chain of a line that ends with a value",
+                    self.peek().describe()
+                ),
+            )),
+            Token::ErrPipe(_) => Err(Error::at(
+                span,
+                format!(
+                    "{} maps the failure of the value before it, so a fallible value comes first, as in 'call() !> Err.new()'",
                     self.peek().describe()
                 ),
             )),
@@ -5620,6 +5781,7 @@ pub(crate) fn interpolated_parts(pieces: Vec<Expr>, region: &str, region_span: S
 fn calls_value(expr: &Expr) -> bool {
     match &expr.kind {
         ExprKind::Index(..) | ExprKind::Call { .. } | ExprKind::Invoke { .. } | ExprKind::Deref(_) | ExprKind::MethodCall { .. } => true,
+        ExprKind::Try(inner) => calls_value(inner),
         ExprKind::Field(_, item) => item.bytes().all(|b| b.is_ascii_digit()),
         _ => false,
     }
@@ -5735,6 +5897,7 @@ pub fn empty_lambda_has_results(line: &[&Token]) -> bool {
                     | Token::Le
                     | Token::Ge
                     | Token::Pipe(_)
+                    | Token::ErrPipe(_)
                     | Token::Dot
             )
         });

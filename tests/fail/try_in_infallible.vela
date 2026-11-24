@@ -1,0 +1,13 @@
+; error: 11:22: '!' propagates a 'Err' failure, so this task must return a failure too (such as '-> R ~ Err')
+kind Err
+    Boom
+fi
+
+task risky() -> int ~ Err
+    <- fail Err.Boom
+fi
+
+task main()
+    fixed x = risky()!
+    show(x)
+fi

@@ -1,6 +1,7 @@
 ; std/web: networking, HTTP server, client, routing, and web primitives.
 
 include std/files {File, FileMode, FileError}
+include std/json {Json, JsonError, parse => json_parse, stringify => json_stringify}
 
 kind SocketError
     WouldBlock
@@ -473,6 +474,18 @@ shape Client
     shared fetch_json(url: text@p, body: text@p, r: region default) -> Response@r ~ WebError@r
         <- http_client_request("POST", url, body, "application/json", 5000, r)
     fi
+
+    rpc_call(url: text@p, method: text@q, params: Json@r, r: region default) -> RpcResponse@r ~ WebError@r
+        fixed wire = encode_rpc_request(method, params, Json.Int(1), r)
+        fixed resp = http_client_request("POST", url, wire, "application/json", .timeout_ms, r)!
+        fixed parsed = json_parse(resp.body_data, r) !> e -> WebError.BadResponse(e.str(r))
+        <- parse_rpc_response_json(parsed, r)
+    fi
+
+    rpc_notify(url: text@p, method: text@q, params: Json@r, r: region default) -> nothing ~ WebError@r
+        fixed wire = encode_rpc_request(method, params, none, r)
+        http_client_request("POST", url, wire, "application/json", .timeout_ms, r)!
+    fi
 fi
 
 task fetch(url: text@p, r: region default) -> Response@r ~ WebError@r
@@ -658,6 +671,8 @@ shape RouteEntry
     pattern: text = ""
     handler: maybe (Request@r, @r) -> Response@r ~ WebError@r = none
     ws_handler: maybe (WebSocket, Request@r, @r) -> nothing = none
+    rpc_server: maybe RpcServer = none
+    rpc_ws: bool = false
     folder: text = ""
     prefix: text = ""
 fi
@@ -720,6 +735,22 @@ shape Router
         <- .this
     fi
 
+    alters rpc(pattern: text, srv: RpcServer) -> Router@this
+        when .count < 128
+            .routes[.count] = RouteEntry { method_code: 2, pattern: pattern, rpc_server: srv }
+            .count++
+        fi
+        <- .this
+    fi
+
+    alters ws_rpc(pattern: text, srv: RpcServer) -> Router@this
+        when .count < 128
+            .routes[.count] = RouteEntry { method_code: 1, pattern: pattern, rpc_server: srv, rpc_ws: true }
+            .count++
+        fi
+        <- .this
+    fi
+
     route(req: Request@r, r: region default) -> Response@r ~ WebError@r
         flex idx = 0
         flex path_matched = false
@@ -731,6 +762,13 @@ shape Router
                 when entry.method_code == 0 or entry.method_code == method_code(req.method)
                     when entry.folder != ""
                         <- serve_file_request(entry.folder, entry.prefix, req, r)
+                    else when entry.rpc_server is {srv}
+                        when entry.rpc_ws
+                            fixed ws = req.upgrade_websocket(r)!
+                            srv.handle_ws(ws, req, r)
+                            <- Response.with_status(101, r, "Switching Protocols")
+                        fi
+                        <- srv.handle_http(req, r)
                     else when entry.ws_handler is {wsh}
                         when not req.is_websocket_upgrade()
                             <- fail WebError.BadRequest("expected websocket upgrade")
@@ -810,6 +848,13 @@ shape DefaultRouter
                 when entry.method_code == 0 or entry.method_code == method_code(req.method)
                     when entry.folder != ""
                         <- serve_file_request(entry.folder, entry.prefix, req, r)
+                    else when entry.rpc_server is {srv}
+                        when entry.rpc_ws
+                            fixed ws = req.upgrade_websocket(r)!
+                            srv.handle_ws(ws, req, r)
+                            <- Response.with_status(101, r, "Switching Protocols")
+                        fi
+                        <- srv.handle_http(req, r)
                     else when entry.ws_handler is {wsh}
                         when not req.is_websocket_upgrade()
                             <- fail WebError.BadRequest("expected websocket upgrade")
@@ -848,6 +893,20 @@ shape DefaultRouter
     shared ws(pattern: text, handler: (WebSocket, Request@r, @r) -> nothing)
         when DefaultRouter.count < 128
             DefaultRouter.routes[DefaultRouter.count] = RouteEntry { method_code: 1, pattern: pattern, ws_handler: handler }
+            DefaultRouter.count++
+        fi
+    fi
+
+    shared rpc(pattern: text, srv: RpcServer)
+        when DefaultRouter.count < 128
+            DefaultRouter.routes[DefaultRouter.count] = RouteEntry { method_code: 2, pattern: pattern, rpc_server: srv }
+            DefaultRouter.count++
+        fi
+    fi
+
+    shared ws_rpc(pattern: text, srv: RpcServer)
+        when DefaultRouter.count < 128
+            DefaultRouter.routes[DefaultRouter.count] = RouteEntry { method_code: 1, pattern: pattern, rpc_server: srv, rpc_ws: true }
             DefaultRouter.count++
         fi
     fi
@@ -907,6 +966,14 @@ fi
 
 task ws(pattern: text, handler: (WebSocket, Request@r, @r) -> nothing)
     DefaultRouter.ws(pattern, handler)
+fi
+
+task rpc(pattern: text, srv: RpcServer)
+    DefaultRouter.rpc(pattern, srv)
+fi
+
+task ws_rpc(pattern: text, srv: RpcServer)
+    DefaultRouter.ws_rpc(pattern, srv)
 fi
 
 task router() -> Router
@@ -1784,7 +1851,7 @@ task parse_response(raw: text@r, r: region default) -> Response@r ~ WebError@r
     <- fail WebError.BadResponse("headers not terminated")
 fi
 
-task http_client_request(method_str: text@p, url: text@p, body: text@p, content_type: text@p, timeout_ms: int, r: region default) -> Response@r ~ WebError@r
+task http_client_request(method_str: text@p, url: text@q, body: text@b, content_type: text@c, timeout_ms: int, r: region default) -> Response@r ~ WebError@r
     fixed (host, port, path) = parse_url(url) { failure e
         <- fail e
     }
@@ -2249,6 +2316,616 @@ task serve_file_request(folder: text@p, prefix: text@p, req: Request@r, r: regio
     flex hdrs = new [text: text]() at r
     hdrs["content-type"] = mime_type(disk_path, r)
     <- Response { status: 200, reason: "OK", headers: hdrs, body_data: content }
+fi
+
+; --- JSON-RPC 2.0 protocol, framing, persistent connections, and dispatch ---
+
+kind RpcFraming
+    Line
+    ContentLength
+fi
+
+kind RpcError
+    BadJson
+    InvalidRequest
+    MethodNotFound
+    InvalidParams
+    InternalError
+    TransportError(why: text)
+    ServerError(code: int, message: text, data: text)
+
+    code() -> int
+        <- match .this
+        case BadJson = -32700
+        case InvalidRequest = -32600
+        case MethodNotFound = -32601
+        case InvalidParams = -32602
+        case InternalError = -32603
+        case TransportError _ = -32000
+        case ServerError c _ _ = c
+        fi
+    fi
+
+    message() -> text@this
+        <- match .this
+        case BadJson = "Parse error"
+        case InvalidRequest = "Invalid Request"
+        case MethodNotFound = "Method not found"
+        case InvalidParams = "Invalid params"
+        case InternalError = "Internal error"
+        case TransportError w = w
+        case ServerError _ m _ = m
+        fi
+    fi
+
+    to_json(r: region default) -> Json@r
+        flex obj = new [text: Json]() at r
+        obj["code"] = Json.Int(.code())
+        obj["message"] = Json.Str("{.message()}" at r)
+        match .this
+        case ServerError _ _ d
+            when d.len > 0
+                obj["data"] = Json.Str("{d}" at r)
+            fi
+        case _
+        fi
+        <- Json.Object(obj)
+    fi
+
+    str(r: region default) -> text@r
+        <- "RPC error {.code()}: {.message()}" at r
+    fi
+fi
+
+shape RpcRequest
+    method: text
+    params: Json = Json.Null
+    id: maybe Json = none
+
+    is_notification() -> bool
+        <- when .id is {_} false else true fi
+    fi
+
+    to_json(r: region default) -> Json@r
+        flex obj = new [text: Json]() at r
+        obj["jsonrpc"] = Json.Str("2.0")
+        obj["method"] = Json.Str("{.method}" at r)
+        when .params is Json.Null
+        else
+            obj["params"] = .params.copy() at r
+        fi
+        when .id is {req_id}
+            obj["id"] = req_id.copy() at r
+        fi
+        <- Json.Object(obj)
+    fi
+
+    encode(r: region default) -> text@r
+        <- json_stringify(.to_json(r), r)
+    fi
+fi
+
+shape RpcResponse
+    id: Json = Json.Null
+    result: maybe Json = none
+    error: maybe RpcError = none
+
+    is_ok() -> bool
+        <- when .error is {_} false else true fi
+    fi
+
+    to_json(r: region default) -> Json@r
+        flex obj = new [text: Json]() at r
+        obj["jsonrpc"] = Json.Str("2.0")
+        obj["id"] = .id.copy() at r
+        when .error is {err}
+            obj["error"] = err.to_json(r)
+        else when .result is {res}
+            obj["result"] = res.copy() at r
+        else
+            obj["result"] = Json.Null
+        fi
+        <- Json.Object(obj)
+    fi
+
+    encode(r: region default) -> text@r
+        <- json_stringify(.to_json(r), r)
+    fi
+fi
+
+task encode_rpc_request(method: text@p, params: Json@q, id: maybe Json@s, r: region default) -> text@r
+    flex obj = new [text: Json]() at r
+    obj["jsonrpc"] = Json.Str("2.0")
+    obj["method"] = Json.Str("{method}" at r)
+    when params is Json.Null
+    else
+        obj["params"] = params.copy() at r
+    fi
+    when id is {req_id}
+        obj["id"] = req_id.copy() at r
+    fi
+    <- json_stringify(Json.Object(obj), r)
+fi
+
+priv task encode_rpc_error_wire(id: Json@p, err: RpcError@q, r: region default) -> text@r
+    flex obj = new [text: Json]() at r
+    obj["jsonrpc"] = Json.Str("2.0")
+    obj["id"] = id.copy() at r
+    obj["error"] = err.to_json(r)
+    <- json_stringify(Json.Object(obj), r)
+fi
+
+priv task rpc_valid_id(val: Json@p) -> bool
+    <- match val
+    case Json.Null = true
+    case Json.Str _ = true
+    case Json.Int _ = true
+    case Json.BigInt _ = true
+    case Json.Float _ = true
+    case _ = false
+    fi
+fi
+
+priv task rpc_object_of(val: Json@p) -> maybe [text: Json]@p
+    <- match val
+    case Json.Object m = m
+    case _ = none
+    fi
+fi
+
+priv task rpc_extract_error(eobj: [text: Json]@r, r: region default) -> maybe RpcError@r
+    fixed code_node = eobj[#"code"] { <- none }
+    fixed code = code_node.as_int() { <- none }
+    fixed msg_node = eobj[#"message"] { <- none }
+    fixed msg = msg_node.as_text() { <- none }
+    fixed data_str: text@r = when eobj[#"data"] is {d_node}
+        when d_node.as_text() is {dt}
+            dt
+        else
+            json_stringify(d_node, r)
+        fi
+    else
+        ""
+    fi
+    <- RpcError.ServerError(code, msg, data_str)
+fi
+
+priv task parse_rpc_request_json(val: Json@r, r: region default) -> RpcRequest@r ~ RpcError@r
+    fixed props: [text: Json]@r = rpc_object_of(val) { <- fail RpcError.InvalidRequest }
+    fixed ver_node = props[#"jsonrpc"] { <- fail RpcError.InvalidRequest }
+    fixed ver = ver_node.as_text() { <- fail RpcError.InvalidRequest }
+    when ver != "2.0"
+        <- fail RpcError.InvalidRequest
+    fi
+    fixed method_node = props[#"method"] { <- fail RpcError.InvalidRequest }
+    fixed method = method_node.as_text() { <- fail RpcError.InvalidRequest }
+    when method.len == 0
+        <- fail RpcError.InvalidRequest
+    fi
+    flex req_id: maybe Json@r = none
+    when props[#"id"] is {id_node}
+        when not rpc_valid_id(id_node)
+            <- fail RpcError.InvalidRequest
+        fi
+        req_id = id_node.copy() at r
+    fi
+    fixed params: Json@r = when props[#"params"] is {p}
+        fixed valid = match p
+        case Json.Array _ = true
+        case Json.Object _ = true
+        case Json.Null = true
+        case _ = false
+        fi
+        when not valid
+            <- fail RpcError.InvalidParams
+        fi
+        p
+    else
+        Json.Null
+    fi
+    <- RpcRequest { method: method, params: params, id: req_id }
+fi
+
+priv task parse_rpc_response_json(val: Json@r, r: region default) -> RpcResponse@r ~ WebError@r
+    fixed props: [text: Json]@r = rpc_object_of(val) { <- fail WebError.BadResponse("JSON-RPC response is not a JSON object") }
+    fixed id_node = props[#"id"] { Json.Null }
+    when props[#"error"] is {err_node}
+        fixed eobj: [text: Json]@r = rpc_object_of(err_node) { <- fail WebError.BadResponse("JSON-RPC error field must be an object") }
+        fixed rpc_err = rpc_extract_error(eobj, r) { <- fail WebError.BadResponse("malformed JSON-RPC error object") }
+        <- RpcResponse { id: id_node, result: none, error: rpc_err }
+    fi
+    fixed res: maybe Json@r = props[#"result"]
+    <- RpcResponse { id: id_node, result: res, error: none }
+fi
+
+priv task parse_rpc_response_raw(raw: text@r, r: region default) -> RpcResponse@r ~ RpcError@r
+    fixed parsed = json_parse(raw, r) !> RpcError.BadJson
+    fixed props: [text: Json]@r = rpc_object_of(parsed) { <- fail RpcError.InvalidRequest }
+    fixed ver_node = props[#"jsonrpc"] { <- fail RpcError.InvalidRequest }
+    fixed ver = ver_node.as_text() { <- fail RpcError.InvalidRequest }
+    when ver != "2.0"
+        <- fail RpcError.InvalidRequest
+    fi
+    fixed id_node = props[#"id"] { Json.Null }
+    when props[#"error"] is {err_node}
+        fixed eobj: [text: Json]@r = rpc_object_of(err_node) { <- fail RpcError.InvalidRequest }
+        fixed rpc_err = rpc_extract_error(eobj, r) { <- fail RpcError.InvalidRequest }
+        <- RpcResponse { id: id_node, result: none, error: rpc_err }
+    fi
+    fixed res: maybe Json@r = props[#"result"]
+    <- RpcResponse { id: id_node, result: res, error: none }
+fi
+
+priv task content_length_header(hdrs: text@p) -> int
+    region scratch default
+    fixed lower = to_lower(hdrs, scratch)
+    fixed idx = text_find(lower, "content-length:", 0)
+    when idx < 0
+        <- -1
+    fi
+    fixed line_end = text_find(lower, "\r\n", idx)
+    fixed val_end = when line_end >= 0 line_end else lower.len fi
+    fixed raw_len = trim(cut(lower, idx + 15, val_end))
+    <- int(raw_len) { -1 }
+fi
+
+shape JsonRpcConn
+    sock: Socket
+    ws: maybe WebSocket = none
+    framing: RpcFraming = RpcFraming.Line
+    timeout_ms: int = 5000
+    next_id: int = 1
+    closed: bool = false
+
+    shared from_socket(sock: Socket, framing: RpcFraming = RpcFraming.Line, timeout_ms: int = 5000) -> JsonRpcConn
+        <- JsonRpcConn { sock: sock, ws: none, framing: framing, timeout_ms: timeout_ms }
+    fi
+
+    shared from_ws(ws: WebSocket, timeout_ms: int = 5000) -> JsonRpcConn
+        <- JsonRpcConn { sock: ws.sock, ws: ws, framing: RpcFraming.Line, timeout_ms: timeout_ms }
+    fi
+
+    shared connect(host: text@p, port: int, framing: RpcFraming, r: region default) -> JsonRpcConn ~ WebError
+        fixed sock = Socket.open(r) !> WebError.ServerFailed("failed to open JSON-RPC socket")
+        sock.connect(host, port) { failure _
+            flex s = sock
+            s.close() { failure _ }
+            <- fail WebError.ServerFailed("failed to connect JSON-RPC socket")
+        }
+        fixed wr = sock.poll(2, 5000) { 0 }
+        when wr <= 0
+            flex s = sock
+            s.close() { failure _ }
+            <- fail WebError.ServerFailed("JSON-RPC connection timed out")
+        fi
+        <- JsonRpcConn { sock: sock, ws: none, framing: framing, timeout_ms: 5000 }
+    fi
+
+    shared accept(server_sock: Socket, framing: RpcFraming, r: region default) -> JsonRpcConn ~ WebError
+        fixed client = server_sock.accept(r) !> WebError.ServerFailed("failed accepting JSON-RPC connection")
+        <- JsonRpcConn { sock: client, ws: none, framing: framing, timeout_ms: 5000 }
+    fi
+
+    shared connect_ws(url: text@p, r: region default) -> JsonRpcConn ~ WebError@r
+        fixed ws = ws_connect(url, r)!
+        <- JsonRpcConn.from_ws(ws, 5000)
+    fi
+
+    timeout(ms: int) -> JsonRpcConn
+        <- JsonRpcConn { sock: .sock, ws: .ws, framing: .framing, timeout_ms: ms, next_id: .next_id, closed: .closed }
+    fi
+
+    is_open() -> bool
+        when .closed
+            <- false
+        fi
+        when .ws is {ws_conn}
+            <- ws_conn.is_open()
+        fi
+        <- .sock.raw_handle() >= 0
+    fi
+
+    send_message(payload: text@p, r: region default) -> nothing ~ RpcError
+        when .closed
+            <- fail RpcError.TransportError("connection closed")
+        fi
+        when .ws is {ws_conn}
+            ws_conn.send_text(payload, r) !> RpcError.TransportError("failed sending WebSocket RPC frame")
+            <-
+        fi
+        fixed framed = match .framing
+        case RpcFraming.Line = "{payload}\n" at r
+        case RpcFraming.ContentLength = "Content-Length: {payload.len}\r\n\r\n{payload}" at r
+        fi
+        when not put_bytes(.sock, framed) or not drain(.sock, .timeout_ms)
+            <- fail RpcError.TransportError("failed writing JSON-RPC frame")
+        fi
+    fi
+
+    alters recv_message(into: region default) -> text@into ~ RpcError
+        when .closed
+            <- fail RpcError.TransportError("connection closed")
+        fi
+        when .ws is {ws_conn}
+            flex ws_mut = ws_conn
+            endless
+                fixed msg = ws_mut.recv(into) !> RpcError.TransportError("failed reading WebSocket RPC frame")
+                .ws = ws_mut
+                match msg
+                case WebSocketMessage.Text text_payload
+                    <- "{text_payload}" at into
+                case WebSocketMessage.Binary bin_payload
+                    <- "{bin_payload}" at into
+                case WebSocketMessage.Close _ reason
+                    .closed = true
+                    <- fail RpcError.TransportError("WebSocket closed")
+                case _
+                fi
+            fi
+        fi
+        fixed handle = .sock.raw_handle()
+        fixed deadline = time_ms() + .timeout_ms
+        endless
+            region stash_r default
+            fixed stashed = native_socket_stashed(handle, stash_r)
+            match .framing
+            case RpcFraming.Line
+                fixed nl = text_find(stashed, "\n", 0)
+                when nl >= 0
+                    fixed line_end = when nl > 0 and cut(stashed, nl - 1, nl) == "\r" nl - 1 else nl fi
+                    fixed msg = "{cut(stashed, 0, line_end)}" at into
+                    native_socket_stash_consume(handle, nl + 1)
+                    when msg.len > 0
+                        <- msg
+                    fi
+                    continue
+                fi
+            case RpcFraming.ContentLength
+                fixed hdr_end = text_find(stashed, "\r\n\r\n", 0)
+                when hdr_end >= 0
+                    fixed body_len = content_length_header(cut(stashed, 0, hdr_end))
+                    when body_len < 0
+                        native_socket_unstash(handle)
+                        <- fail RpcError.BadJson
+                    fi
+                    fixed total = hdr_end + 4 + body_len
+                    when stashed.len >= total
+                        fixed msg = "{cut(stashed, hdr_end + 4, total)}" at into
+                        native_socket_stash_consume(handle, total)
+                        <- msg
+                    fi
+                fi
+            fi
+            fixed now = time_ms()
+            when cancelled() or now >= deadline
+                <- fail RpcError.TransportError("timed out waiting for JSON-RPC message")
+            fi
+            fixed rem = deadline - now
+            fixed wait = when rem > 100 100 else rem fi
+            fixed ready = .sock.poll(1, wait) !> RpcError.TransportError("socket poll failed")
+            when ready == 0
+                continue
+            fi
+            fixed chunk = .sock.read(8192, stash_r) { failure err
+                fixed is_wb = match err
+                case SocketError.WouldBlock = true
+                case _ = false
+                fi
+                when is_wb
+                    continue
+                fi
+                .closed = true
+                <- fail RpcError.TransportError("socket read failed")
+            }
+            when chunk.len == 0
+                .closed = true
+                <- fail RpcError.TransportError("connection closed")
+            fi
+            native_socket_stash(handle, chunk)
+        fi
+    fi
+
+    alters recv_request(r: region default) -> RpcRequest@r ~ RpcError@r
+        fixed raw = .recv_message(r)!
+        fixed parsed = json_parse(raw, r) !> RpcError.BadJson
+        <- parse_rpc_request_json(parsed, r)
+    fi
+
+    send_response(resp: RpcResponse@p, r: region default) -> nothing ~ RpcError
+        .send_message(resp.encode(r), r)!
+    fi
+
+    send_result(id: Json@p, res: Json@p, r: region default) -> nothing ~ RpcError
+        fixed resp = RpcResponse { id: id, result: res, error: none }
+        .send_response(resp, r)!
+    fi
+
+    send_error(id: Json@p, err: RpcError@q, r: region default) -> nothing ~ RpcError
+        .send_message(encode_rpc_error_wire(id, err, r), r)!
+    fi
+
+    notify(method: text@p, params: Json@r, r: region default) -> nothing ~ RpcError
+        .send_message(encode_rpc_request(method, params, none, r), r)!
+    fi
+
+    alters call(method: text@p, params: Json@r, r: region default) -> Json@r ~ RpcError@r
+        fixed req_id = .next_id
+        .next_id++
+        .send_message(encode_rpc_request(method, params, Json.Int(req_id), r), r)!
+        fixed raw = .recv_message(r)!
+        fixed resp = parse_rpc_response_raw(raw, r)!
+        when resp.error is {err}
+            <- fail err
+        fi
+        <- when resp.result is {res} res else Json.Null fi
+    fi
+
+    alters close(r: region default)
+        when .closed
+            <-
+        fi
+        .closed = true
+        when .ws is {ws_conn}
+            flex ws_mut = ws_conn
+            ws_mut.close(1000, "closed", r) { failure _ }
+            .ws = ws_mut
+            <-
+        fi
+        flex s = .sock
+        s.close() { failure _ }
+        .sock = s
+    fi
+fi
+
+shape RpcEntry
+    method: text = ""
+    handler: maybe (Json@r, @r) -> Json@r ~ RpcError@r = none
+fi
+
+shape RpcServer
+    count: int = 0
+    entries: [RpcEntry#128] = [RpcEntry {}#128]
+
+    shared new() -> RpcServer
+        <- RpcServer {}
+    fi
+
+    alters register(method: text, handler: (Json@r, @r) -> Json@r ~ RpcError@r) -> RpcServer@this
+        flex i = 0
+        loop i < .count
+            when .entries[i].method == method
+                .entries[i] = RpcEntry { method: method, handler: handler }
+                <- .this
+            fi
+            i++
+        fi
+        when .count < 128
+            .entries[.count] = RpcEntry { method: method, handler: handler }
+            .count++
+        fi
+        <- .this
+    fi
+
+    find_handler(method: text@p) -> maybe (Json@r, @r) -> Json@r ~ RpcError@r
+        flex i = 0
+        loop i < .count
+            when .entries[i].method == method
+                <- .entries[i].handler
+            fi
+            i++
+        fi
+        <- none
+    fi
+
+    dispatch_value(val: Json@r, r: region default) -> maybe text@r
+        fixed req = parse_rpc_request_json(val, r) { failure err
+            fixed err_id: Json@r = when val.get("id") is {id_val}
+                when rpc_valid_id(id_val) id_val else Json.Null fi
+            else
+                Json.Null
+            fi
+            <- encode_rpc_error_wire(err_id, err, r)
+        }
+        fixed handler = when .find_handler(req.method) is {h}
+            h
+        else
+            when req.id is {req_id}
+                <- encode_rpc_error_wire(req_id, RpcError.MethodNotFound, r)
+            fi
+            <- none
+        fi
+        fixed result = handler(req.params, r) { failure err
+            when req.id is {req_id}
+                <- encode_rpc_error_wire(req_id, err, r)
+            fi
+            <- none
+        }
+        when req.id is {req_id}
+            fixed resp = RpcResponse { id: req_id, result: result, error: none }
+            <- resp.encode(r)
+        fi
+        <- none
+    fi
+
+    dispatch_raw(raw: text@r, r: region default) -> maybe text@r
+        fixed parsed = json_parse(raw, r) { failure _
+            <- encode_rpc_error_wire(Json.Null, RpcError.BadJson, r)
+        }
+        match parsed
+        case Json.Array items
+            when items.len == 0
+                <- encode_rpc_error_wire(Json.Null, RpcError.InvalidRequest, r)
+            fi
+            flex replies = new [text]() at r
+            each item in items
+                when .dispatch_value(item, r) is {reply}
+                    replies.add(reply)
+                fi
+            fi
+            when replies.len == 0
+                <- none
+            fi
+            flex joined: text@r = "["
+            flex i = 0
+            each reply in replies
+                when i > 0
+                    joined = "{joined}," at r
+                fi
+                joined = "{joined}{reply}" at r
+                i++
+            fi
+            <- "{joined}]" at r
+        case _
+        fi
+        <- .dispatch_value(parsed, r)
+    fi
+
+    handle_http(req: Request@r, r: region default) -> Response@r
+        when .dispatch_raw(req.body(), r) is {reply}
+            <- Response.json(reply, r)
+        fi
+        <- Response.with_status(204, r, "No Content")
+    fi
+
+    handle_ws(ws: WebSocket, req: Request@p, r: region default)
+        flex conn = JsonRpcConn.from_ws(ws)
+        .serve_conn(&conn, r)
+    fi
+
+    serve_conn(flex& conn: JsonRpcConn, outer: region default)
+        loop conn.is_open()
+            region msg_r default
+            fixed raw = conn.recv_message(msg_r) { failure _
+                break
+            }
+            when .dispatch_raw(raw, msg_r) is {reply}
+                conn.send_message(reply, msg_r) { failure _
+                    break
+                }
+            fi
+        fi
+        conn.close(outer)
+    fi
+fi
+
+task rpc_server() -> RpcServer
+    <- RpcServer.new()
+fi
+
+task rpc_connect(host: text@p, port: int, framing: RpcFraming, r: region default) -> JsonRpcConn ~ WebError
+    <- JsonRpcConn.connect(host, port, framing, r)
+fi
+
+task rpc_connect_ws(url: text@p, r: region default) -> JsonRpcConn ~ WebError@r
+    <- JsonRpcConn.connect_ws(url, r)
+fi
+
+task rpc_call(url: text@p, method: text@p, params: Json@r, r: region default) -> RpcResponse@r ~ WebError@r
+    <- Client.new().rpc_call(url, method, params, r)
+fi
+
+task rpc_notify(url: text@p, method: text@p, params: Json@r, r: region default) -> nothing ~ WebError@r
+    <- Client.new().rpc_notify(url, method, params, r)
 fi
 
 priv native task native_socket_open(within: region) -> int

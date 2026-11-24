@@ -488,6 +488,9 @@ pub const THIS_WORD: &str = "this";
 /// Parameter name for the method receiver (`.this`); leading `.` cannot collide with user identifiers.
 pub const THIS: &str = ".this";
 
+/// Hidden parameter name for the failure value in `!>` pipelines.
+pub const FAILURE_VAL: &str = ".failure";
+
 pub const MEMBER_WRAPPER: &str = ".";
 
 /// Temporary per-line region name used by `show` for `.str()`; leading `.` prevents user shadowing.
@@ -1632,6 +1635,15 @@ pub enum ExprKind {
     Widen(Box<Expr>),
     Pipe(Box<Expr>),
     Piped(Box<Expr>),
+    Try(Box<Expr>),
+    ErrPipe {
+        value: Box<Expr>,
+        step: Box<Expr>,
+        binder: Option<(String, Span)>,
+        count: usize,
+        propagate: bool,
+        prepared: bool,
+    },
     Fail(Box<Expr>),
     PlanB {
         value: Box<Expr>,

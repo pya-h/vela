@@ -3005,6 +3005,7 @@ impl Resolver<'_> {
                 self.expr(callee)?;
                 args.iter_mut().try_for_each(|e| self.expr(e))
             }
+            ExprKind::Var(name) if name == crate::ast::FAILURE_VAL => Ok(()),
             ExprKind::Var(name) => self.rename(name, span, &[What::Variant, What::Macro]),
             ExprKind::Call { name, types, args } => {
                 self.rename(name, span, &[What::Task, What::Variant])?;
@@ -3099,7 +3100,23 @@ impl Resolver<'_> {
             | ExprKind::Wrap(base)
             | ExprKind::Widen(base)
             | ExprKind::Pipe(base)
-            | ExprKind::Piped(base) => self.expr(base),
+            | ExprKind::Piped(base)
+            | ExprKind::Try(base) => self.expr(base),
+            ExprKind::ErrPipe {
+                value,
+                step,
+                binder,
+                count,
+                ..
+            } => {
+                self.expr(value)?;
+                if *count == 1 && binder.is_none() {
+                    self.resolve_err_pipe_step(step)?;
+                } else {
+                    self.expr(step)?;
+                }
+                Ok(())
+            }
             ExprKind::Index(a, b)
             | ExprKind::Lookup(a, b)
             | ExprKind::ChanSend(a, b)
@@ -3187,6 +3204,64 @@ impl Resolver<'_> {
         };
         self.expr(expr)?;
         Ok(true)
+    }
+
+    fn resolve_err_pipe_step(&self, step: &mut Expr) -> Result<()> {
+        if let ExprKind::Var(name) = &step.kind
+            && !name.starts_with('.')
+            && let Some(entry) = self.lookup(name, step.span, false)?
+            && matches!(entry.what, What::Shape | What::Kind)
+        {
+            let new_fn = method_name(&entry.full, NEW_WORD);
+            if self.has_method(&new_fn) {
+                step.kind = ExprKind::Call {
+                    name: new_fn,
+                    types: Vec::new(),
+                    args: Vec::new(),
+                };
+                return Ok(());
+            }
+        }
+        if let ExprKind::Field(base, member) = &step.kind
+            && let ExprKind::Var(first) = &base.kind
+        {
+            if let Some(full) = self.shared_method(&[first, member], step.span)?
+                && self.has_method(&full)
+            {
+                step.kind = ExprKind::Call {
+                    name: full,
+                    types: Vec::new(),
+                    args: Vec::new(),
+                };
+                return Ok(());
+            }
+            if let Some(module) = self.modules.get(first.as_str())
+                && let Ok(entry) = self.member(first, module, member, step.span)
+                && matches!(entry.what, What::Shape | What::Kind)
+            {
+                let new_fn = method_name(&entry.full, NEW_WORD);
+                if self.has_method(&new_fn) {
+                    step.kind = ExprKind::Call {
+                        name: new_fn,
+                        types: Vec::new(),
+                        args: Vec::new(),
+                    };
+                    return Ok(());
+                }
+            }
+        }
+        self.expr(step)?;
+        if let ExprKind::Shared { shape, field } = &step.kind {
+            let full = method_name(shape, field);
+            if self.has_method(&full) {
+                step.kind = ExprKind::Call {
+                    name: full,
+                    types: Vec::new(),
+                    args: Vec::new(),
+                };
+            }
+        }
+        Ok(())
     }
 }
 

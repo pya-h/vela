@@ -1,0 +1,24 @@
+; error: 19:19: a '!>' failure mapper must return a failure value (type E), not int ~ ErrB
+kind ErrA
+    A
+fi
+
+kind ErrB
+    B
+fi
+
+task risky() -> int ~ ErrA
+    <- fail ErrA.A
+fi
+
+task bad_map(e: ErrA) -> int ~ ErrB
+    <- fail ErrB.B
+fi
+
+task caller() -> int ~ ErrB
+    <- risky() !> bad_map()
+fi
+
+task main()
+    show(caller() { 0 })
+fi

@@ -1,0 +1,2 @@
+rpc response: {"jsonrpc":"2.0","id":1,"result":42}
+notification method=log.ping silent=true

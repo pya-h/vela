@@ -532,7 +532,20 @@ impl Checked {
             | ExprKind::Wrap(inner)
             | ExprKind::Widen(inner)
             | ExprKind::Pipe(inner)
-            | ExprKind::Piped(inner) => self.expr(inner, kinds),
+            | ExprKind::Piped(inner)
+            | ExprKind::Try(inner) => self.expr(inner, kinds),
+            ExprKind::ErrPipe {
+                value,
+                step,
+                binder,
+                ..
+            } => {
+                self.expr(value, kinds);
+                if let (Some((_, span)), Some(Type::Or(_, error_ty))) = (binder, &value.ty) {
+                    self.declare(*span, (**error_ty).clone());
+                }
+                self.expr(step, kinds);
+            }
             ExprKind::PlanB { value, error, body } => {
                 self.expr(value, kinds);
                 if let (Some((_, span)), Some(Type::Or(_, error_ty))) = (error, &value.ty) {

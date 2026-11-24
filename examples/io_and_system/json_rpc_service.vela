@@ -1,0 +1,62 @@
+; JSON-RPC 2.0 service over a loopback line-framed TCP socket connection.
+include std/json { Json }
+include std/web { Socket, WebError, RpcFraming, RpcError, RpcRequest, JsonRpcConn, RpcServer }
+
+task add_handler(params: Json@r, r: region default) -> Json@r ~ RpcError@r
+    match params
+    case Json.Array items
+        when items.len == 2
+            match items[0]
+            case Json.Int a
+                match items[1]
+                case Json.Int b
+                    <- Json.Int(a + b)
+                case _
+                fi
+            case _
+            fi
+        fi
+    case _
+    fi
+    <- fail RpcError.InvalidParams
+fi
+
+task run_demo(r: region default) -> nothing ~ WebError@r
+    flex listener = Socket.open(r) !> WebError.ListenFailed
+    listener.bind_to("127.0.0.1", 18115) !> WebError.ListenFailed
+    listener.listen(8) !> WebError.ListenFailed
+
+    fixed client_sock = Socket.open(r) !> WebError.ServerFailed("client open")
+    client_sock.connect("127.0.0.1", 18115) !> WebError.ServerFailed("connect")
+    fixed accepted_sock = listener.accept(r) !> WebError.ServerFailed("accept")
+
+    flex client = JsonRpcConn.from_socket(client_sock, RpcFraming.Line, 5000)
+    flex peer = JsonRpcConn.from_socket(accepted_sock, RpcFraming.Line, 5000)
+
+    flex srv = RpcServer.new()
+    srv = srv.register("math.add", add_handler)
+
+    flex args = new [Json]() at r
+    args.add(Json.Int(20))
+    args.add(Json.Int(22))
+    fixed req = RpcRequest { method: "math.add", params: Json.Array(args), id: Json.Int(1) }
+
+    client.send_message(req.encode(r), r) !> e -> WebError.BadResponse(e.str(r))
+    fixed incoming = peer.recv_message(r) !> e -> WebError.BadResponse(e.str(r))
+    when srv.dispatch_raw(incoming, r) is {reply}
+        peer.send_message(reply, r) !> e -> WebError.BadResponse(e.str(r))
+    fi
+    fixed response_raw = client.recv_message(r) !> e -> WebError.BadResponse(e.str(r))
+    show("rpc response: ", response_raw)
+
+    client.notify("log.ping", Json.Null, r) !> e -> WebError.BadResponse(e.str(r))
+    fixed note = peer.recv_request(r) !> e -> WebError.BadResponse(e.str(r))
+    show("notification method=", note.method, " silent=", note.is_notification())
+fi
+
+task main()
+    region r default
+    run_demo(r) { failure err
+        show("rpc demo failed")
+    }
+fi

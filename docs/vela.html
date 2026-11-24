@@ -1493,12 +1493,12 @@ small++                     <span class="comment">; stops: vela: 128 does not fi
         <tr><td><code>and</code></td><td></td></tr>
         <tr><td><code>== != ~= &lt;&gt;</code></td><td></td></tr>
         <tr><td><code>&lt; &lt;= &gt; &gt;=</code></td><td><code>1 &lt; 2 &lt; 3</code> is an error: <code>1 &lt; 2</code> is a <code>bool</code></td></tr>
-        <tr><td><code>|&gt; |&gt;&gt; …</code></td><td><code>a + 1 |&gt; f() == 3</code> is <code>f(a + 1) == 3</code> (see <a href="#pipes">Call pipes</a>)</td></tr>
+        <tr><td><code>|&gt; |&gt;&gt; …</code>, <code>!&gt; !&gt;&gt; …</code></td><td><code>a + 1 |&gt; f() == 3</code> is <code>f(a + 1) == 3</code>; <code>call() !&gt; Err.new()</code> maps failure (see <a href="#error-propagation">Error propagation</a> and <a href="#pipes">Call pipes</a>)</td></tr>
         <tr><td><code>..</code></td><td><code>0..n + 1</code> is <code>0..(n + 1)</code></td></tr>
         <tr><td><code>+ -</code></td><td></td></tr>
         <tr><td><code>* / %</code></td><td><code>2 + 3 * 4</code> is <code>14</code></td></tr>
         <tr><td><code>-x</code>, <code>not x</code>, <code>fail e</code>, <code>&amp;x</code></td><td><code>not a == b</code> is <code>(not a) == b</code>; write <code>not (a == b)</code>. <code>&amp;p^.x</code> is the place <code>p^.x</code></td></tr>
-        <tr><td><code>a.x</code>, <code>p^</code>, <code>xs[i]</code>, <code>f(x)</code>, <code>x { … }</code></td><td><code>p^.x</code> reads a field through a pointer; <code>x { 0 } * 2</code> is <code>(x { 0 }) * 2</code></td></tr>
+        <tr><td><code>a.x</code>, <code>p^</code>, <code>xs[i]</code>, <code>f(x)</code>, <code>x!</code>, <code>x { … }</code></td><td><code>p^.x</code> reads a field through a pointer; <code>call()!.meth()</code> propagates failures through chains; <code>x { 0 } * 2</code> is <code>(x { 0 }) * 2</code></td></tr>
       </table>
       <p>
         <code>at r</code> after text joined with <code>+</code>, or after a call, names the region of the whole chain
@@ -4585,6 +4585,45 @@ save(500) {
           <code>x: T ~ text</code>, gives a <code>maybe T</code> whatever <code>T</code> is.
         </p>
       </div>
+
+      <h3 id="error-propagation">Error propagation: <code>!</code> and <code>!&gt;</code></h3>
+      <p>
+        Inside a task or method that returns a failure (<code>-&gt; R ~ E</code>), postfix <code>!</code> unwraps a
+        fallible result or immediately returns its failure to the caller &mdash; including chained calls such as
+        <code>call()!.method()!.step()</code>. The inner failure type must match <code>E</code> or fit into an imitating
+        kind (<code>kind E::Inner</code>). Because <code>!</code> is a postfix operator, prefix negation continues to use
+        <code>not x</code> (and <code>?</code> remains reserved for decorators and dynamic tuple queries).
+      </p>
+      <p>
+        When failures have different types, the error-mapping pipeline <code>!&gt;</code> (and positional
+        <code>!&gt;&gt;</code>, <code>!&gt;&gt;&gt;</code>, &hellip;) converts a failure using a constructor, shared
+        method, variant, task, or expression that produces a plain failure value <code>E_out</code> (never
+        <code>T ~ E</code> or <code>nothing</code>). Like call pipes, <code>!&gt;</code> passes the failure as an
+        optional first argument (or without an argument if the step takes none), while <code>!&gt;&gt;</code> inserts
+        it as the 2nd argument, <code>!&gt;&gt;&gt;</code> as the 3rd, and so on. To inspect or transform the failure
+        inline, refer to it with <code>failure</code> or bind a name with <code>e -&gt; expr</code>:
+      </p>
+      <pre><code><span class="keyword">task</span> load_port(raw: text@r, r: <span class="keyword">region default</span>) -&gt; int ~ AppErr@r
+    <span class="comment">; Postfix '!' propagates through chained fallible calls and imitating kinds:</span>
+    <span class="keyword">fixed</span> cfg = parse_config(raw)!.normalize()!
+
+    <span class="comment">; Error pipelines '!&gt;' and '!&gt;&gt;' map failures before propagating or Plan B:</span>
+    <span class="keyword">fixed</span> p = read_port(cfg) !&gt;&gt; AppErr.with_context(<span class="string">"port:"</span>, r) !&gt; OuterErr.new(r)
+
+    <span class="comment">; Inline 'failure' or 'e -&gt; expr' customize mapping like map_err in Rust:</span>
+    <span class="keyword">fixed</span> checked = (open_port(p) !&gt; e -&gt; AppErr.from_msg(e.detail(r))).bind(r)!
+    &lt;- checked.number
+<span class="keyword">fi</span>
+
+<span class="comment">; Adding a Plan B block catches the mapped error instead of returning early:</span>
+<span class="keyword">fixed</span> fallback = risky() !&gt;&gt; X.new(<span class="string">"error:"</span>) !&gt; Z.new() { <span class="keyword">failure</span> f
+    show(<span class="string">"recovered: "</span>, f)
+    default_value()
+}</code></pre>
+      <p>
+        On an early return through <code>!</code> or an uncaught <code>!&gt;</code>, Vela runs task exit hooks and
+        frees local regions and commitments cleanly before returning <code>fail ...</code> to the caller.
+      </p>
 
       <h3 id="pipes">Call pipes</h3>
       <p>

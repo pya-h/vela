@@ -1,0 +1,20 @@
+; error: 15:15: '!' cannot propagate failure of type 'ErrA' from a task returning 'ErrB'; map it with '!>' or make 'ErrB' imitate 'ErrA'
+kind ErrA
+    A
+fi
+
+kind ErrB
+    B
+fi
+
+task risky() -> int ~ ErrA
+    <- fail ErrA.A
+fi
+
+task caller() -> int ~ ErrB
+    <- risky()!
+fi
+
+task main()
+    show(caller() { 0 })
+fi

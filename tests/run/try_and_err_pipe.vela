@@ -1,0 +1,238 @@
+; Tests postfix '!' error propagation, '!>' / '!>>' error-mapping pipelines, inline 'failure',
+; arrow binders, Plan B on '!>', and dot chaining.
+
+kind SmallErr
+    BadInput(why: text)
+fi
+
+kind BigErr::SmallErr
+    Other(why: text)
+fi
+
+shape Boxed
+    val: int
+
+    double() -> Boxed ~ SmallErr
+        when .val < 0
+            <- fail SmallErr.BadInput("neg")
+        fi
+        <- Boxed { val: .val * 2 }
+    fi
+
+    plus(d: int) -> Boxed ~ SmallErr
+        when .val + d > 100
+            <- fail SmallErr.BadInput("big")
+        fi
+        <- Boxed { val: .val + d }
+    fi
+fi
+
+shape CtxErr
+    tag: text
+    why: text
+
+    shared new(err: SmallErr) -> CtxErr
+        match err
+            case SmallErr.BadInput w
+                <- CtxErr { tag: "new", why: w }
+        fi
+    fi
+
+    shared tagged(prefix: text, err: SmallErr) -> CtxErr
+        match err
+            case SmallErr.BadInput w
+                <- CtxErr { tag: prefix, why: w }
+        fi
+    fi
+
+    shared from_code(tag: text, why: text) -> CtxErr
+        <- CtxErr { tag: tag, why: why }
+    fi
+fi
+
+shape OuterErr
+    msg: text
+
+    shared new(c: CtxErr, r: region default) -> OuterErr@r
+        <- OuterErr { msg: "{c.tag}:{c.why}" at r }
+    fi
+fi
+
+task make_box(v: int) -> Boxed ~ SmallErr
+    when v == 0
+        <- fail SmallErr.BadInput("zero")
+    fi
+    <- Boxed { val: v }
+fi
+
+task ping(ok: bool) -> nothing ~ SmallErr
+    when not ok
+        <- fail SmallErr.BadInput("ping")
+    fi
+fi
+
+task always_big(err: SmallErr, r: region default) -> BigErr@r
+    match err
+        case SmallErr.BadInput w
+            <- BigErr.Other("mapped:{w}" at r)
+    fi
+fi
+
+task const_outer() -> OuterErr
+    <- OuterErr { msg: "fixed-const" }
+fi
+
+task step_chain(v: int) -> int ~ SmallErr
+    fixed b = make_box(v)!.double()!.plus(3)!
+    <- b.val
+fi
+
+task step_widened(v: int) -> int ~ BigErr
+    fixed b = make_box(v)!
+    <- b.val + 1
+fi
+
+task step_stmt(ok: bool) -> int ~ SmallErr
+    ping(ok)!
+    <- 42
+fi
+
+task step_region(v: int, outer: region default) -> text@outer ~ SmallErr
+    region tmp
+    fixed b = make_box(v)!
+    <- "ok:{b.val}" at outer
+fi
+
+task map_bare_and_fn(v: int, r: region default) -> int ~ OuterErr@r
+    fixed b = make_box(v) !> CtxErr.new() !> OuterErr.new(r)
+    <- b.val
+fi
+
+task map_variant_kind(v: int) -> int ~ BigErr
+    fixed b = make_box(v) !> BigErr.Other("variant")
+    <- b.val
+fi
+
+task map_shape_bare(v: int) -> int ~ CtxErr
+    fixed b = make_box(v) !> CtxErr
+    <- b.val
+fi
+
+task map_no_param(v: int) -> int ~ OuterErr
+    fixed b = make_box(v) !> const_outer()
+    <- b.val
+fi
+
+task map_positional(v: int, r: region default) -> int ~ OuterErr@r
+    fixed b = make_box(v) !>> CtxErr.tagged("ctx") !> OuterErr.new(r)
+    <- b.val
+fi
+
+task map_inline_failure(v: int) -> int ~ CtxErr
+    fixed b = make_box(v) !> CtxErr.from_code("inline", match failure case BadInput w = w fi)
+    <- b.val
+fi
+
+task map_arrow_binder(v: int) -> int ~ CtxErr
+    fixed b = make_box(v) !> e -> CtxErr.from_code("arrow", match e case BadInput w = w fi)
+    <- b.val
+fi
+
+task map_paren_chain(v: int) -> int ~ CtxErr
+    fixed n = (make_box(v) !> CtxErr.new()).plus(5) !>> CtxErr.tagged("chained")
+    <- n.val
+fi
+
+task show_small(name: text, res: int ~ SmallErr)
+    fixed v = res { failure e
+        match e
+            case SmallErr.BadInput w
+                show(name, ": err=", w)
+        fi
+        <-
+    }
+    show(name, ": ok=", v)
+fi
+
+task show_ctx(name: text, res: int ~ CtxErr)
+    fixed v = res { failure e
+        show(name, ": err=", e.tag, "|", e.why)
+        <-
+    }
+    show(name, ": ok=", v)
+fi
+
+task show_outer(name: text, res: int ~ OuterErr@r)
+    fixed v = res { failure e
+        show(name, ": err=", e.msg)
+        <-
+    }
+    show(name, ": ok=", v)
+fi
+
+task show_big(name: text, res: int ~ BigErr)
+    fixed v = res { failure e
+        match e
+            case BadInput w
+                show(name, ": small=", w)
+            case Other w
+                show(name, ": other=", w)
+        fi
+        <-
+    }
+    show(name, ": ok=", v)
+fi
+
+task main()
+    region r default
+    show_small("chain-ok", step_chain(10))
+    show_small("chain-fail-0", step_chain(0))
+    show_small("chain-fail-big", step_chain(50))
+    show_big("widen-ok", step_widened(7))
+    show_big("widen-fail", step_widened(0))
+    show_small("stmt-ok", step_stmt(true))
+    show_small("stmt-fail", step_stmt(false))
+
+    fixed rt1 = step_region(9, r) { failure e
+        show("region-err")
+        ""
+    }
+    fixed rt2 = step_region(0, r) { failure e
+        match e
+            case SmallErr.BadInput w
+                show("region-fail=", w)
+        fi
+        ""
+    }
+    show("region-ok=", rt1, "|", rt2)
+
+    show_outer("map-ok", map_bare_and_fn(5, r))
+    show_outer("map-fail", map_bare_and_fn(0, r))
+    show_big("variant-fail", map_variant_kind(0))
+    show_ctx("shape-bare", map_shape_bare(0))
+    show_outer("no-param", map_no_param(0))
+    show_outer("positional", map_positional(0, r))
+    show_ctx("inline-fail", map_inline_failure(0))
+    show_ctx("arrow-binder", map_arrow_binder(0))
+    show_ctx("paren-chain-ok", map_paren_chain(4))
+    show_ctx("paren-chain-0", map_paren_chain(0))
+    show_ctx("paren-chain-big", map_paren_chain(98))
+
+    ; Plan B after '!>> ... !> ...' prevents interruption and sees mapped failure type
+    fixed fallback = make_box(0) !>> CtxErr.tagged("pb") !> OuterErr.new(r) { failure f
+        show("planb-caught=", f.msg)
+        Boxed { val: 77 }
+    }
+    show("planb-val=", fallback.val)
+
+    ; Bare !> arrow mapping with BigErr fn
+    fixed b2 = make_box(0) !> e -> always_big(e, r) { failure f
+        match f
+            case BigErr.Other w
+                show("arrow-fn=", w)
+            case _
+        fi
+        Boxed { val: 11 }
+    }
+    show("arrow-fn-val=", b2.val)
+fi

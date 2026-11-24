@@ -74,7 +74,9 @@ pub enum Token {
     ChanRecv,
     ChanSend,
     Parts,
+    Bang,
     Pipe(usize),
+    ErrPipe(usize),
     Range,
     Ellipsis,
     Plus,
@@ -218,7 +220,9 @@ impl Token {
             Token::Char(_) => return "char literal".to_string(),
             Token::Ident(s) => return format!("identifier '{}'", s),
             Token::Newline => return "end of line".to_string(),
+            Token::Bang => "!",
             Token::Pipe(n) => return format!("'|{}'", ">".repeat(*n)),
+            Token::ErrPipe(n) => return format!("'!{}'", ">".repeat(*n)),
             Token::Eof => return "end of file".to_string(),
             Token::LParen => "(",
             Token::RParen => ")",
@@ -691,8 +695,15 @@ impl Lexer {
                 if self.peek() == '=' {
                     self.advance();
                     Token::Ne
+                } else if self.peek() == '>' {
+                    let mut count = 0;
+                    while self.peek() == '>' {
+                        self.advance();
+                        count += 1;
+                    }
+                    Token::ErrPipe(count)
                 } else {
-                    return invalid(loc, "unexpected '!'; Vela negates with 'not'");
+                    Token::Bang
                 }
             }
             '&' | '|' => {

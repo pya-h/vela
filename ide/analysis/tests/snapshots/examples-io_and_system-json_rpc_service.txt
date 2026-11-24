@@ -1,0 +1,106 @@
+  1 | ; JSON-RPC 2.0 service over a loopback line-framed TCP socket connection.
+    | comment:; JSON-RPC 2.0 service over a loopback line-framed TCP socket connection.
+  2 | include std/json { Json }
+    | keyword:include  module:std  operator:/  module:json  punctuation:{  type:Json  punctuation:}
+  3 | include std/web { Socket, WebError, RpcFraming, RpcError, RpcRequest, JsonRpcConn, RpcServer }
+    | keyword:include  module:std  operator:/  module:web  punctuation:{  type:Socket  punctuation:,  type:WebError  punctuation:,  type:RpcFraming  punctuation:,  type:RpcError  punctuation:,  type:RpcRequest  punctuation:,  type:JsonRpcConn  punctuation:,  type:RpcServer  punctuation:}
+  5 | task add_handler(params: Json@r, r: region default) -> Json@r ~ RpcError@r
+    | keyword:task  task:add_handler  punctuation:(  parameter:params  punctuation::  type:Json  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Json  operator:@  region:r  operator:~  type:RpcError  operator:@  region:r
+  6 |     match params
+    | keyword:match  parameter:params
+  7 |     case Json.Array items
+    | keyword:case  type:Json  punctuation:.  variant:Array  variable:items
+  8 |         when items.len == 2
+    | keyword:when  variable:items  punctuation:.  field:len  operator:==  number:2
+  9 |             match items[0]
+    | keyword:match  variable:items  punctuation:[  number:0  punctuation:]
+ 10 |             case Json.Int a
+    | keyword:case  type:Json  punctuation:.  variant:Int  variable:a
+ 11 |                 match items[1]
+    | keyword:match  variable:items  punctuation:[  number:1  punctuation:]
+ 12 |                 case Json.Int b
+    | keyword:case  type:Json  punctuation:.  variant:Int  variable:b
+ 13 |                     <- Json.Int(a + b)
+    | keyword:<-  type:Json  punctuation:.  variant:Int  punctuation:(  variable:a  operator:+  variable:b  punctuation:)
+ 14 |                 case _
+    | keyword:case  keyword:_
+ 15 |                 fi
+    | keyword:fi
+ 16 |             case _
+    | keyword:case  keyword:_
+ 17 |             fi
+    | keyword:fi
+ 18 |         fi
+    | keyword:fi
+ 19 |     case _
+    | keyword:case  keyword:_
+ 20 |     fi
+    | keyword:fi
+ 21 |     <- fail RpcError.InvalidParams
+    | keyword:<-  keyword:fail  type:RpcError  punctuation:.  variant:InvalidParams
+ 22 | fi
+    | keyword:fi
+ 24 | task run_demo(r: region default) -> nothing ~ WebError@r
+    | keyword:task  task:run_demo  punctuation:(  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type-builtin:nothing  operator:~  type:WebError  operator:@  region:r
+ 25 |     flex listener = Socket.open(r) !> WebError.ListenFailed
+    | keyword:flex  variable:listener  operator:=  type:Socket  punctuation:.  method:open  punctuation:(  region:r  punctuation:)  operator:!>  type:WebError  punctuation:.  variant:ListenFailed
+ 26 |     listener.bind_to("127.0.0.1", 18115) !> WebError.ListenFailed
+    | variable:listener  punctuation:.  method:bind_to  punctuation:(  string:"127.0.0.1"  punctuation:,  number:18115  punctuation:)  operator:!>  type:WebError  punctuation:.  variant:ListenFailed
+ 27 |     listener.listen(8) !> WebError.ListenFailed
+    | variable:listener  punctuation:.  method:listen  punctuation:(  number:8  punctuation:)  operator:!>  type:WebError  punctuation:.  variant:ListenFailed
+ 29 |     fixed client_sock = Socket.open(r) !> WebError.ServerFailed("client open")
+    | keyword:fixed  variable:client_sock  operator:=  type:Socket  punctuation:.  method:open  punctuation:(  region:r  punctuation:)  operator:!>  type:WebError  punctuation:.  variant:ServerFailed  punctuation:(  string:"client open"  punctuation:)
+ 30 |     client_sock.connect("127.0.0.1", 18115) !> WebError.ServerFailed("connect")
+    | variable:client_sock  punctuation:.  method:connect  punctuation:(  string:"127.0.0.1"  punctuation:,  number:18115  punctuation:)  operator:!>  type:WebError  punctuation:.  variant:ServerFailed  punctuation:(  string:"connect"  punctuation:)
+ 31 |     fixed accepted_sock = listener.accept(r) !> WebError.ServerFailed("accept")
+    | keyword:fixed  variable:accepted_sock  operator:=  variable:listener  punctuation:.  method:accept  punctuation:(  region:r  punctuation:)  operator:!>  type:WebError  punctuation:.  variant:ServerFailed  punctuation:(  string:"accept"  punctuation:)
+ 33 |     flex client = JsonRpcConn.from_socket(client_sock, RpcFraming.Line, 5000)
+    | keyword:flex  variable:client  operator:=  type:JsonRpcConn  punctuation:.  method:from_socket  punctuation:(  variable:client_sock  punctuation:,  type:RpcFraming  punctuation:.  variant:Line  punctuation:,  number:5000  punctuation:)
+ 34 |     flex peer = JsonRpcConn.from_socket(accepted_sock, RpcFraming.Line, 5000)
+    | keyword:flex  variable:peer  operator:=  type:JsonRpcConn  punctuation:.  method:from_socket  punctuation:(  variable:accepted_sock  punctuation:,  type:RpcFraming  punctuation:.  variant:Line  punctuation:,  number:5000  punctuation:)
+ 36 |     flex srv = RpcServer.new()
+    | keyword:flex  variable:srv  operator:=  type:RpcServer  punctuation:.  method:new  punctuation:(  punctuation:)
+ 37 |     srv = srv.register("math.add", add_handler)
+    | variable:srv  operator:=  variable:srv  punctuation:.  method:register  punctuation:(  string:"math.add"  punctuation:,  task:add_handler  punctuation:)
+ 39 |     flex args = new [Json]() at r
+    | keyword:flex  variable:args  operator:=  keyword:new  punctuation:[  type:Json  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 40 |     args.add(Json.Int(20))
+    | variable:args  punctuation:.  field:add  punctuation:(  type:Json  punctuation:.  variant:Int  punctuation:(  number:20  punctuation:)  punctuation:)
+ 41 |     args.add(Json.Int(22))
+    | variable:args  punctuation:.  field:add  punctuation:(  type:Json  punctuation:.  variant:Int  punctuation:(  number:22  punctuation:)  punctuation:)
+ 42 |     fixed req = RpcRequest { method: "math.add", params: Json.Array(args), id: Json.Int(1) }
+    | keyword:fixed  variable:req  operator:=  type:RpcRequest  punctuation:{  field:method  punctuation::  string:"math.add"  punctuation:,  field:params  punctuation::  type:Json  punctuation:.  variant:Array  punctuation:(  variable:args  punctuation:)  punctuation:,  field:id  punctuation::  type:Json  punctuation:.  variant:Int  punctuation:(  number:1  punctuation:)  punctuation:}
+ 44 |     client.send_message(req.encode(r), r) !> e -> WebError.BadResponse(e.str(r))
+    | variable:client  punctuation:.  method:send_message  punctuation:(  variable:req  punctuation:.  method:encode  punctuation:(  region:r  punctuation:)  punctuation:,  region:r  punctuation:)  operator:!>  parameter:e  operator:->  type:WebError  punctuation:.  variant:BadResponse  punctuation:(  parameter:e  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 45 |     fixed incoming = peer.recv_message(r) !> e -> WebError.BadResponse(e.str(r))
+    | keyword:fixed  variable:incoming  operator:=  variable:peer  punctuation:.  method:recv_message  punctuation:(  region:r  punctuation:)  operator:!>  parameter:e  operator:->  type:WebError  punctuation:.  variant:BadResponse  punctuation:(  parameter:e  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 46 |     when srv.dispatch_raw(incoming, r) is {reply}
+    | keyword:when  variable:srv  punctuation:.  method:dispatch_raw  punctuation:(  variable:incoming  punctuation:,  region:r  punctuation:)  keyword:is  punctuation:{  variable:reply  punctuation:}
+ 47 |         peer.send_message(reply, r) !> e -> WebError.BadResponse(e.str(r))
+    | variable:peer  punctuation:.  method:send_message  punctuation:(  variable:reply  punctuation:,  region:r  punctuation:)  operator:!>  parameter:e  operator:->  type:WebError  punctuation:.  variant:BadResponse  punctuation:(  parameter:e  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 48 |     fi
+    | keyword:fi
+ 49 |     fixed response_raw = client.recv_message(r) !> e -> WebError.BadResponse(e.str(r))
+    | keyword:fixed  variable:response_raw  operator:=  variable:client  punctuation:.  method:recv_message  punctuation:(  region:r  punctuation:)  operator:!>  parameter:e  operator:->  type:WebError  punctuation:.  variant:BadResponse  punctuation:(  parameter:e  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 50 |     show("rpc response: ", response_raw)
+    | builtin-fn:show  punctuation:(  string:"rpc response: "  punctuation:,  variable:response_raw  punctuation:)
+ 52 |     client.notify("log.ping", Json.Null, r) !> e -> WebError.BadResponse(e.str(r))
+    | variable:client  punctuation:.  method:notify  punctuation:(  string:"log.ping"  punctuation:,  type:Json  punctuation:.  variant:Null  punctuation:,  region:r  punctuation:)  operator:!>  parameter:e  operator:->  type:WebError  punctuation:.  variant:BadResponse  punctuation:(  parameter:e  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 53 |     fixed note = peer.recv_request(r) !> e -> WebError.BadResponse(e.str(r))
+    | keyword:fixed  variable:note  operator:=  variable:peer  punctuation:.  method:recv_request  punctuation:(  region:r  punctuation:)  operator:!>  parameter:e  operator:->  type:WebError  punctuation:.  variant:BadResponse  punctuation:(  parameter:e  punctuation:.  method:str  punctuation:(  region:r  punctuation:)  punctuation:)
+ 54 |     show("notification method=", note.method, " silent=", note.is_notification())
+    | builtin-fn:show  punctuation:(  string:"notification method="  punctuation:,  variable:note  punctuation:.  field:method  punctuation:,  string:" silent="  punctuation:,  variable:note  punctuation:.  method:is_notification  punctuation:(  punctuation:)  punctuation:)
+ 55 | fi
+    | keyword:fi
+ 57 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 58 |     region r default
+    | keyword:region  region:r  keyword:default
+ 59 |     run_demo(r) { failure err
+    | task:run_demo  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  variable:err
+ 60 |         show("rpc demo failed")
+    | builtin-fn:show  punctuation:(  string:"rpc demo failed"  punctuation:)
+ 61 |     }
+    | punctuation:}
+ 62 | fi
+    | keyword:fi

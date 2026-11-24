@@ -330,7 +330,18 @@ fn common_mistakes_get_hints() {
     assert_eq!(kinds("a || b")[1], token(Token::Parts));
     assert_eq!(Token::Parts.describe(), "'||'");
     assert_eq!(kinds("a | b")[1], invalid(1, 3, "unexpected character '|'; Vela writes 'or'"));
-    assert_eq!(kinds("!x")[0], invalid(1, 1, "unexpected '!'; Vela negates with 'not'"));
+    assert_eq!(kinds("!x"), vec![token(Token::Bang), token(Token::Ident("x".into())), token(Token::Eof)]);
+    assert_eq!(
+        kinds("a!>b!>>c"),
+        vec![
+            token(Token::Ident("a".into())),
+            token(Token::ErrPipe(1)),
+            token(Token::Ident("b".into())),
+            token(Token::ErrPipe(2)),
+            token(Token::Ident("c".into())),
+            token(Token::Eof),
+        ]
+    );
     assert_eq!(Token::Float(1e20).describe(), "float 100000000000000000000.0");
     assert_eq!(Token::Float(2.5).describe(), "float 2.5");
 }
@@ -381,7 +392,7 @@ fn braces_in_text_that_hold_no_value_are_errors() {
     assert_eq!(kinds("\"a {} b\"")[0], invalid(1, 4, "'{}' in text holds no value; put one inside, as in '{n}', or write a brace as '\\{'"));
     assert_eq!(kinds("\"a } b\"")[0], invalid(1, 4, "a '}' in text closes a value opened with '{'; to write a brace, write '\\}'"));
     assert_eq!(kinds("\"{n ; note}\"")[0], invalid(1, 5, "a value in text can't hold a comment"));
-    assert_eq!(kinds("\"{n!}\"")[0], invalid(1, 4, "unexpected '!'; Vela negates with 'not'"));
+    assert!(matches!(kinds("\"{n!}\"")[0], LexKind::Token(Token::Interpolated(_))));
     let tokens = kinds("show(\"{n)\nfi\n");
     assert_eq!(tokens[2], invalid(1, 7, UNCLOSED_VALUE));
     assert_eq!(tokens[3..], [token(Token::Newline), token(Token::Fi), token(Token::Newline), token(Token::Eof)]);

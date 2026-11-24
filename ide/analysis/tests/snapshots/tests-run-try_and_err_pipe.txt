@@ -1,0 +1,404 @@
+  1 | ; Tests postfix '!' error propagation, '!>' / '!>>' error-mapping pipelines, inline 'failure',
+    | comment:; Tests postfix '!' error propagation, '!>' / '!>>' error-mapping pipelines, inline 'failure',
+  2 | ; arrow binders, Plan B on '!>', and dot chaining.
+    | comment:; arrow binders, Plan B on '!>', and dot chaining.
+  4 | kind SmallErr
+    | keyword:kind  type:SmallErr
+  5 |     BadInput(why: text)
+    | variant:BadInput  punctuation:(  field:why  punctuation::  type-builtin:text  punctuation:)
+  6 | fi
+    | keyword:fi
+  8 | kind BigErr::SmallErr
+    | keyword:kind  type:BigErr  punctuation::  punctuation::  type:SmallErr
+  9 |     Other(why: text)
+    | variant:Other  punctuation:(  field:why  punctuation::  type-builtin:text  punctuation:)
+ 10 | fi
+    | keyword:fi
+ 12 | shape Boxed
+    | keyword:shape  type:Boxed
+ 13 |     val: int
+    | field:val  punctuation::  type-builtin:int
+ 15 |     double() -> Boxed ~ SmallErr
+    | method:double  punctuation:(  punctuation:)  operator:->  type:Boxed  operator:~  type:SmallErr
+ 16 |         when .val < 0
+    | keyword:when  punctuation:.  field:val  operator:<  number:0
+ 17 |             <- fail SmallErr.BadInput("neg")
+    | keyword:<-  keyword:fail  type:SmallErr  punctuation:.  variant:BadInput  punctuation:(  string:"neg"  punctuation:)
+ 18 |         fi
+    | keyword:fi
+ 19 |         <- Boxed { val: .val * 2 }
+    | keyword:<-  type:Boxed  punctuation:{  field:val  punctuation::  punctuation:.  field:val  operator:*  number:2  punctuation:}
+ 20 |     fi
+    | keyword:fi
+ 22 |     plus(d: int) -> Boxed ~ SmallErr
+    | method:plus  punctuation:(  parameter:d  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Boxed  operator:~  type:SmallErr
+ 23 |         when .val + d > 100
+    | keyword:when  punctuation:.  field:val  operator:+  parameter:d  operator:>  number:100
+ 24 |             <- fail SmallErr.BadInput("big")
+    | keyword:<-  keyword:fail  type:SmallErr  punctuation:.  variant:BadInput  punctuation:(  string:"big"  punctuation:)
+ 25 |         fi
+    | keyword:fi
+ 26 |         <- Boxed { val: .val + d }
+    | keyword:<-  type:Boxed  punctuation:{  field:val  punctuation::  punctuation:.  field:val  operator:+  parameter:d  punctuation:}
+ 27 |     fi
+    | keyword:fi
+ 28 | fi
+    | keyword:fi
+ 30 | shape CtxErr
+    | keyword:shape  type:CtxErr
+ 31 |     tag: text
+    | field:tag  punctuation::  type-builtin:text
+ 32 |     why: text
+    | field:why  punctuation::  type-builtin:text
+ 34 |     shared new(err: SmallErr) -> CtxErr
+    | keyword:shared  method:new  punctuation:(  parameter:err  punctuation::  type:SmallErr  punctuation:)  operator:->  type:CtxErr
+ 35 |         match err
+    | keyword:match  parameter:err
+ 36 |             case SmallErr.BadInput w
+    | keyword:case  type:SmallErr  punctuation:.  variant:BadInput  variable:w
+ 37 |                 <- CtxErr { tag: "new", why: w }
+    | keyword:<-  type:CtxErr  punctuation:{  field:tag  punctuation::  string:"new"  punctuation:,  field:why  punctuation::  variable:w  punctuation:}
+ 38 |         fi
+    | keyword:fi
+ 39 |     fi
+    | keyword:fi
+ 41 |     shared tagged(prefix: text, err: SmallErr) -> CtxErr
+    | keyword:shared  method:tagged  punctuation:(  parameter:prefix  punctuation::  type-builtin:text  punctuation:,  parameter:err  punctuation::  type:SmallErr  punctuation:)  operator:->  type:CtxErr
+ 42 |         match err
+    | keyword:match  parameter:err
+ 43 |             case SmallErr.BadInput w
+    | keyword:case  type:SmallErr  punctuation:.  variant:BadInput  variable:w
+ 44 |                 <- CtxErr { tag: prefix, why: w }
+    | keyword:<-  type:CtxErr  punctuation:{  field:tag  punctuation::  parameter:prefix  punctuation:,  field:why  punctuation::  variable:w  punctuation:}
+ 45 |         fi
+    | keyword:fi
+ 46 |     fi
+    | keyword:fi
+ 48 |     shared from_code(tag: text, why: text) -> CtxErr
+    | keyword:shared  method:from_code  punctuation:(  parameter:tag  punctuation::  type-builtin:text  punctuation:,  parameter:why  punctuation::  type-builtin:text  punctuation:)  operator:->  type:CtxErr
+ 49 |         <- CtxErr { tag: tag, why: why }
+    | keyword:<-  type:CtxErr  punctuation:{  field:tag  punctuation::  parameter:tag  punctuation:,  field:why  punctuation::  parameter:why  punctuation:}
+ 50 |     fi
+    | keyword:fi
+ 51 | fi
+    | keyword:fi
+ 53 | shape OuterErr
+    | keyword:shape  type:OuterErr
+ 54 |     msg: text
+    | field:msg  punctuation::  type-builtin:text
+ 56 |     shared new(c: CtxErr, r: region default) -> OuterErr@r
+    | keyword:shared  method:new  punctuation:(  parameter:c  punctuation::  type:CtxErr  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:OuterErr  operator:@  region:r
+ 57 |         <- OuterErr { msg: "{c.tag}:{c.why}" at r }
+    | keyword:<-  type:OuterErr  punctuation:{  field:msg  punctuation::  string:"{  parameter:c  punctuation:.  field:tag  string:}:{  parameter:c  punctuation:.  field:why  string:}"  keyword:at  region:r  punctuation:}
+ 58 |     fi
+    | keyword:fi
+ 59 | fi
+    | keyword:fi
+ 61 | task make_box(v: int) -> Boxed ~ SmallErr
+    | keyword:task  task:make_box  punctuation:(  parameter:v  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Boxed  operator:~  type:SmallErr
+ 62 |     when v == 0
+    | keyword:when  parameter:v  operator:==  number:0
+ 63 |         <- fail SmallErr.BadInput("zero")
+    | keyword:<-  keyword:fail  type:SmallErr  punctuation:.  variant:BadInput  punctuation:(  string:"zero"  punctuation:)
+ 64 |     fi
+    | keyword:fi
+ 65 |     <- Boxed { val: v }
+    | keyword:<-  type:Boxed  punctuation:{  field:val  punctuation::  parameter:v  punctuation:}
+ 66 | fi
+    | keyword:fi
+ 68 | task ping(ok: bool) -> nothing ~ SmallErr
+    | keyword:task  task:ping  punctuation:(  parameter:ok  punctuation::  type-builtin:bool  punctuation:)  operator:->  type-builtin:nothing  operator:~  type:SmallErr
+ 69 |     when not ok
+    | keyword:when  keyword:not  parameter:ok
+ 70 |         <- fail SmallErr.BadInput("ping")
+    | keyword:<-  keyword:fail  type:SmallErr  punctuation:.  variant:BadInput  punctuation:(  string:"ping"  punctuation:)
+ 71 |     fi
+    | keyword:fi
+ 72 | fi
+    | keyword:fi
+ 74 | task always_big(err: SmallErr, r: region default) -> BigErr@r
+    | keyword:task  task:always_big  punctuation:(  parameter:err  punctuation::  type:SmallErr  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:BigErr  operator:@  region:r
+ 75 |     match err
+    | keyword:match  parameter:err
+ 76 |         case SmallErr.BadInput w
+    | keyword:case  type:SmallErr  punctuation:.  variant:BadInput  variable:w
+ 77 |             <- BigErr.Other("mapped:{w}" at r)
+    | keyword:<-  type:BigErr  punctuation:.  variant:Other  punctuation:(  string:"mapped:{  variable:w  string:}"  keyword:at  region:r  punctuation:)
+ 78 |     fi
+    | keyword:fi
+ 79 | fi
+    | keyword:fi
+ 81 | task const_outer() -> OuterErr
+    | keyword:task  task:const_outer  punctuation:(  punctuation:)  operator:->  type:OuterErr
+ 82 |     <- OuterErr { msg: "fixed-const" }
+    | keyword:<-  type:OuterErr  punctuation:{  field:msg  punctuation::  string:"fixed-const"  punctuation:}
+ 83 | fi
+    | keyword:fi
+ 85 | task step_chain(v: int) -> int ~ SmallErr
+    | keyword:task  task:step_chain  punctuation:(  parameter:v  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:SmallErr
+ 86 |     fixed b = make_box(v)!.double()!.plus(3)!
+    | keyword:fixed  variable:b  operator:=  task:make_box  punctuation:(  parameter:v  punctuation:)  operator:!  punctuation:.  method:double  punctuation:(  punctuation:)  operator:!  punctuation:.  method:plus  punctuation:(  number:3  punctuation:)  operator:!
+ 87 |     <- b.val
+    | keyword:<-  variable:b  punctuation:.  field:val
+ 88 | fi
+    | keyword:fi
+ 90 | task step_widened(v: int) -> int ~ BigErr
+    | keyword:task  task:step_widened  punctuation:(  parameter:v  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:BigErr
+ 91 |     fixed b = make_box(v)!
+    | keyword:fixed  variable:b  operator:=  task:make_box  punctuation:(  parameter:v  punctuation:)  operator:!
+ 92 |     <- b.val + 1
+    | keyword:<-  variable:b  punctuation:.  field:val  operator:+  number:1
+ 93 | fi
+    | keyword:fi
+ 95 | task step_stmt(ok: bool) -> int ~ SmallErr
+    | keyword:task  task:step_stmt  punctuation:(  parameter:ok  punctuation::  type-builtin:bool  punctuation:)  operator:->  type-builtin:int  operator:~  type:SmallErr
+ 96 |     ping(ok)!
+    | task:ping  punctuation:(  parameter:ok  punctuation:)  operator:!
+ 97 |     <- 42
+    | keyword:<-  number:42
+ 98 | fi
+    | keyword:fi
+100 | task step_region(v: int, outer: region default) -> text@outer ~ SmallErr
+    | keyword:task  task:step_region  punctuation:(  parameter:v  punctuation::  type-builtin:int  punctuation:,  region:outer  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type-builtin:text  operator:@  region:outer  operator:~  type:SmallErr
+101 |     region tmp
+    | keyword:region  region:tmp
+102 |     fixed b = make_box(v)!
+    | keyword:fixed  variable:b  operator:=  task:make_box  punctuation:(  parameter:v  punctuation:)  operator:!
+103 |     <- "ok:{b.val}" at outer
+    | keyword:<-  string:"ok:{  variable:b  punctuation:.  field:val  string:}"  keyword:at  region:outer
+104 | fi
+    | keyword:fi
+106 | task map_bare_and_fn(v: int, r: region default) -> int ~ OuterErr@r
+    | keyword:task  task:map_bare_and_fn  punctuation:(  parameter:v  punctuation::  type-builtin:int  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type-builtin:int  operator:~  type:OuterErr  operator:@  region:r
+107 |     fixed b = make_box(v) !> CtxErr.new() !> OuterErr.new(r)
+    | keyword:fixed  variable:b  operator:=  task:make_box  punctuation:(  parameter:v  punctuation:)  operator:!>  type:CtxErr  punctuation:.  method:new  punctuation:(  punctuation:)  operator:!>  type:OuterErr  punctuation:.  method:new  punctuation:(  region:r  punctuation:)
+108 |     <- b.val
+    | keyword:<-  variable:b  punctuation:.  field:val
+109 | fi
+    | keyword:fi
+111 | task map_variant_kind(v: int) -> int ~ BigErr
+    | keyword:task  task:map_variant_kind  punctuation:(  parameter:v  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:BigErr
+112 |     fixed b = make_box(v) !> BigErr.Other("variant")
+    | keyword:fixed  variable:b  operator:=  task:make_box  punctuation:(  parameter:v  punctuation:)  operator:!>  type:BigErr  punctuation:.  variant:Other  punctuation:(  string:"variant"  punctuation:)
+113 |     <- b.val
+    | keyword:<-  variable:b  punctuation:.  field:val
+114 | fi
+    | keyword:fi
+116 | task map_shape_bare(v: int) -> int ~ CtxErr
+    | keyword:task  task:map_shape_bare  punctuation:(  parameter:v  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:CtxErr
+117 |     fixed b = make_box(v) !> CtxErr
+    | keyword:fixed  variable:b  operator:=  task:make_box  punctuation:(  parameter:v  punctuation:)  operator:!>  type:CtxErr
+118 |     <- b.val
+    | keyword:<-  variable:b  punctuation:.  field:val
+119 | fi
+    | keyword:fi
+121 | task map_no_param(v: int) -> int ~ OuterErr
+    | keyword:task  task:map_no_param  punctuation:(  parameter:v  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:OuterErr
+122 |     fixed b = make_box(v) !> const_outer()
+    | keyword:fixed  variable:b  operator:=  task:make_box  punctuation:(  parameter:v  punctuation:)  operator:!>  task:const_outer  punctuation:(  punctuation:)
+123 |     <- b.val
+    | keyword:<-  variable:b  punctuation:.  field:val
+124 | fi
+    | keyword:fi
+126 | task map_positional(v: int, r: region default) -> int ~ OuterErr@r
+    | keyword:task  task:map_positional  punctuation:(  parameter:v  punctuation::  type-builtin:int  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type-builtin:int  operator:~  type:OuterErr  operator:@  region:r
+127 |     fixed b = make_box(v) !>> CtxErr.tagged("ctx") !> OuterErr.new(r)
+    | keyword:fixed  variable:b  operator:=  task:make_box  punctuation:(  parameter:v  punctuation:)  operator:!>>  type:CtxErr  punctuation:.  method:tagged  punctuation:(  string:"ctx"  punctuation:)  operator:!>  type:OuterErr  punctuation:.  method:new  punctuation:(  region:r  punctuation:)
+128 |     <- b.val
+    | keyword:<-  variable:b  punctuation:.  field:val
+129 | fi
+    | keyword:fi
+131 | task map_inline_failure(v: int) -> int ~ CtxErr
+    | keyword:task  task:map_inline_failure  punctuation:(  parameter:v  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:CtxErr
+132 |     fixed b = make_box(v) !> CtxErr.from_code("inline", match failure case BadInput w = w fi)
+    | keyword:fixed  variable:b  operator:=  task:make_box  punctuation:(  parameter:v  punctuation:)  operator:!>  type:CtxErr  punctuation:.  method:from_code  punctuation:(  string:"inline"  punctuation:,  keyword:match  keyword:failure  keyword:case  variant:BadInput  variable:w  operator:=  variable:w  keyword:fi  punctuation:)
+133 |     <- b.val
+    | keyword:<-  variable:b  punctuation:.  field:val
+134 | fi
+    | keyword:fi
+136 | task map_arrow_binder(v: int) -> int ~ CtxErr
+    | keyword:task  task:map_arrow_binder  punctuation:(  parameter:v  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:CtxErr
+137 |     fixed b = make_box(v) !> e -> CtxErr.from_code("arrow", match e case BadInput w = w fi)
+    | keyword:fixed  variable:b  operator:=  task:make_box  punctuation:(  parameter:v  punctuation:)  operator:!>  parameter:e  operator:->  type:CtxErr  punctuation:.  method:from_code  punctuation:(  string:"arrow"  punctuation:,  keyword:match  parameter:e  keyword:case  variant:BadInput  variable:w  operator:=  variable:w  keyword:fi  punctuation:)
+138 |     <- b.val
+    | keyword:<-  variable:b  punctuation:.  field:val
+139 | fi
+    | keyword:fi
+141 | task map_paren_chain(v: int) -> int ~ CtxErr
+    | keyword:task  task:map_paren_chain  punctuation:(  parameter:v  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:CtxErr
+142 |     fixed n = (make_box(v) !> CtxErr.new()).plus(5) !>> CtxErr.tagged("chained")
+    | keyword:fixed  variable:n  operator:=  punctuation:(  task:make_box  punctuation:(  parameter:v  punctuation:)  operator:!>  type:CtxErr  punctuation:.  method:new  punctuation:(  punctuation:)  punctuation:)  punctuation:.  method:plus  punctuation:(  number:5  punctuation:)  operator:!>>  type:CtxErr  punctuation:.  method:tagged  punctuation:(  string:"chained"  punctuation:)
+143 |     <- n.val
+    | keyword:<-  variable:n  punctuation:.  field:val
+144 | fi
+    | keyword:fi
+146 | task show_small(name: text, res: int ~ SmallErr)
+    | keyword:task  task:show_small  punctuation:(  parameter:name  punctuation::  type-builtin:text  punctuation:,  parameter:res  punctuation::  type-builtin:int  operator:~  type:SmallErr  punctuation:)
+147 |     fixed v = res { failure e
+    | keyword:fixed  variable:v  operator:=  parameter:res  punctuation:{  keyword:failure  variable:e
+148 |         match e
+    | keyword:match  variable:e
+149 |             case SmallErr.BadInput w
+    | keyword:case  type:SmallErr  punctuation:.  variant:BadInput  variable:w
+150 |                 show(name, ": err=", w)
+    | builtin-fn:show  punctuation:(  parameter:name  punctuation:,  string:": err="  punctuation:,  variable:w  punctuation:)
+151 |         fi
+    | keyword:fi
+152 |         <-
+    | keyword:<-
+153 |     }
+    | punctuation:}
+154 |     show(name, ": ok=", v)
+    | builtin-fn:show  punctuation:(  parameter:name  punctuation:,  string:": ok="  punctuation:,  variable:v  punctuation:)
+155 | fi
+    | keyword:fi
+157 | task show_ctx(name: text, res: int ~ CtxErr)
+    | keyword:task  task:show_ctx  punctuation:(  parameter:name  punctuation::  type-builtin:text  punctuation:,  parameter:res  punctuation::  type-builtin:int  operator:~  type:CtxErr  punctuation:)
+158 |     fixed v = res { failure e
+    | keyword:fixed  variable:v  operator:=  parameter:res  punctuation:{  keyword:failure  variable:e
+159 |         show(name, ": err=", e.tag, "|", e.why)
+    | builtin-fn:show  punctuation:(  parameter:name  punctuation:,  string:": err="  punctuation:,  variable:e  punctuation:.  field:tag  punctuation:,  string:"|"  punctuation:,  variable:e  punctuation:.  field:why  punctuation:)
+160 |         <-
+    | keyword:<-
+161 |     }
+    | punctuation:}
+162 |     show(name, ": ok=", v)
+    | builtin-fn:show  punctuation:(  parameter:name  punctuation:,  string:": ok="  punctuation:,  variable:v  punctuation:)
+163 | fi
+    | keyword:fi
+165 | task show_outer(name: text, res: int ~ OuterErr@r)
+    | keyword:task  task:show_outer  punctuation:(  parameter:name  punctuation::  type-builtin:text  punctuation:,  parameter:res  punctuation::  type-builtin:int  operator:~  type:OuterErr  operator:@  region:r  punctuation:)
+166 |     fixed v = res { failure e
+    | keyword:fixed  variable:v  operator:=  parameter:res  punctuation:{  keyword:failure  variable:e
+167 |         show(name, ": err=", e.msg)
+    | builtin-fn:show  punctuation:(  parameter:name  punctuation:,  string:": err="  punctuation:,  variable:e  punctuation:.  field:msg  punctuation:)
+168 |         <-
+    | keyword:<-
+169 |     }
+    | punctuation:}
+170 |     show(name, ": ok=", v)
+    | builtin-fn:show  punctuation:(  parameter:name  punctuation:,  string:": ok="  punctuation:,  variable:v  punctuation:)
+171 | fi
+    | keyword:fi
+173 | task show_big(name: text, res: int ~ BigErr)
+    | keyword:task  task:show_big  punctuation:(  parameter:name  punctuation::  type-builtin:text  punctuation:,  parameter:res  punctuation::  type-builtin:int  operator:~  type:BigErr  punctuation:)
+174 |     fixed v = res { failure e
+    | keyword:fixed  variable:v  operator:=  parameter:res  punctuation:{  keyword:failure  variable:e
+175 |         match e
+    | keyword:match  variable:e
+176 |             case BadInput w
+    | keyword:case  variant:BadInput  variable:w
+177 |                 show(name, ": small=", w)
+    | builtin-fn:show  punctuation:(  parameter:name  punctuation:,  string:": small="  punctuation:,  variable:w  punctuation:)
+178 |             case Other w
+    | keyword:case  variant:Other  variable:w
+179 |                 show(name, ": other=", w)
+    | builtin-fn:show  punctuation:(  parameter:name  punctuation:,  string:": other="  punctuation:,  variable:w  punctuation:)
+180 |         fi
+    | keyword:fi
+181 |         <-
+    | keyword:<-
+182 |     }
+    | punctuation:}
+183 |     show(name, ": ok=", v)
+    | builtin-fn:show  punctuation:(  parameter:name  punctuation:,  string:": ok="  punctuation:,  variable:v  punctuation:)
+184 | fi
+    | keyword:fi
+186 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+187 |     region r default
+    | keyword:region  region:r  keyword:default
+188 |     show_small("chain-ok", step_chain(10))
+    | task:show_small  punctuation:(  string:"chain-ok"  punctuation:,  task:step_chain  punctuation:(  number:10  punctuation:)  punctuation:)
+189 |     show_small("chain-fail-0", step_chain(0))
+    | task:show_small  punctuation:(  string:"chain-fail-0"  punctuation:,  task:step_chain  punctuation:(  number:0  punctuation:)  punctuation:)
+190 |     show_small("chain-fail-big", step_chain(50))
+    | task:show_small  punctuation:(  string:"chain-fail-big"  punctuation:,  task:step_chain  punctuation:(  number:50  punctuation:)  punctuation:)
+191 |     show_big("widen-ok", step_widened(7))
+    | task:show_big  punctuation:(  string:"widen-ok"  punctuation:,  task:step_widened  punctuation:(  number:7  punctuation:)  punctuation:)
+192 |     show_big("widen-fail", step_widened(0))
+    | task:show_big  punctuation:(  string:"widen-fail"  punctuation:,  task:step_widened  punctuation:(  number:0  punctuation:)  punctuation:)
+193 |     show_small("stmt-ok", step_stmt(true))
+    | task:show_small  punctuation:(  string:"stmt-ok"  punctuation:,  task:step_stmt  punctuation:(  keyword:true  punctuation:)  punctuation:)
+194 |     show_small("stmt-fail", step_stmt(false))
+    | task:show_small  punctuation:(  string:"stmt-fail"  punctuation:,  task:step_stmt  punctuation:(  keyword:false  punctuation:)  punctuation:)
+196 |     fixed rt1 = step_region(9, r) { failure e
+    | keyword:fixed  variable:rt1  operator:=  task:step_region  punctuation:(  number:9  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+197 |         show("region-err")
+    | builtin-fn:show  punctuation:(  string:"region-err"  punctuation:)
+198 |         ""
+    | string:""
+199 |     }
+    | punctuation:}
+200 |     fixed rt2 = step_region(0, r) { failure e
+    | keyword:fixed  variable:rt2  operator:=  task:step_region  punctuation:(  number:0  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+201 |         match e
+    | keyword:match  variable:e
+202 |             case SmallErr.BadInput w
+    | keyword:case  type:SmallErr  punctuation:.  variant:BadInput  variable:w
+203 |                 show("region-fail=", w)
+    | builtin-fn:show  punctuation:(  string:"region-fail="  punctuation:,  variable:w  punctuation:)
+204 |         fi
+    | keyword:fi
+205 |         ""
+    | string:""
+206 |     }
+    | punctuation:}
+207 |     show("region-ok=", rt1, "|", rt2)
+    | builtin-fn:show  punctuation:(  string:"region-ok="  punctuation:,  variable:rt1  punctuation:,  string:"|"  punctuation:,  variable:rt2  punctuation:)
+209 |     show_outer("map-ok", map_bare_and_fn(5, r))
+    | task:show_outer  punctuation:(  string:"map-ok"  punctuation:,  task:map_bare_and_fn  punctuation:(  number:5  punctuation:,  region:r  punctuation:)  punctuation:)
+210 |     show_outer("map-fail", map_bare_and_fn(0, r))
+    | task:show_outer  punctuation:(  string:"map-fail"  punctuation:,  task:map_bare_and_fn  punctuation:(  number:0  punctuation:,  region:r  punctuation:)  punctuation:)
+211 |     show_big("variant-fail", map_variant_kind(0))
+    | task:show_big  punctuation:(  string:"variant-fail"  punctuation:,  task:map_variant_kind  punctuation:(  number:0  punctuation:)  punctuation:)
+212 |     show_ctx("shape-bare", map_shape_bare(0))
+    | task:show_ctx  punctuation:(  string:"shape-bare"  punctuation:,  task:map_shape_bare  punctuation:(  number:0  punctuation:)  punctuation:)
+213 |     show_outer("no-param", map_no_param(0))
+    | task:show_outer  punctuation:(  string:"no-param"  punctuation:,  task:map_no_param  punctuation:(  number:0  punctuation:)  punctuation:)
+214 |     show_outer("positional", map_positional(0, r))
+    | task:show_outer  punctuation:(  string:"positional"  punctuation:,  task:map_positional  punctuation:(  number:0  punctuation:,  region:r  punctuation:)  punctuation:)
+215 |     show_ctx("inline-fail", map_inline_failure(0))
+    | task:show_ctx  punctuation:(  string:"inline-fail"  punctuation:,  task:map_inline_failure  punctuation:(  number:0  punctuation:)  punctuation:)
+216 |     show_ctx("arrow-binder", map_arrow_binder(0))
+    | task:show_ctx  punctuation:(  string:"arrow-binder"  punctuation:,  task:map_arrow_binder  punctuation:(  number:0  punctuation:)  punctuation:)
+217 |     show_ctx("paren-chain-ok", map_paren_chain(4))
+    | task:show_ctx  punctuation:(  string:"paren-chain-ok"  punctuation:,  task:map_paren_chain  punctuation:(  number:4  punctuation:)  punctuation:)
+218 |     show_ctx("paren-chain-0", map_paren_chain(0))
+    | task:show_ctx  punctuation:(  string:"paren-chain-0"  punctuation:,  task:map_paren_chain  punctuation:(  number:0  punctuation:)  punctuation:)
+219 |     show_ctx("paren-chain-big", map_paren_chain(98))
+    | task:show_ctx  punctuation:(  string:"paren-chain-big"  punctuation:,  task:map_paren_chain  punctuation:(  number:98  punctuation:)  punctuation:)
+221 |     ; Plan B after '!>> ... !> ...' prevents interruption and sees mapped failure type
+    | comment:; Plan B after '!>> ... !> ...' prevents interruption and sees mapped failure type
+222 |     fixed fallback = make_box(0) !>> CtxErr.tagged("pb") !> OuterErr.new(r) { failure f
+    | keyword:fixed  variable:fallback  operator:=  task:make_box  punctuation:(  number:0  punctuation:)  operator:!>>  type:CtxErr  punctuation:.  method:tagged  punctuation:(  string:"pb"  punctuation:)  operator:!>  type:OuterErr  punctuation:.  method:new  punctuation:(  region:r  punctuation:)  punctuation:{  keyword:failure  variable:f
+223 |         show("planb-caught=", f.msg)
+    | builtin-fn:show  punctuation:(  string:"planb-caught="  punctuation:,  variable:f  punctuation:.  field:msg  punctuation:)
+224 |         Boxed { val: 77 }
+    | type:Boxed  punctuation:{  field:val  punctuation::  number:77  punctuation:}
+225 |     }
+    | punctuation:}
+226 |     show("planb-val=", fallback.val)
+    | builtin-fn:show  punctuation:(  string:"planb-val="  punctuation:,  variable:fallback  punctuation:.  field:val  punctuation:)
+228 |     ; Bare !> arrow mapping with BigErr fn
+    | comment:; Bare !> arrow mapping with BigErr fn
+229 |     fixed b2 = make_box(0) !> e -> always_big(e, r) { failure f
+    | keyword:fixed  variable:b2  operator:=  task:make_box  punctuation:(  number:0  punctuation:)  operator:!>  parameter:e  operator:->  task:always_big  punctuation:(  parameter:e  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:f
+230 |         match f
+    | keyword:match  variable:f
+231 |             case BigErr.Other w
+    | keyword:case  type:BigErr  punctuation:.  variant:Other  variable:w
+232 |                 show("arrow-fn=", w)
+    | builtin-fn:show  punctuation:(  string:"arrow-fn="  punctuation:,  variable:w  punctuation:)
+233 |             case _
+    | keyword:case  keyword:_
+234 |         fi
+    | keyword:fi
+235 |         Boxed { val: 11 }
+    | type:Boxed  punctuation:{  field:val  punctuation::  number:11  punctuation:}
+236 |     }
+    | punctuation:}
+237 |     show("arrow-fn-val=", b2.val)
+    | builtin-fn:show  punctuation:(  string:"arrow-fn-val="  punctuation:,  variable:b2  punctuation:.  field:val  punctuation:)
+238 | fi
+    | keyword:fi

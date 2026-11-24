@@ -1,0 +1,11 @@
+line_add: {"jsonrpc":"2.0","id":1,"result":42}
+note_method=ping is_note=true
+null_is_some=true
+missing: {"jsonrpc":"2.0","id":2,"error":{"code":-32601,"message":"Method not found"}}
+server_err: {"jsonrpc":"2.0","id":3,"error":{"code":-32001,"message":"boom","data":"extra"}}
+batch: [{"jsonrpc":"2.0","id":10,"result":5}]
+cl_add: {"jsonrpc":"2.0","id":4,"result":42}
+ws_add: {"jsonrpc":"2.0","id":5,"result":123}
+router_rpc: {"jsonrpc":"2.0","id":7,"result":30}
+http_ok: true
+http_body: {"jsonrpc":"2.0","id":6,"result":15}

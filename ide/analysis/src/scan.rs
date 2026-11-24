@@ -1189,6 +1189,7 @@ pub(crate) fn ends_value(token: &Token) -> bool {
             | Token::RBracket
             | Token::RBrace
             | Token::Caret
+            | Token::Bang
     )
 }
 
@@ -2269,7 +2270,9 @@ impl<'a> Classifier<'a> {
                 | Token::Percent
                 | Token::Eq
                 | Token::Ne
+                | Token::Bang
                 | Token::Pipe(_)
+                | Token::ErrPipe(_)
                 | Token::Increment
                 | Token::Decrement
                 | Token::PlusAssign

@@ -607,8 +607,51 @@
       </div>
     </section>
 
+    <section id="json-rpc">
+      <h2><span class="icon">🔌</span> 6. JSON-RPC 2.0 Connection Mode</h2>
+      <p>
+        For language servers, IPC daemons, RPC microservices, and bidirectional WebSocket tooling, <code>std/web</code>
+        includes a complete <strong>JSON-RPC 2.0</strong> stack built on <code>std/json</code>:
+      </p>
+      <ul>
+        <li><strong>Persistent Connections (<code>JsonRpcConn</code>):</strong> Connect or wrap any TCP <code>Socket</code> with <code>RpcFraming.Line</code> (newline-delimited JSON) or <code>RpcFraming.ContentLength</code> (LSP-style <code>Content-Length: N\r\n\r\n</code> headers), or wrap a <code>WebSocket</code> via <code>JsonRpcConn.from_ws(ws)</code> / <code>rpc_connect_ws(url, r)</code>.</li>
+        <li><strong>Method Dispatch (<code>RpcServer</code>):</strong> Register typed handlers <code>(Json@r, @r) -&gt; Json@r ~ RpcError@r</code> and handle single requests, silent notifications (returning <code>none</code> / <code>204 No Content</code>), batch arrays, and standard JSON-RPC error codes (<code>-32700</code> through <code>-32603</code> plus custom <code>ServerError</code>).</li>
+        <li><strong>HTTP &amp; WebSocket Mounting:</strong> Expose an <code>RpcServer</code> directly on an HTTP endpoint via <code>rtr.rpc("/rpc", srv)</code> or persistent WebSocket endpoint via <code>rtr.ws_rpc("/ws-rpc", srv)</code>, and invoke one-shot HTTP calls with <code>rpc_call(url, method, params, r)</code>.</li>
+      </ul>
+      <pre><code><span class="keyword">include</span> std/json { Json }
+<span class="keyword">include</span> std/web { RpcServer, RpcError, JsonRpcConn, RpcFraming }
+
+<span class="keyword">task</span> add_handler(params: Json@r, r: <span class="keyword">region default</span>) -&gt; Json@r ~ RpcError@r
+    <span class="keyword">match</span> params
+    <span class="keyword">case</span> Json.Array items
+        <span class="keyword">when</span> items.len == <span class="number">2</span>
+            <span class="keyword">match</span> (items[<span class="number">0</span>], items[<span class="number">1</span>])
+            <span class="keyword">case</span> (Json.Int a, Json.Int b)
+                &lt;- Json.Int(a + b)
+            <span class="keyword">case</span> _
+            <span class="keyword">fi</span>
+        <span class="keyword">fi</span>
+    <span class="keyword">case</span> _
+    <span class="keyword">fi</span>
+    &lt;- <span class="keyword">fail</span> RpcError.InvalidParams
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> rpc_session(host: text, port: int, r: <span class="keyword">region default</span>) -&gt; Json@r ~ WebError
+    <span class="keyword">flex</span> conn = JsonRpcConn.connect(host, port, RpcFraming.Line, r)!
+    <span class="keyword">flex</span> args = <span class="keyword">new</span> [Json]() <span class="keyword">at</span> r
+    args.add(Json.Int(<span class="number">20</span>))
+    args.add(Json.Int(<span class="number">22</span>))
+    &lt;- conn.call(<span class="string">"math.add"</span>, Json.Array(args), r) !&gt; e -&gt; WebError.BadResponse(e.str(r))
+<span class="keyword">fi</span></code></pre>
+      <p>
+        See <a href="../examples/io_and_system/json_rpc_service.vela"><code>examples/io_and_system/json_rpc_service.vela</code></a>
+        for a full runnable loopback server + client demonstration combining <code>RpcServer</code>,
+        <code>JsonRpcConn</code>, notifications, and <code>!</code> / <code>!&gt;</code> error handling.
+      </p>
+    </section>
+
     <section>
-      <h2><span class="icon">🔒</span> 6. Security &amp; Confinement</h2>
+      <h2><span class="icon">🔒</span> 7. Security &amp; Confinement</h2>
       <p>
         Serving files via <code>app.files(prefix, directory)</code> applies strict path sanitization:
       </p>

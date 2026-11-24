@@ -1,0 +1,212 @@
+  1 | ; Propagating failures with postfix '!' and transforming them with '!>' / '!>>'.
+    | comment:; Propagating failures with postfix '!' and transforming them with '!>' / '!>>'.
+  2 | kind InputErr
+    | keyword:kind  type:InputErr
+  3 |     Blank
+    | variant:Blank
+  4 |     BadPort(port: int)
+    | variant:BadPort  punctuation:(  field:port  punctuation::  type-builtin:int  punctuation:)
+  5 | fi
+    | keyword:fi
+  7 | kind AppErr::InputErr
+    | keyword:kind  type:AppErr  punctuation::  punctuation::  type:InputErr
+  8 |     ConfigError(detail: text)
+    | variant:ConfigError  punctuation:(  field:detail  punctuation::  type-builtin:text  punctuation:)
+ 10 |     shared with_context(prefix: text, err: InputErr, r: region default) -> AppErr@r
+    | keyword:shared  method:with_context  punctuation:(  parameter:prefix  punctuation::  type-builtin:text  punctuation:,  parameter:err  punctuation::  type:InputErr  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:AppErr  operator:@  region:r
+ 11 |         match err
+    | keyword:match  parameter:err
+ 12 |             case Blank
+    | keyword:case  variant:Blank
+ 13 |                 <- AppErr.ConfigError("{prefix}: empty input" at r)
+    | keyword:<-  type:AppErr  punctuation:.  variant:ConfigError  punctuation:(  string:"{  parameter:prefix  string:}: empty input"  keyword:at  region:r  punctuation:)
+ 14 |             case BadPort p
+    | keyword:case  variant:BadPort  variable:p
+ 15 |                 <- AppErr.ConfigError("{prefix}: port {p} out of range" at r)
+    | keyword:<-  type:AppErr  punctuation:.  variant:ConfigError  punctuation:(  string:"{  parameter:prefix  string:}: port {  variable:p  string:} out of range"  keyword:at  region:r  punctuation:)
+ 16 |         fi
+    | keyword:fi
+ 17 |     fi
+    | keyword:fi
+ 19 |     shared wrap(err: InputErr, r: region default) -> AppErr@r
+    | keyword:shared  method:wrap  punctuation:(  parameter:err  punctuation::  type:InputErr  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:AppErr  operator:@  region:r
+ 20 |         <- AppErr.with_context("wrapped", err, r)
+    | keyword:<-  type:AppErr  punctuation:.  method:with_context  punctuation:(  string:"wrapped"  punctuation:,  parameter:err  punctuation:,  region:r  punctuation:)
+ 21 |     fi
+    | keyword:fi
+ 22 | fi
+    | keyword:fi
+ 24 | shape Endpoint
+    | keyword:shape  type:Endpoint
+ 25 |     host: text
+    | field:host  punctuation::  type-builtin:text
+ 26 |     port: int
+    | field:port  punctuation::  type-builtin:int
+ 28 |     validate() -> Endpoint@this ~ InputErr
+    | method:validate  punctuation:(  punctuation:)  operator:->  type:Endpoint  operator:@  region:this  operator:~  type:InputErr
+ 29 |         when .host.len == 0
+    | keyword:when  punctuation:.  field:host  punctuation:.  field:len  operator:==  number:0
+ 30 |             <- fail InputErr.Blank
+    | keyword:<-  keyword:fail  type:InputErr  punctuation:.  variant:Blank
+ 31 |         fi
+    | keyword:fi
+ 32 |         when .port < 1 or .port > 65535
+    | keyword:when  punctuation:.  field:port  operator:<  number:1  keyword:or  punctuation:.  field:port  operator:>  number:65535
+ 33 |             <- fail InputErr.BadPort(.port)
+    | keyword:<-  keyword:fail  type:InputErr  punctuation:.  variant:BadPort  punctuation:(  punctuation:.  field:port  punctuation:)
+ 34 |         fi
+    | keyword:fi
+ 35 |         <- .this
+    | keyword:<-  punctuation:.  keyword:this
+ 36 |     fi
+    | keyword:fi
+ 38 |     secure_port() -> int ~ InputErr
+    | method:secure_port  punctuation:(  punctuation:)  operator:->  type-builtin:int  operator:~  type:InputErr
+ 39 |         when .port < 1024
+    | keyword:when  punctuation:.  field:port  operator:<  number:1024
+ 40 |             <- fail InputErr.BadPort(.port)
+    | keyword:<-  keyword:fail  type:InputErr  punctuation:.  variant:BadPort  punctuation:(  punctuation:.  field:port  punctuation:)
+ 41 |         fi
+    | keyword:fi
+ 42 |         <- .port
+    | keyword:<-  punctuation:.  field:port
+ 43 |     fi
+    | keyword:fi
+ 44 | fi
+    | keyword:fi
+ 46 | task make_endpoint(host: text, port: int) -> Endpoint ~ InputErr
+    | keyword:task  task:make_endpoint  punctuation:(  parameter:host  punctuation::  type-builtin:text  punctuation:,  parameter:port  punctuation::  type-builtin:int  punctuation:)  operator:->  type:Endpoint  operator:~  type:InputErr
+ 47 |     when host.len == 0
+    | keyword:when  parameter:host  punctuation:.  field:len  operator:==  number:0
+ 48 |         <- fail InputErr.Blank
+    | keyword:<-  keyword:fail  type:InputErr  punctuation:.  variant:Blank
+ 49 |     fi
+    | keyword:fi
+ 50 |     <- Endpoint { host: host, port: port }
+    | keyword:<-  type:Endpoint  punctuation:{  field:host  punctuation::  parameter:host  punctuation:,  field:port  punctuation::  parameter:port  punctuation:}
+ 51 | fi
+    | keyword:fi
+ 53 | ; 1. Chained '!' and kind imitation widening (InputErr -> AppErr)
+    | comment:; 1. Chained '!' and kind imitation widening (InputErr -> AppErr)
+ 54 | task verified_port(host: text, port: int) -> int ~ AppErr
+    | keyword:task  task:verified_port  punctuation:(  parameter:host  punctuation::  type-builtin:text  punctuation:,  parameter:port  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:AppErr
+ 55 |     <- make_endpoint(host, port)!.validate()!.secure_port()!
+    | keyword:<-  task:make_endpoint  punctuation:(  parameter:host  punctuation:,  parameter:port  punctuation:)  operator:!  punctuation:.  method:validate  punctuation:(  punctuation:)  operator:!  punctuation:.  method:secure_port  punctuation:(  punctuation:)  operator:!
+ 56 | fi
+    | keyword:fi
+ 58 | ; 2. Mapping InputErr -> AppErr with '!>' and positional '!>>'
+    | comment:; 2. Mapping InputErr -> AppErr with '!>' and positional '!>>'
+ 59 | task map_with_context(host: text, port: int, r: region default) -> Endpoint ~ AppErr@r
+    | keyword:task  task:map_with_context  punctuation:(  parameter:host  punctuation::  type-builtin:text  punctuation:,  parameter:port  punctuation::  type-builtin:int  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:Endpoint  operator:~  type:AppErr  operator:@  region:r
+ 60 |     <- make_endpoint(host, port) !>> AppErr.with_context("endpoint", r)
+    | keyword:<-  task:make_endpoint  punctuation:(  parameter:host  punctuation:,  parameter:port  punctuation:)  operator:!>>  type:AppErr  punctuation:.  method:with_context  punctuation:(  string:"endpoint"  punctuation:,  region:r  punctuation:)
+ 61 | fi
+    | keyword:fi
+ 63 | ; 3. Using the failure value inline via 'failure' or an arrow binder 'e -> expr'
+    | comment:; 3. Using the failure value inline via 'failure' or an arrow binder 'e -> expr'
+ 64 | task map_custom(host: text, port: int, r: region default) -> int ~ AppErr@r
+    | keyword:task  task:map_custom  punctuation:(  parameter:host  punctuation::  type-builtin:text  punctuation:,  parameter:port  punctuation::  type-builtin:int  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type-builtin:int  operator:~  type:AppErr  operator:@  region:r
+ 65 |     fixed ep = make_endpoint(host, port) !> e -> AppErr.with_context("arrow", e, r)
+    | keyword:fixed  variable:ep  operator:=  task:make_endpoint  punctuation:(  parameter:host  punctuation:,  parameter:port  punctuation:)  operator:!>  parameter:e  operator:->  type:AppErr  punctuation:.  method:with_context  punctuation:(  string:"arrow"  punctuation:,  parameter:e  punctuation:,  region:r  punctuation:)
+ 66 |     fixed valid = ep.validate() !> AppErr.ConfigError(match failure case BadPort p = "bad {p}" at r case _ = "blank" fi)
+    | keyword:fixed  variable:valid  operator:=  variable:ep  punctuation:.  method:validate  punctuation:(  punctuation:)  operator:!>  type:AppErr  punctuation:.  variant:ConfigError  punctuation:(  keyword:match  keyword:failure  keyword:case  variant:BadPort  variable:p  operator:=  string:"bad {  variable:p  string:}"  keyword:at  region:r  keyword:case  keyword:_  operator:=  string:"blank"  keyword:fi  punctuation:)
+ 67 |     <- valid.port
+    | keyword:<-  variable:valid  punctuation:.  field:port
+ 68 | fi
+    | keyword:fi
+ 70 | ; 4. Combined dot chaining + '!>' + Plan B
+    | comment:; 4. Combined dot chaining + '!>' + Plan B
+ 71 | task strict_port(host: text, port: int, r: region default) -> int ~ AppErr@r
+    | keyword:task  task:strict_port  punctuation:(  parameter:host  punctuation::  type-builtin:text  punctuation:,  parameter:port  punctuation::  type-builtin:int  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type-builtin:int  operator:~  type:AppErr  operator:@  region:r
+ 72 |     <- (make_endpoint(host, port) !> AppErr.wrap(r)).secure_port() !>> AppErr.with_context("port", r)
+    | keyword:<-  punctuation:(  task:make_endpoint  punctuation:(  parameter:host  punctuation:,  parameter:port  punctuation:)  operator:!>  type:AppErr  punctuation:.  method:wrap  punctuation:(  region:r  punctuation:)  punctuation:)  punctuation:.  method:secure_port  punctuation:(  punctuation:)  operator:!>>  type:AppErr  punctuation:.  method:with_context  punctuation:(  string:"port"  punctuation:,  region:r  punctuation:)
+ 73 | fi
+    | keyword:fi
+ 75 | task load_port(host: text, port: int, r: region default) -> int
+    | keyword:task  task:load_port  punctuation:(  parameter:host  punctuation::  type-builtin:text  punctuation:,  parameter:port  punctuation::  type-builtin:int  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type-builtin:int
+ 76 |     fixed p = strict_port(host, port, r) { failure err
+    | keyword:fixed  variable:p  operator:=  task:strict_port  punctuation:(  parameter:host  punctuation:,  parameter:port  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:err
+ 77 |         match err
+    | keyword:match  variable:err
+ 78 |             case ConfigError d
+    | keyword:case  variant:ConfigError  variable:d
+ 79 |                 show("fallback: ", d)
+    | builtin-fn:show  punctuation:(  string:"fallback: "  punctuation:,  variable:d  punctuation:)
+ 80 |             case _
+    | keyword:case  keyword:_
+ 81 |                 show("fallback: input")
+    | builtin-fn:show  punctuation:(  string:"fallback: input"  punctuation:)
+ 82 |         fi
+    | keyword:fi
+ 83 |         8080
+    | number:8080
+ 84 |     }
+    | punctuation:}
+ 85 |     <- p
+    | keyword:<-  variable:p
+ 86 | fi
+    | keyword:fi
+ 88 | task show_app(label: text, res: int ~ AppErr@r, r: region default)
+    | keyword:task  task:show_app  punctuation:(  parameter:label  punctuation::  type-builtin:text  punctuation:,  parameter:res  punctuation::  type-builtin:int  operator:~  type:AppErr  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)
+ 89 |     fixed v = res { failure e
+    | keyword:fixed  variable:v  operator:=  parameter:res  punctuation:{  keyword:failure  variable:e
+ 90 |         match e
+    | keyword:match  variable:e
+ 91 |             case Blank
+    | keyword:case  variant:Blank
+ 92 |                 show(label, ": blank")
+    | builtin-fn:show  punctuation:(  parameter:label  punctuation:,  string:": blank"  punctuation:)
+ 93 |             case BadPort p
+    | keyword:case  variant:BadPort  variable:p
+ 94 |                 show(label, ": bad-port=", p)
+    | builtin-fn:show  punctuation:(  parameter:label  punctuation:,  string:": bad-port="  punctuation:,  variable:p  punctuation:)
+ 95 |             case ConfigError d
+    | keyword:case  variant:ConfigError  variable:d
+ 96 |                 show(label, ": ", d)
+    | builtin-fn:show  punctuation:(  parameter:label  punctuation:,  string:": "  punctuation:,  variable:d  punctuation:)
+ 97 |         fi
+    | keyword:fi
+ 98 |         <-
+    | keyword:<-
+ 99 |     }
+    | punctuation:}
+100 |     show(label, ": ", v)
+    | builtin-fn:show  punctuation:(  parameter:label  punctuation:,  string:": "  punctuation:,  variable:v  punctuation:)
+101 | fi
+    | keyword:fi
+103 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+104 |     region r default
+    | keyword:region  region:r  keyword:default
+105 |     show_app("ok", verified_port("vela.local", 8443), r)
+    | task:show_app  punctuation:(  string:"ok"  punctuation:,  task:verified_port  punctuation:(  string:"vela.local"  punctuation:,  number:8443  punctuation:)  punctuation:,  region:r  punctuation:)
+106 |     show_app("blank", verified_port("", 8443), r)
+    | task:show_app  punctuation:(  string:"blank"  punctuation:,  task:verified_port  punctuation:(  string:""  punctuation:,  number:8443  punctuation:)  punctuation:,  region:r  punctuation:)
+107 |     show_app("priv", verified_port("vela.local", 80), r)
+    | task:show_app  punctuation:(  string:"priv"  punctuation:,  task:verified_port  punctuation:(  string:"vela.local"  punctuation:,  number:80  punctuation:)  punctuation:,  region:r  punctuation:)
+109 |     fixed m1 = map_with_context("", 8080, r) { failure e
+    | keyword:fixed  variable:m1  operator:=  task:map_with_context  punctuation:(  string:""  punctuation:,  number:8080  punctuation:,  region:r  punctuation:)  punctuation:{  keyword:failure  variable:e
+110 |         match e
+    | keyword:match  variable:e
+111 |             case ConfigError d
+    | keyword:case  variant:ConfigError  variable:d
+112 |                 show("mapped: ", d)
+    | builtin-fn:show  punctuation:(  string:"mapped: "  punctuation:,  variable:d  punctuation:)
+113 |             case _
+    | keyword:case  keyword:_
+114 |         fi
+    | keyword:fi
+115 |         Endpoint { host: "default", port: 8080 }
+    | type:Endpoint  punctuation:{  field:host  punctuation::  string:"default"  punctuation:,  field:port  punctuation::  number:8080  punctuation:}
+116 |     }
+    | punctuation:}
+117 |     show("m1 host=", m1.host)
+    | builtin-fn:show  punctuation:(  string:"m1 host="  punctuation:,  variable:m1  punctuation:.  field:host  punctuation:)
+119 |     show_app("custom", map_custom("", 8080, r), r)
+    | task:show_app  punctuation:(  string:"custom"  punctuation:,  task:map_custom  punctuation:(  string:""  punctuation:,  number:8080  punctuation:,  region:r  punctuation:)  punctuation:,  region:r  punctuation:)
+120 |     show("loaded-ok=", load_port("vela.local", 9000, r))
+    | builtin-fn:show  punctuation:(  string:"loaded-ok="  punctuation:,  task:load_port  punctuation:(  string:"vela.local"  punctuation:,  number:9000  punctuation:,  region:r  punctuation:)  punctuation:)
+121 |     show("loaded-bad=", load_port("vela.local", 80, r))
+    | builtin-fn:show  punctuation:(  string:"loaded-bad="  punctuation:,  task:load_port  punctuation:(  string:"vela.local"  punctuation:,  number:80  punctuation:,  region:r  punctuation:)  punctuation:)
+122 | fi
+    | keyword:fi

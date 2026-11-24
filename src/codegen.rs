@@ -4457,7 +4457,7 @@ impl Generator {
             }
             StmtKind::Expr(e) => {
                 let expr = self.gen_expr(e)?;
-                if (matches!(e.kind, ExprKind::PlanB { .. })
+                if (matches!(e.kind, ExprKind::PlanB { .. } | ExprKind::Try(_) | ExprKind::ErrPipe { .. })
                     || matches!(e.ty.as_ref(), Some(Type::Commitment(_))))
                     && !expr.is_empty()
                 {
@@ -6035,6 +6035,14 @@ impl Generator {
                 .last()
                 .cloned()
                 .ok_or_else(|| Error::internal_at(e.span, "a piped value outside its pipe")),
+            ExprKind::Try(inner) => self.gen_try(e, inner),
+            ExprKind::ErrPipe {
+                value,
+                step,
+                binder,
+                propagate,
+                ..
+            } => self.gen_err_pipe(e, value, step, binder.as_ref(), *propagate),
             ExprKind::PlanB { value, error, body } => {
                 self.gen_plan_b(e, value, error.as_ref(), body)
             }
@@ -8134,6 +8142,144 @@ impl Generator {
         Ok(result)
     }
 
+    fn emit_early_fail_return(&mut self, err_expr: &str, err_from: &Type, span: Span) -> Result<()> {
+        let ret = self.ret.clone();
+        let Type::Or(_, err_task) = &ret else {
+            return Err(Error::internal_at(
+                span,
+                format!("early failure propagation in task returning {}", ret),
+            ));
+        };
+        let err_val = if err_from.without_regions() == err_task.without_regions() {
+            err_expr.to_string()
+        } else {
+            format!("{}({})", widen_helper(err_from, err_task), err_expr)
+        };
+        let err_tmp = self.fresh_temp("err");
+        self.w
+            .line(&format!("{} {} = {};", c_type(err_task), err_tmp, err_val));
+        self.gen_task_hooks(false);
+        self.free_all_regions();
+        self.w.line(&format!(
+            "return (({}){{ .ok = false, .error = {} }});",
+            c_type(&ret),
+            err_tmp
+        ));
+        Ok(())
+    }
+
+    fn gen_try(&mut self, e: &Expr, inner: &Expr) -> Result<String> {
+        let inner_ty = inner.ty()?.clone();
+        let Type::Or(ok_ty, err_in) = &inner_ty else {
+            return Err(Error::internal_at(
+                e.span,
+                format!("'!' on non-fallible type {}", inner_ty),
+            ));
+        };
+        let val_c = self.gen_expr(inner)?;
+        let tmp = self.fresh_temp("try");
+        self.w
+            .line(&format!("{} {} = {};", c_type(&inner_ty), tmp, val_c));
+        self.w.open(&format!("if (!{}.ok)", tmp));
+        self.emit_early_fail_return(&format!("{}.error", tmp), err_in, e.span)?;
+        self.w.close();
+        if **ok_ty == Type::Nothing {
+            Ok(String::new())
+        } else {
+            Ok(format!("{}.value", tmp))
+        }
+    }
+
+    fn gen_err_pipe(
+        &mut self,
+        e: &Expr,
+        value: &Expr,
+        step: &Expr,
+        binder: Option<&Binding>,
+        propagate: bool,
+    ) -> Result<String> {
+        let val_ty = value.ty()?.clone();
+        let Type::Or(ok_ty, err_in) = &val_ty else {
+            return Err(Error::internal_at(
+                e.span,
+                format!("'!>' on non-fallible type {}", val_ty),
+            ));
+        };
+        let val_c = self.gen_expr(value)?;
+        let piped = self.fresh_temp("epipe");
+        self.w
+            .line(&format!("{} {} = {};", c_type(&val_ty), piped, val_c));
+        if propagate {
+            self.w.open(&format!("if (!{}.ok)", piped));
+            self.w.line(&format!(
+                "{} {} = {}.error;",
+                c_type(err_in),
+                c_ident(FAILURE_VAL),
+                piped
+            ));
+            if let Some((bname, _)) = binder
+                && bname != DISCARD
+            {
+                self.w.line(&format!(
+                    "{} {} = {};",
+                    c_type(err_in),
+                    c_ident(bname),
+                    c_ident(FAILURE_VAL)
+                ));
+                self.w.line(&format!("(void){};", c_ident(bname)));
+            }
+            self.w.line(&format!("(void){};", c_ident(FAILURE_VAL)));
+            let mapped = self.gen_expr(step)?;
+            let err_mapped = step.ty()?.clone();
+            self.emit_early_fail_return(&mapped, &err_mapped, e.span)?;
+            self.w.close();
+            if **ok_ty == Type::Nothing {
+                return Ok(String::new());
+            }
+            return Ok(format!("{}.value", piped));
+        }
+        let result_ty = e.ty()?.clone();
+        let ctype = c_type(&result_ty);
+        let result = self.fresh_temp("eout");
+        self.w.line(&format!("{} {};", ctype, result));
+        self.w.open(&format!("if ({}.ok)", piped));
+        if **ok_ty == Type::Nothing {
+            self.w
+                .line(&format!("{} = ({}){{ .ok = true }};", result, ctype));
+        } else {
+            self.w.line(&format!(
+                "{} = ({}){{ .ok = true, .value = {}.value }};",
+                result, ctype, piped
+            ));
+        }
+        self.w.reopen("else");
+        self.w.line(&format!(
+            "{} {} = {}.error;",
+            c_type(err_in),
+            c_ident(FAILURE_VAL),
+            piped
+        ));
+        if let Some((bname, _)) = binder
+            && bname != DISCARD
+        {
+            self.w.line(&format!(
+                "{} {} = {};",
+                c_type(err_in),
+                c_ident(bname),
+                c_ident(FAILURE_VAL)
+            ));
+            self.w.line(&format!("(void){};", c_ident(bname)));
+        }
+        self.w.line(&format!("(void){};", c_ident(FAILURE_VAL)));
+        let mapped = self.gen_expr(step)?;
+        self.w.line(&format!(
+            "{} = ({}){{ .ok = false, .error = {} }};",
+            result, ctype, mapped
+        ));
+        self.w.close();
+        Ok(result)
+    }
+
     fn gen_wrap(&mut self, e: &Expr, inner: &Expr) -> Result<String> {
         let target = e.ty()?;
         let ctype = c_type(target);
@@ -9019,7 +9165,9 @@ fn has_prelude(e: &Expr) -> bool {
         | ExprKind::Edit { .. }
         | ExprKind::Scan { .. }
         | ExprKind::Doing(_)
-        | ExprKind::Pipe(_) => true,
+        | ExprKind::Pipe(_)
+        | ExprKind::Try(_)
+        | ExprKind::ErrPipe { .. } => true,
         ExprKind::Piped(_) => false,
         ExprKind::IntLit(_)
         | ExprKind::FloatLit(_)
@@ -9168,6 +9316,7 @@ struct UsedTypes {
     channels: TypeList,
     commitments: TypeList,
     maybe_commitments: Vec<(Type, Type)>,
+    current_err: Option<Type>,
 }
 
 #[derive(Default)]
@@ -9301,6 +9450,7 @@ impl UsedTypes {
             channels: TypeList::default(),
             commitments: TypeList::default(),
             maybe_commitments: Vec::new(),
+            current_err: None,
         };
         let tasks: HashSet<&str> = items
             .iter()
@@ -9408,7 +9558,12 @@ impl UsedTypes {
                 Item::Task(t) if t.types.is_empty() => {
                     t.params.iter().for_each(|p| used.add(&p.ty));
                     used.add(&t.ret);
+                    used.current_err = match &t.ret {
+                        Type::Or(_, err) => Some((**err).clone()),
+                        _ => None,
+                    };
                     used.block(&t.body);
+                    used.current_err = None;
                     if is_startup(&t.name) {
                         for stmt in &t.body {
                             if let StmtKind::Expr(Expr {
@@ -9925,6 +10080,29 @@ impl UsedTypes {
                 self.expr(call)
             }
             ExprKind::Piped(inner) => self.expr(inner),
+            ExprKind::Try(inner) => {
+                if let (Some(Type::Or(_, from)), Some(to)) = (&inner.ty, self.current_err.clone())
+                    && from.without_regions() != to.without_regions()
+                {
+                    self.widen(from, &to);
+                }
+                self.expr(inner);
+            }
+            ExprKind::ErrPipe {
+                value,
+                step,
+                propagate,
+                ..
+            } => {
+                if *propagate
+                    && let (Some(from), Some(to)) = (&step.ty, self.current_err.clone())
+                    && from.without_regions() != to.without_regions()
+                {
+                    self.widen(from, &to);
+                }
+                self.expr(value);
+                self.expr(step);
+            }
             ExprKind::Choice(stmt) => self.block(std::slice::from_ref(stmt)),
             ExprKind::LoopValue(value) => {
                 self.block(std::slice::from_ref(&value.stmt));
@@ -10335,7 +10513,9 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         | ExprKind::Wrap(inner)
         | ExprKind::Widen(inner)
         | ExprKind::Pipe(inner)
-        | ExprKind::Piped(inner) => expr_reads(inner, name),
+        | ExprKind::Piped(inner)
+        | ExprKind::Try(inner) => expr_reads(inner, name),
+        ExprKind::ErrPipe { value, step, .. } => expr_reads(value, name) || expr_reads(step, name),
         ExprKind::Index(a, b)
         | ExprKind::Lookup(a, b)
         | ExprKind::ChanSend(a, b)
@@ -10497,10 +10677,12 @@ fn expr_has_doing(e: &Expr) -> bool {
         | ExprKind::Widen(inner)
         | ExprKind::Pipe(inner)
         | ExprKind::Piped(inner)
+        | ExprKind::Try(inner)
         | ExprKind::ToText { value: inner, .. }
         | ExprKind::ToJson { value: inner, .. }
         | ExprKind::Copy { value: inner, .. }
         | ExprKind::Shortcut { value: inner, .. } => expr_has_doing(inner),
+        ExprKind::ErrPipe { value, step, .. } => expr_has_doing(value) || expr_has_doing(step),
         ExprKind::IntLit(_)
         | ExprKind::FloatLit(_)
         | ExprKind::CharLit(_)
@@ -10857,6 +11039,9 @@ fn c_ident(name: &str) -> String {
     }
     if name == THIS {
         return "vela__this".to_string();
+    }
+    if name == FAILURE_VAL {
+        return "vela__failure".to_string();
     }
     if collides_with_c(name) {
         format!("vela__{}", name)

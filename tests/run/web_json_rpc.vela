@@ -1,0 +1,240 @@
+; Tests JSON-RPC 2.0 connection mode over Line-framed TCP sockets, Content-Length framing,
+; WebSockets, and HTTP Router.rpc dispatch, including notifications, batches, and error codes.
+include std/json { Json, parse => json_parse, stringify => json_stringify }
+include std/web { Socket, Request, Response, Method, WebSocket, Router, router, RpcFraming, RpcError, RpcRequest, RpcResponse, JsonRpcConn, RpcServer, ws_accept, serve_one, rpc, default_route, trim, text_find }
+
+task build_add_handler(params: Json@r, r: region default) -> Json@r ~ RpcError@r
+    match params
+    case Json.Array items
+        when items.len == 2
+            flex a = 0
+            flex b = 0
+            match items[0]
+            case Json.Int n
+                a = n
+            case _
+                <- fail RpcError.InvalidParams
+            fi
+            match items[1]
+            case Json.Int n
+                b = n
+            case _
+                <- fail RpcError.InvalidParams
+            fi
+            <- Json.Int(a + b)
+        fi
+    case _
+    fi
+    <- fail RpcError.InvalidParams
+fi
+
+task build_fail_handler(params: Json@r, r: region default) -> Json@r ~ RpcError@r
+    <- fail RpcError.ServerError(-32001, "boom", "extra")
+fi
+
+task main()
+    region r default
+    flex srv = RpcServer.new()
+    srv = srv.register("add", build_add_handler)
+    srv = srv.register("fail_me", build_fail_handler)
+
+    ; 1. Line-framed TCP Socket JSON-RPC
+    flex tcp_srv = Socket.open(r) { failure _
+        <-
+    }
+    tcp_srv.bind_to("127.0.0.1", 18110) { failure _
+        <-
+    }
+    tcp_srv.listen(16) { failure _
+        <-
+    }
+
+    fixed tcp_cli = Socket.open(r) { failure _
+        <-
+    }
+    tcp_cli.connect("127.0.0.1", 18110) { failure _
+        <-
+    }
+    fixed tcp_acc = tcp_srv.accept(r) { failure _
+        <-
+    }
+
+    flex client_line = JsonRpcConn.from_socket(tcp_cli, RpcFraming.Line, 5000)
+    flex server_line = JsonRpcConn.from_socket(tcp_acc, RpcFraming.Line, 5000)
+
+    flex add_params = new [Json]() at r
+    add_params.add(Json.Int(19))
+    add_params.add(Json.Int(23))
+    fixed req1 = RpcRequest { method: "add", params: Json.Array(add_params), id: Json.Int(1) }
+    client_line.send_message(req1.encode(r), r) { failure _
+        <-
+    }
+    fixed raw1 = server_line.recv_message(r) { failure _
+        show("line recv failed")
+        <-
+    }
+    when srv.dispatch_raw(raw1, r) is {reply1}
+        server_line.send_message(reply1, r) { failure _
+            <-
+        }
+    fi
+    fixed got1 = client_line.recv_message(r) { failure _
+        <-
+    }
+    show("line_add: ", got1)
+
+    ; Notification returns none from dispatch and is received via recv_request
+    client_line.notify("ping", Json.Null, r) { failure _
+        <-
+    }
+    fixed note_req = server_line.recv_request(r) { failure _
+        <-
+    }
+    show("note_method=", note_req.method, " is_note=", note_req.is_notification())
+    fixed note_reply = srv.dispatch_value(Json.Null, r)
+    show("null_is_some=", when note_reply is {_} true else false fi)
+
+    ; Method not found & ServerError
+    fixed missing = srv.dispatch_raw("\{\"jsonrpc\":\"2.0\",\"method\":\"unknown\",\"id\":2\}", r)
+    show("missing: ", when missing is {m} m else "none" fi)
+    fixed srv_err = srv.dispatch_raw("\{\"jsonrpc\":\"2.0\",\"method\":\"fail_me\",\"id\":3\}", r)
+    show("server_err: ", when srv_err is {m} m else "none" fi)
+
+    ; Batch dispatch
+    fixed batch_raw = "[\{\"jsonrpc\":\"2.0\",\"method\":\"add\",\"params\":[2,3],\"id\":10\},\{\"jsonrpc\":\"2.0\",\"method\":\"ping\"\}]"
+    fixed batch_out = srv.dispatch_raw(batch_raw, r)
+    show("batch: ", when batch_out is {b} b else "none" fi)
+
+    ; 2. Content-Length framed TCP Socket JSON-RPC
+    flex cl_srv = Socket.open(r) { failure _
+        <-
+    }
+    cl_srv.bind_to("127.0.0.1", 18111) { failure _
+        <-
+    }
+    cl_srv.listen(16) { failure _
+        <-
+    }
+
+    fixed cl_cli = Socket.open(r) { failure _
+        <-
+    }
+    cl_cli.connect("127.0.0.1", 18111) { failure _
+        <-
+    }
+    fixed cl_acc = cl_srv.accept(r) { failure _
+        <-
+    }
+
+    flex client_cl = JsonRpcConn.from_socket(cl_cli, RpcFraming.ContentLength, 5000)
+    flex server_cl = JsonRpcConn.from_socket(cl_acc, RpcFraming.ContentLength, 5000)
+    client_cl.send_message("\{\"jsonrpc\":\"2.0\",\"method\":\"add\",\"params\":[40,2],\"id\":4\}", r) { failure _
+        <-
+    }
+    fixed raw_cl = server_cl.recv_message(r) { failure _
+        <-
+    }
+    when srv.dispatch_raw(raw_cl, r) is {reply_cl}
+        server_cl.send_message(reply_cl, r) { failure _
+            <-
+        }
+    fi
+    fixed got_cl = client_cl.recv_message(r) { failure _
+        <-
+    }
+    show("cl_add: ", got_cl)
+
+    ; 3. WebSocket JSON-RPC
+    flex hdrs = new [text: text]() at r
+    hdrs["upgrade"] = "websocket"
+    hdrs["connection"] = "Upgrade"
+    hdrs["sec-websocket-key"] = "dGhlIHNhbXBsZSBub25jZQ=="
+    fixed ws_req = Request { method: Method.Get, path: "/rpc", raw_query: "", headers: hdrs, body_data: "", params: new [text: text]() at r }
+
+    flex ws_srv_sock = Socket.open(r) { failure _
+        <-
+    }
+    ws_srv_sock.bind_to("127.0.0.1", 18112) { failure _
+        <-
+    }
+    ws_srv_sock.listen(16) { failure _
+        <-
+    }
+    fixed ws_cli_sock = Socket.open(r) { failure _
+        <-
+    }
+    ws_cli_sock.connect("127.0.0.1", 18112) { failure _
+        <-
+    }
+    fixed ws_acc_sock = ws_srv_sock.accept(r) { failure _
+        <-
+    }
+    flex server_ws = ws_accept(ws_req, ws_acc_sock, r) { failure _
+        <-
+    }
+    fixed hs = ws_cli_sock.read(256, r) { failure _
+        <-
+    }
+    flex client_ws = WebSocket { sock: ws_cli_sock, is_client: true, closed: false }
+
+    flex ws_cli_rpc = JsonRpcConn.from_ws(client_ws, 5000)
+    flex ws_srv_rpc = JsonRpcConn.from_ws(server_ws, 5000)
+    ws_cli_rpc.send_message("\{\"jsonrpc\":\"2.0\",\"method\":\"add\",\"params\":[100,23],\"id\":5\}", r) { failure _
+        <-
+    }
+    fixed ws_raw = ws_srv_rpc.recv_message(r) { failure _
+        <-
+    }
+    when srv.dispatch_raw(ws_raw, r) is {ws_reply}
+        ws_srv_rpc.send_message(ws_reply, r) { failure _
+            <-
+        }
+    fi
+    fixed ws_got = ws_cli_rpc.recv_message(r) { failure _
+        <-
+    }
+    show("ws_add: ", ws_got)
+
+    ; 4. HTTP rpc dispatch (programmatic Router.rpc + default_route serve_one)
+    flex rtr = router()
+    rtr = rtr.rpc("/rpc", srv)
+    fixed direct_req = Request { method: Method.Post, path: "/rpc", raw_query: "", headers: new [text: text]() at r, body_data: "\{\"jsonrpc\":\"2.0\",\"method\":\"add\",\"params\":[10,20],\"id\":7\}", params: new [text: text]() at r }
+    fixed direct_res = rtr.route(direct_req, r) { failure _
+        Response.text("err", r)
+    }
+    show("router_rpc: ", trim(direct_res.body_data))
+
+    flex http_srv = Socket.open(r) { failure _
+        <-
+    }
+    http_srv.bind_to("127.0.0.1", 18113) { failure _
+        <-
+    }
+    http_srv.listen(16) { failure _
+        <-
+    }
+
+    rpc("/rpc", srv)
+    fixed http_cli = Socket.open(r) { failure _
+        <-
+    }
+    http_cli.connect("127.0.0.1", 18113) { failure _
+        <-
+    }
+    fixed payload = "\{\"jsonrpc\":\"2.0\",\"method\":\"add\",\"params\":[7,8],\"id\":6\}"
+    fixed raw_http = "POST /rpc HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Type: application/json\r\nContent-Length: {payload.len}\r\n\r\n{payload}" at r
+    http_cli.write(raw_http) { failure _
+        <-
+    }
+    serve_one(http_srv, default_route, r) { failure _
+        <-
+    }
+    fixed http_resp = http_cli.read(1024, r) { failure _
+        <-
+    }
+    fixed body_pos = text_find(http_resp, "\r\n\r\n", 0)
+    show("http_ok: ", text_find(http_resp, "200 OK", 0) >= 0)
+    when body_pos >= 0
+        show("http_body: ", trim(http_resp[body_pos + 4..http_resp.len]))
+    fi
+fi

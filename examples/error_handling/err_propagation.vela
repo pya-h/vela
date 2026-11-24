@@ -1,0 +1,122 @@
+; Propagating failures with postfix '!' and transforming them with '!>' / '!>>'.
+kind InputErr
+    Blank
+    BadPort(port: int)
+fi
+
+kind AppErr::InputErr
+    ConfigError(detail: text)
+
+    shared with_context(prefix: text, err: InputErr, r: region default) -> AppErr@r
+        match err
+            case Blank
+                <- AppErr.ConfigError("{prefix}: empty input" at r)
+            case BadPort p
+                <- AppErr.ConfigError("{prefix}: port {p} out of range" at r)
+        fi
+    fi
+
+    shared wrap(err: InputErr, r: region default) -> AppErr@r
+        <- AppErr.with_context("wrapped", err, r)
+    fi
+fi
+
+shape Endpoint
+    host: text
+    port: int
+
+    validate() -> Endpoint@this ~ InputErr
+        when .host.len == 0
+            <- fail InputErr.Blank
+        fi
+        when .port < 1 or .port > 65535
+            <- fail InputErr.BadPort(.port)
+        fi
+        <- .this
+    fi
+
+    secure_port() -> int ~ InputErr
+        when .port < 1024
+            <- fail InputErr.BadPort(.port)
+        fi
+        <- .port
+    fi
+fi
+
+task make_endpoint(host: text, port: int) -> Endpoint ~ InputErr
+    when host.len == 0
+        <- fail InputErr.Blank
+    fi
+    <- Endpoint { host: host, port: port }
+fi
+
+; 1. Chained '!' and kind imitation widening (InputErr -> AppErr)
+task verified_port(host: text, port: int) -> int ~ AppErr
+    <- make_endpoint(host, port)!.validate()!.secure_port()!
+fi
+
+; 2. Mapping InputErr -> AppErr with '!>' and positional '!>>'
+task map_with_context(host: text, port: int, r: region default) -> Endpoint ~ AppErr@r
+    <- make_endpoint(host, port) !>> AppErr.with_context("endpoint", r)
+fi
+
+; 3. Using the failure value inline via 'failure' or an arrow binder 'e -> expr'
+task map_custom(host: text, port: int, r: region default) -> int ~ AppErr@r
+    fixed ep = make_endpoint(host, port) !> e -> AppErr.with_context("arrow", e, r)
+    fixed valid = ep.validate() !> AppErr.ConfigError(match failure case BadPort p = "bad {p}" at r case _ = "blank" fi)
+    <- valid.port
+fi
+
+; 4. Combined dot chaining + '!>' + Plan B
+task strict_port(host: text, port: int, r: region default) -> int ~ AppErr@r
+    <- (make_endpoint(host, port) !> AppErr.wrap(r)).secure_port() !>> AppErr.with_context("port", r)
+fi
+
+task load_port(host: text, port: int, r: region default) -> int
+    fixed p = strict_port(host, port, r) { failure err
+        match err
+            case ConfigError d
+                show("fallback: ", d)
+            case _
+                show("fallback: input")
+        fi
+        8080
+    }
+    <- p
+fi
+
+task show_app(label: text, res: int ~ AppErr@r, r: region default)
+    fixed v = res { failure e
+        match e
+            case Blank
+                show(label, ": blank")
+            case BadPort p
+                show(label, ": bad-port=", p)
+            case ConfigError d
+                show(label, ": ", d)
+        fi
+        <-
+    }
+    show(label, ": ", v)
+fi
+
+task main()
+    region r default
+    show_app("ok", verified_port("vela.local", 8443), r)
+    show_app("blank", verified_port("", 8443), r)
+    show_app("priv", verified_port("vela.local", 80), r)
+
+    fixed m1 = map_with_context("", 8080, r) { failure e
+        match e
+            case ConfigError d
+                show("mapped: ", d)
+            case _
+        fi
+        Endpoint { host: "default", port: 8080 }
+    }
+    show("m1 host=", m1.host)
+
+    show_app("custom", map_custom("", 8080, r), r)
+    show("loaded-ok=", load_port("vela.local", 9000, r))
+    show("loaded-bad=", load_port("vela.local", 80, r))
+fi
