@@ -1,0 +1,33 @@
+task main()
+    ; boolean logic
+    fixed t = true
+    fixed f = false
+
+    assert t and t
+    assert !(t and f)
+    assert t or f
+    assert !(f or f)
+    assert t xor f
+    assert !(t xor t)
+    assert !(f xor f)
+    assert t nand f
+    assert !(t nand t)
+    assert f nor f
+    assert !(t nor f)
+    assert !f
+    assert not f
+
+    ; bitwise on integers
+    fixed a = 12   ; 0b1100
+    fixed b = 10   ; 0b1010
+
+    show("and: ", a & b)
+    show("or: ", a | b)
+    show("xor: ", a ^^ b)
+    show("nand: ", a ~& b)
+    show("nor: ", a ~| b)
+    show("xnor: ", a ~^ b)
+    show("not: ", ~a)
+    show("shl: ", a << 2)
+    show("shr: ", a >> 2)
+fi

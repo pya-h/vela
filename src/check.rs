@@ -2674,12 +2674,16 @@ impl Checker {
                         .ok_or_else(|| Error::at(span, "the value doesn't fit in an int")),
                     (UnaryOp::Neg, Constant::Float(x)) => Ok(Constant::Float(-x)),
                     (UnaryOp::Not, Constant::Bool(b)) => Ok(Constant::Bool(!b)),
+                    (UnaryOp::BitNot, Constant::Int(n)) => Ok(Constant::Int(!n)),
                     (UnaryOp::Neg, other) => err(
                         span,
                         format!("'-' makes an int or a float negative, not a {}", other.ty()),
                     ),
                     (UnaryOp::Not, other) => {
                         err(span, format!("'not' is for a bool, not a {}", other.ty()))
+                    }
+                    (UnaryOp::BitNot, other) => {
+                        err(span, format!("'~' is for an int, not a {}", other.ty()))
                     }
                 }
             }
@@ -6012,7 +6016,7 @@ impl Checker {
         let count = match &value.stmt.kind {
             StmtKind::Each(_, _, range, _, _) => match (&range.ty, &range.kind) {
                 (Some(Type::Array(_, count)), _) => Some(*count),
-                (_, ExprKind::Range(start, end)) => {
+                (_, ExprKind::Range(start, end, ..)) => {
                     match (constant_int(start), constant_int(end)) {
                         (Some(a), Some(b)) => match b
                             .checked_sub(a)
@@ -7694,6 +7698,15 @@ impl Checker {
                     if decl.default {
                         self.set_default_region(&decl.name, decl.span)?;
                     }
+                }
+                Ok(())
+            }
+            StmtKind::Assert { condition, message, .. } => {
+                let ty = self.check_expr(condition)?;
+                self.expect_type(&ty, &Type::Bool, condition.span)?;
+                if let Some(msg) = message {
+                    let mty = self.check_expr(msg)?;
+                    self.expect_type(&mty, &Type::Text(None), msg.span)?;
                 }
                 Ok(())
             }
@@ -16350,7 +16363,7 @@ impl Checker {
         index: &mut Expr,
         span: Span,
     ) -> Result<Type> {
-        let ExprKind::Range(from, to) = &mut index.kind else {
+        let ExprKind::Range(from, to, ..) = &mut index.kind else {
             let ty = self.check_expr(index)?;
             self.expect_type(&ty, &Type::Int, index.span)?;
             if let Some(value) = constant_int(index).filter(|value| *value < 0) {
@@ -16476,11 +16489,21 @@ impl Checker {
                 ),
             }
         };
+        let item_source = |items: Type| -> Result<(Type, Option<Type>)> {
+            match second {
+                Some(_) => Ok((Type::Int, Some(items))),
+                None => Ok((items, None)),
+            }
+        };
         // `Range` is only valid as an `each` source, so check it here rather than in `infer_expr`.
-        if let ExprKind::Range(start, end) = &mut range.kind {
+        if let ExprKind::Range(start, end, step, _) = &mut range.kind {
             for bound in [start, end] {
                 let bty = self.check_expr(bound)?;
                 self.expect_type(&bty, &Type::Int, bound.span)?;
+            }
+            if let Some(s) = step {
+                let sty = self.check_expr(s)?;
+                self.expect_type(&sty, &Type::Int, s.span)?;
             }
             range.ty = Some(Type::Range(Box::new(Type::Int)));
             return one(Type::Int);
@@ -16517,7 +16540,7 @@ impl Checker {
             }
             range.ty = Some(ty.clone());
             return match ty {
-                Type::Array(items, _) | Type::Slice(items, _) => one(*items),
+                Type::Array(items, _) | Type::Slice(items, _) => item_source(*items),
                 Type::Map(key, value, _) => map_pair(*key, *value, range.span),
                 other if other.unknown() => Ok((Type::Unknown, second.map(|_| Type::Unknown))),
                 other => err(
@@ -16537,7 +16560,7 @@ impl Checker {
                     name
                 ),
             ),
-            Type::Array(items, _) | Type::Slice(items, _) => one(*items),
+            Type::Array(items, _) | Type::Slice(items, _) => item_source(*items),
             Type::Map(key, value, _) => map_pair(*key, *value, range.span),
             other if other.unknown() => Ok((Type::Unknown, second.map(|_| Type::Unknown))),
             // Signal `check_stmt_kind` to desugar `each x in it` using `Iterator.next()`.
@@ -16885,7 +16908,7 @@ impl Checker {
                 ),
             }
         };
-        let ExprKind::Range(from, to) = &mut index.kind else {
+        let ExprKind::Range(from, to, ..) = &mut index.kind else {
             let ty = self.check_expr(index)?;
             self.expect_type(&ty, &Type::Int, index.span)?;
             if let Some(value) = constant_int(index) {
@@ -18368,6 +18391,19 @@ impl Checker {
                 self.expect_type(&ty, &Type::Bool, e.span)?;
                 Ok(Type::Bool)
             }
+            UnaryOp::BitNot => {
+                if !ty.is_integer() {
+                    return err(
+                        span,
+                        format!(
+                            "bitwise not '~' requires an integer, got {}{}",
+                            ty,
+                            extract_hint(&[&ty])
+                        ),
+                    );
+                }
+                Ok(ty)
+            }
         }
     }
 
@@ -19121,10 +19157,53 @@ impl Checker {
                 }
                 Ok(Type::Bool)
             }
-            BinaryOp::And | BinaryOp::Or => {
+            BinaryOp::And | BinaryOp::Or | BinaryOp::Xor | BinaryOp::Nand | BinaryOp::Nor => {
                 self.expect_type(&lt, &Type::Bool, l.span)?;
                 self.expect_type(&rt, &Type::Bool, r.span)?;
                 Ok(Type::Bool)
+            }
+            BinaryOp::BitAnd
+            | BinaryOp::BitNand
+            | BinaryOp::BitOr
+            | BinaryOp::BitNor
+            | BinaryOp::BitXor
+            | BinaryOp::BitXnor => {
+                if !lt.is_integer() || !rt.is_integer() {
+                    return err(
+                        span,
+                        format!(
+                            "bitwise operations require integer operands, got {} and {}{}",
+                            lt,
+                            rt,
+                            extract_hint(&[&lt, &rt])
+                        ),
+                    );
+                }
+                if lt != rt {
+                    return err(
+                        span,
+                        format!(
+                            "{} and {} don't mix in bitwise operation: turn one into the other first",
+                            a_type(&lt),
+                            a_type(&rt)
+                        ),
+                    );
+                }
+                Ok(lt)
+            }
+            BinaryOp::Shl | BinaryOp::Shr => {
+                if !lt.is_integer() || !rt.is_integer() {
+                    return err(
+                        span,
+                        format!(
+                            "shift operations require integer operands, got {} and {}{}",
+                            lt,
+                            rt,
+                            extract_hint(&[&lt, &rt])
+                        ),
+                    );
+                }
+                Ok(lt)
             }
         }
     }
@@ -23903,7 +23982,7 @@ impl Checker {
                 .iter_mut()
                 .try_for_each(|value| self.substitute_expr(value, given, made)),
             StmtKind::Break(_, Some(value)) => self.substitute_expr(value, given, made),
-            StmtKind::Region { .. } | StmtKind::Break(..) | StmtKind::Continue(_) => Ok(()),
+            StmtKind::Region { .. } | StmtKind::Break(..) | StmtKind::Continue(_) | StmtKind::Assert { .. } => Ok(()),
             StmtKind::Named(_, inner) => self.substitute_stmt(inner, given, made),
             StmtKind::Turns(turns) => turns
                 .iter_mut()
@@ -24540,10 +24619,17 @@ impl Checker {
             ExprKind::Binary(_, a, b)
             | ExprKind::Index(a, b)
             | ExprKind::Lookup(a, b)
-            | ExprKind::Range(a, b)
             | ExprKind::Repeat { value: a, count: b } => {
                 self.substitute_expr(a, given, made)?;
                 self.substitute_expr(b, given, made)
+            }
+            ExprKind::Range(a, b, step, _) => {
+                self.substitute_expr(a, given, made)?;
+                self.substitute_expr(b, given, made)?;
+                if let Some(s) = step {
+                    self.substitute_expr(s, given, made)?;
+                }
+                Ok(())
             }
             ExprKind::Spawn { args, .. }
             | ExprKind::Construct { args, .. }
@@ -25664,7 +25750,7 @@ fn stmt_effects(
         StmtKind::Named(..) | StmtKind::Loop(..) | StmtKind::Each(..) | StmtKind::Parted(_) => {
             nested_loop_effects(stmt, None, names, inner, own, effects)
         }
-        StmtKind::Region { .. } => {}
+        StmtKind::Region { .. } | StmtKind::Assert { .. } => {}
     }
 }
 
@@ -25894,6 +25980,17 @@ fn binary_symbol(op: BinaryOp) -> &'static str {
         BinaryOp::Ge => ">=",
         BinaryOp::And => "and",
         BinaryOp::Or => "or",
+        BinaryOp::Xor => "xor",
+        BinaryOp::Nand => "nand",
+        BinaryOp::Nor => "nor",
+        BinaryOp::BitAnd => "&",
+        BinaryOp::BitNand => "~&",
+        BinaryOp::BitOr => "|",
+        BinaryOp::BitNor => "~|",
+        BinaryOp::BitXor => "^^",
+        BinaryOp::BitXnor => "~^",
+        BinaryOp::Shl => "<<",
+        BinaryOp::Shr => ">>",
     }
 }
 
@@ -27318,7 +27415,7 @@ fn visit_stmt(stmt: &Stmt, f: &mut dyn FnMut(&Expr) -> bool) {
                 .for_each(|part| visit_expr(&part.value, f));
             visit_block(&e.body, f);
         }
-        StmtKind::Region { .. } | StmtKind::Break(..) | StmtKind::Continue(_) => {}
+        StmtKind::Region { .. } | StmtKind::Break(..) | StmtKind::Continue(_) | StmtKind::Assert { .. } => {}
     }
 }
 
@@ -27392,10 +27489,16 @@ fn visit_expr(e: &Expr, f: &mut dyn FnMut(&Expr) -> bool) {
         | ExprKind::Lookup(a, b)
         | ExprKind::ChanSend(a, b)
         | ExprKind::Binary(_, a, b)
-        | ExprKind::Range(a, b)
         | ExprKind::Repeat { value: a, count: b } => {
             visit_expr(a, f);
             visit_expr(b, f);
+        }
+        ExprKind::Range(a, b, step, _) => {
+            visit_expr(a, f);
+            visit_expr(b, f);
+            if let Some(s) = step {
+                visit_expr(s, f);
+            }
         }
         ExprKind::Invoke { callee, args } => {
             visit_expr(callee, f);

@@ -1,0 +1,9 @@
+0: apple
+1: banana
+2: cherry
+sum of evens 0..=10: 30
+and: 1
+or:  7
+xor: 6
+shl: 12
+shr: 1

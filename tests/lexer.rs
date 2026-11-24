@@ -329,7 +329,7 @@ fn common_mistakes_get_hints() {
     // `||` parts a loop's parts; the parser says 'or' wherever else it stands.
     assert_eq!(kinds("a || b")[1], token(Token::Parts));
     assert_eq!(Token::Parts.describe(), "'||'");
-    assert_eq!(kinds("a | b")[1], invalid(1, 3, "unexpected character '|'; Vela writes 'or'"));
+    assert_eq!(kinds("a | b")[1], token(Token::Bar));
     assert_eq!(kinds("!x"), vec![token(Token::Bang), token(Token::Ident("x".into())), token(Token::Eof)]);
     assert_eq!(
         kinds("a!>b!>>c"),

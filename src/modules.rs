@@ -2964,6 +2964,13 @@ impl Resolver<'_> {
                 self.block(&mut e.body)
             }
             StmtKind::Region { .. } | StmtKind::Break(..) | StmtKind::Continue(_) => Ok(()),
+            StmtKind::Assert { condition, message, .. } => {
+                self.expr(condition)?;
+                if let Some(msg) = message {
+                    self.expr(msg)?;
+                }
+                Ok(())
+            }
         }
     }
 
@@ -3126,10 +3133,17 @@ impl Resolver<'_> {
             | ExprKind::Lookup(a, b)
             | ExprKind::ChanSend(a, b)
             | ExprKind::Binary(_, a, b)
-            | ExprKind::Range(a, b)
             | ExprKind::Repeat { value: a, count: b } => {
                 self.expr(a)?;
                 self.expr(b)
+            }
+            ExprKind::Range(a, b, step, _) => {
+                self.expr(a)?;
+                self.expr(b)?;
+                if let Some(s) = step {
+                    self.expr(s)?;
+                }
+                Ok(())
             }
             ExprKind::Array(values) | ExprKind::Tuple(values) => {
                 values.iter_mut().try_for_each(|e| self.expr(e))

@@ -1,4 +1,4 @@
-; error: 3:15: unexpected character '|'; Vela writes 'or'
+; error: 3:15: bitwise operations require integer operands, got bool and bool
 task main()
     show(true | false)
 fi

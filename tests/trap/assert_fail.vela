@@ -1,0 +1,5 @@
+; trap: assertion failed at 4:14 in task 'main': assert (x == 2)
+task main()
+    fixed x = 1
+    assert x == 2
+fi

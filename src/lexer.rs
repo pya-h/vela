@@ -109,6 +109,18 @@ pub enum Token {
     Underscore,
     Newline,
     Eof,
+    Assert,
+    Xor,
+    Nand,
+    Nor,
+    BitXor,
+    BitXnor,
+    BitNand,
+    BitNor,
+    Shl,
+    Shr,
+    Bar,
+    RangeInclusive,
 }
 
 pub const KEYWORDS: &[(&str, Token)] = &[
@@ -155,6 +167,10 @@ pub const KEYWORDS: &[(&str, Token)] = &[
     ("spawn", Token::Spawn),
     ("rush", Token::Rush),
     ("event", Token::Event),
+    ("assert", Token::Assert),
+    ("xor", Token::Xor),
+    ("nand", Token::Nand),
+    ("nor", Token::Nor),
 ];
 
 pub const ESCAPES: &[(char, char)] = &[
@@ -273,6 +289,14 @@ impl Token {
             Token::NotSimilar => "<>",
             Token::AtSign => "@",
             Token::Underscore => "_",
+            Token::BitXor => "^^",
+            Token::BitXnor => "~^",
+            Token::BitNand => "~&",
+            Token::BitNor => "~|",
+            Token::Shl => "<<",
+            Token::Shr => ">>",
+            Token::Bar => "|",
+            Token::RangeInclusive => "..=",
             _ => return format!("{:?}", self),
         };
         format!("'{}'", symbol)
@@ -612,6 +636,9 @@ impl Lexer {
                     if self.peek() == '.' {
                         self.advance();
                         Token::Ellipsis
+                    } else if self.peek() == '=' {
+                        self.advance();
+                        Token::RangeInclusive
                     } else {
                         Token::Range
                     }
@@ -670,11 +697,27 @@ impl Lexer {
                 Token::PercentAssign
             }
             '%' => Token::Percent,
-            '^' => Token::Caret,
+            '^' => {
+                if self.peek() == '^' {
+                    self.advance();
+                    Token::BitXor
+                } else {
+                    Token::Caret
+                }
+            }
             '~' => {
                 if self.peek() == '=' {
                     self.advance();
                     Token::Similar
+                } else if self.peek() == '&' {
+                    self.advance();
+                    Token::BitNand
+                } else if self.peek() == '|' {
+                    self.advance();
+                    Token::BitNor
+                } else if self.peek() == '^' {
+                    self.advance();
+                    Token::BitXnor
                 } else {
                     Token::Tilde
                 }
@@ -725,10 +768,7 @@ impl Lexer {
                         format!("unexpected '{}{}'; Vela writes '{}'", c, c, word),
                     );
                 } else if c == '|' {
-                    return invalid(
-                        loc,
-                        format!("unexpected character '{}'; Vela writes '{}'", c, word),
-                    );
+                    Token::Bar
                 } else {
                     Token::Amp
                 }
@@ -738,6 +778,9 @@ impl Lexer {
                     self.advance();
                     self.advance();
                     Token::ChanRecv
+                } else if self.peek() == '<' {
+                    self.advance();
+                    Token::Shl
                 } else if self.peek() == '=' {
                     self.advance();
                     Token::Le
@@ -754,7 +797,10 @@ impl Lexer {
                 }
             }
             '>' => {
-                if self.peek() == '=' {
+                if self.peek() == '>' {
+                    self.advance();
+                    Token::Shr
+                } else if self.peek() == '=' {
                     self.advance();
                     Token::Ge
                 } else {

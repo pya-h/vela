@@ -239,7 +239,7 @@
 142 |     show(textOf(here))
     | builtin-fn:show  punctuation:(  task:textOf  punctuation:(  variable:here  punctuation:)  punctuation:)
 143 |     fixed deep: Box<Box<text>>@r = Box { value: Box { value: "two boxes deep".copy() at r } }
-    | keyword:fixed  variable:deep  punctuation::  type:Box  punctuation:<  type:Box  punctuation:<  type-builtin:text  punctuation:>  punctuation:>  operator:@  region:r  operator:=  type:Box  punctuation:{  field:value  punctuation::  type:Box  punctuation:{  field:value  punctuation::  string:"two boxes deep"  punctuation:.  field:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}  punctuation:}
+    | keyword:fixed  variable:deep  punctuation::  type:Box  punctuation:<  type:Box  punctuation:<  type-builtin:text  keyword:>>  operator:@  region:r  operator:=  type:Box  punctuation:{  field:value  punctuation::  type:Box  punctuation:{  field:value  punctuation::  string:"two boxes deep"  punctuation:.  type:copy  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}  punctuation:}
 144 |     show(deep.value.value)
     | builtin-fn:show  punctuation:(  variable:deep  punctuation:.  field:value  punctuation:.  field:value  punctuation:)
 145 |     fixed paired: Pair<Box<text>, int>@r = Pair { left: Box { value: "on the left".copy() at r }, right: 16 }

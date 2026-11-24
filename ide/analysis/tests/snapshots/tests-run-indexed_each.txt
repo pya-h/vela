@@ -1,0 +1,22 @@
+  1 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  2 |     fixed arr = [10, 20, 30]
+    | keyword:fixed  variable:arr  operator:=  punctuation:[  number:10  punctuation:,  number:20  punctuation:,  number:30  punctuation:]
+  3 |     each i, v in arr
+    | keyword:each  variable:i  punctuation:,  variable:v  keyword:in  variable:arr
+  4 |         show(i, ":", v)
+    | builtin-fn:show  punctuation:(  variable:i  punctuation:,  string:":"  punctuation:,  variable:v  punctuation:)
+  5 |     fi
+    | keyword:fi
+  6 |     region r
+    | keyword:region  region:r
+  7 |     fixed s = [100, 200, 300, ...] at r
+    | keyword:fixed  variable:s  operator:=  punctuation:[  number:100  punctuation:,  number:200  punctuation:,  number:300  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r
+  8 |     each idx, item in s
+    | keyword:each  variable:idx  punctuation:,  variable:item  keyword:in  variable:s
+  9 |         show(idx, "->", item)
+    | builtin-fn:show  punctuation:(  variable:idx  punctuation:,  string:"->"  punctuation:,  variable:item  punctuation:)
+ 10 |     fi
+    | keyword:fi
+ 11 | fi
+    | keyword:fi

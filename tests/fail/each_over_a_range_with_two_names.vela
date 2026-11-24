@@ -1,0 +1,6 @@
+; error: 3:13: 'each i, x' names a key and its value, which only a map gives; this gives one item at a time, so name one
+task main()
+    each i, x in 0..10
+        show(i, x)
+    fi
+fi

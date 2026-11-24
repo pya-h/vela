@@ -235,7 +235,7 @@
 140 |     show(chosen, " ", chosen == Option.None, " ", Option.Some(1) ~= chosen)
     | builtin-fn:show  punctuation:(  variable:chosen  punctuation:,  string:" "  punctuation:,  variable:chosen  operator:==  type:Option  punctuation:.  variant:None  punctuation:,  string:" "  punctuation:,  type:Option  punctuation:.  variant:Some  punctuation:(  number:1  punctuation:)  operator:~=  variable:chosen  punctuation:)
 141 |     fixed nested: Option<Option<int>> = Option.Some(Option.None)
-    | keyword:fixed  variable:nested  punctuation::  type:Option  punctuation:<  type:Option  punctuation:<  type-builtin:int  punctuation:>  punctuation:>  operator:=  type:Option  punctuation:.  variant:Some  punctuation:(  type:Option  punctuation:.  variant:None  punctuation:)
+    | keyword:fixed  variable:nested  punctuation::  type:Option  punctuation:<  type:Option  punctuation:<  type-builtin:int  keyword:>>  operator:=  type:Option  punctuation:.  variant:Some  punctuation:(  type:Option  punctuation:.  variant:None  punctuation:)
 142 |     fixed maybe_one: maybe Option<int> = Option.None
     | keyword:fixed  variable:maybe_one  punctuation::  keyword:maybe  type:Option  punctuation:<  type-builtin:int  punctuation:>  operator:=  type:Option  punctuation:.  variant:None
 143 |     show(nested, " ", maybe_one)

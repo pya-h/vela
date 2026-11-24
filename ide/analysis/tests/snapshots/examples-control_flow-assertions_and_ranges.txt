@@ -1,0 +1,60 @@
+  1 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  2 |     ; 1. Assertions
+    | comment:; 1. Assertions
+  3 |     assert 1 + 1 == 2, "basic addition"
+    | keyword:assert  number:1  operator:+  number:1  operator:==  number:2  punctuation:,  string:"basic addition"
+  4 |     !assert 2 + 2 == 5, "refutation holds"
+    | operator:!  keyword:assert  number:2  operator:+  number:2  operator:==  number:5  punctuation:,  string:"refutation holds"
+  6 |     ; 2. Indexed each loop
+    | comment:; 2. Indexed each loop
+  7 |     fixed fruits = ["apple", "banana", "cherry"]
+    | keyword:fixed  variable:fruits  operator:=  punctuation:[  string:"apple"  punctuation:,  string:"banana"  punctuation:,  string:"cherry"  punctuation:]
+  8 |     each i, fruit in fruits
+    | keyword:each  variable:i  punctuation:,  variable:fruit  keyword:in  variable:fruits
+  9 |         show(i, ": ", fruit)
+    | builtin-fn:show  punctuation:(  variable:i  punctuation:,  string:": "  punctuation:,  variable:fruit  punctuation:)
+ 10 |     fi
+    | keyword:fi
+ 12 |     ; 3. Inclusive and stepped ranges
+    | comment:; 3. Inclusive and stepped ranges
+ 13 |     flex even_sum = 0
+    | keyword:flex  variable:even_sum  operator:=  number:0
+ 14 |     each n in 0..2..=10
+    | keyword:each  variable:n  keyword:in  number:0  operator:..  number:2  keyword:..=  number:10
+ 15 |         even_sum = even_sum + n
+    | variable:even_sum  operator:=  variable:even_sum  operator:+  variable:n
+ 16 |     fi
+    | keyword:fi
+ 17 |     show("sum of evens 0..=10: ", even_sum)
+    | builtin-fn:show  punctuation:(  string:"sum of evens 0..=10: "  punctuation:,  variable:even_sum  punctuation:)
+ 19 |     ; 4. Boolean condition keywords & prefix !
+    | comment:; 4. Boolean condition keywords & prefix !
+ 20 |     fixed ready = true
+    | keyword:fixed  variable:ready  operator:=  keyword:true
+ 21 |     fixed active = false
+    | keyword:fixed  variable:active  operator:=  keyword:false
+ 22 |     assert ready xor active
+    | keyword:assert  variable:ready  keyword:xor  variable:active
+ 23 |     assert !active
+    | keyword:assert  operator:!  variable:active
+ 24 |     assert not active
+    | keyword:assert  keyword:not  variable:active
+ 26 |     ; 5. Integer bitwise operators
+    | comment:; 5. Integer bitwise operators
+ 27 |     fixed flags = 0b0011
+    | keyword:fixed  variable:flags  operator:=  number:0b0011
+ 28 |     fixed mask  = 0b0101
+    | keyword:fixed  variable:mask  operator:=  number:0b0101
+ 29 |     show("and: ", flags & mask)
+    | builtin-fn:show  punctuation:(  string:"and: "  punctuation:,  variable:flags  operator:&  variable:mask  punctuation:)
+ 30 |     show("or:  ", flags | mask)
+    | builtin-fn:show  punctuation:(  string:"or:  "  punctuation:,  variable:flags  keyword:|  variable:mask  punctuation:)
+ 31 |     show("xor: ", flags ^^ mask)
+    | builtin-fn:show  punctuation:(  string:"xor: "  punctuation:,  variable:flags  keyword:^^  variable:mask  punctuation:)
+ 32 |     show("shl: ", flags << 2)
+    | builtin-fn:show  punctuation:(  string:"shl: "  punctuation:,  variable:flags  keyword:<<  number:2  punctuation:)
+ 33 |     show("shr: ", flags >> 1)
+    | builtin-fn:show  punctuation:(  string:"shr: "  punctuation:,  variable:flags  keyword:>>  number:1  punctuation:)
+ 34 | fi
+    | keyword:fi

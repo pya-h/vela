@@ -583,7 +583,7 @@ pub fn without_effects(e: &Expr) -> bool {
         | ExprKind::Ref(inner)
         | ExprKind::Wrap(inner)
         | ExprKind::Widen(inner)
-        | ExprKind::Unary(UnaryOp::Not, inner) => without_effects(inner),
+        | ExprKind::Unary(UnaryOp::Not | UnaryOp::BitNot | UnaryOp::Neg, inner) => without_effects(inner),
         ExprKind::Binary(
             BinaryOp::Eq
             | BinaryOp::Ne
@@ -594,11 +594,26 @@ pub fn without_effects(e: &Expr) -> bool {
             | BinaryOp::Le
             | BinaryOp::Ge
             | BinaryOp::And
-            | BinaryOp::Or,
+            | BinaryOp::Or
+            | BinaryOp::Xor
+            | BinaryOp::Nand
+            | BinaryOp::Nor
+            | BinaryOp::BitAnd
+            | BinaryOp::BitNand
+            | BinaryOp::BitOr
+            | BinaryOp::BitNor
+            | BinaryOp::BitXor
+            | BinaryOp::BitXnor
+            | BinaryOp::Shl
+            | BinaryOp::Shr,
             a,
             b,
-        )
-        | ExprKind::Range(a, b) => without_effects(a) && without_effects(b),
+        ) => without_effects(a) && without_effects(b),
+        ExprKind::Range(a, b, step, _) => {
+            without_effects(a)
+                && without_effects(b)
+                && step.as_ref().is_none_or(|s| without_effects(s))
+        },
         ExprKind::Array(items) | ExprKind::Tuple(items) => items.iter().all(without_effects),
         _ => false,
     }
@@ -1481,6 +1496,7 @@ pub const DISCARD: &str = "_";
 pub enum UnaryOp {
     Neg,
     Not,
+    BitNot,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1501,6 +1517,17 @@ pub enum BinaryOp {
     Ge,
     And,
     Or,
+    Xor,
+    Nand,
+    Nor,
+    BitAnd,
+    BitNand,
+    BitOr,
+    BitNor,
+    BitXor,
+    BitXnor,
+    Shl,
+    Shr,
 }
 
 #[derive(Debug, Clone)]
@@ -1628,7 +1655,7 @@ pub enum ExprKind {
         args: Vec<Expr>,
         types: Vec<TypeArg>,
     },
-    Range(Box<Expr>, Box<Expr>),
+    Range(Box<Expr>, Box<Expr>, Option<Box<Expr>>, bool),
     /// A value of a kind that goes where a kind imitating it is expected
     /// (`kind AppError::ParseErr`), made a value of that kind, its type: the
     /// same variant, carrying the same values. Only the checker makes one.
@@ -1835,6 +1862,11 @@ pub enum StmtKind {
     SetResults(Vec<Binding>, Vec<Expr>),
     Region {
         names: Vec<RegionDecl>,
+    },
+    Assert {
+        condition: Expr,
+        message: Option<Expr>,
+        negated: bool,
     },
 }
 

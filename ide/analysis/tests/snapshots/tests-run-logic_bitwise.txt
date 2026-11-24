@@ -1,0 +1,60 @@
+  1 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  2 |     ; boolean logic
+    | comment:; boolean logic
+  3 |     fixed t = true
+    | keyword:fixed  variable:t  operator:=  keyword:true
+  4 |     fixed f = false
+    | keyword:fixed  variable:f  operator:=  keyword:false
+  6 |     assert t and t
+    | keyword:assert  variable:t  keyword:and  variable:t
+  7 |     assert !(t and f)
+    | keyword:assert  operator:!  punctuation:(  variable:t  keyword:and  variable:f  punctuation:)
+  8 |     assert t or f
+    | keyword:assert  variable:t  keyword:or  variable:f
+  9 |     assert !(f or f)
+    | keyword:assert  operator:!  punctuation:(  variable:f  keyword:or  variable:f  punctuation:)
+ 10 |     assert t xor f
+    | keyword:assert  variable:t  keyword:xor  variable:f
+ 11 |     assert !(t xor t)
+    | keyword:assert  operator:!  punctuation:(  variable:t  keyword:xor  variable:t  punctuation:)
+ 12 |     assert !(f xor f)
+    | keyword:assert  operator:!  punctuation:(  variable:f  keyword:xor  variable:f  punctuation:)
+ 13 |     assert t nand f
+    | keyword:assert  variable:t  keyword:nand  variable:f
+ 14 |     assert !(t nand t)
+    | keyword:assert  operator:!  punctuation:(  variable:t  keyword:nand  variable:t  punctuation:)
+ 15 |     assert f nor f
+    | keyword:assert  variable:f  keyword:nor  variable:f
+ 16 |     assert !(t nor f)
+    | keyword:assert  operator:!  punctuation:(  variable:t  keyword:nor  variable:f  punctuation:)
+ 17 |     assert !f
+    | keyword:assert  operator:!  variable:f
+ 18 |     assert not f
+    | keyword:assert  keyword:not  variable:f
+ 20 |     ; bitwise on integers
+    | comment:; bitwise on integers
+ 21 |     fixed a = 12   ; 0b1100
+    | keyword:fixed  variable:a  operator:=  number:12  comment:; 0b1100
+ 22 |     fixed b = 10   ; 0b1010
+    | keyword:fixed  variable:b  operator:=  number:10  comment:; 0b1010
+ 24 |     show("and: ", a & b)
+    | builtin-fn:show  punctuation:(  string:"and: "  punctuation:,  variable:a  operator:&  variable:b  punctuation:)
+ 25 |     show("or: ", a | b)
+    | builtin-fn:show  punctuation:(  string:"or: "  punctuation:,  variable:a  keyword:|  variable:b  punctuation:)
+ 26 |     show("xor: ", a ^^ b)
+    | builtin-fn:show  punctuation:(  string:"xor: "  punctuation:,  variable:a  keyword:^^  variable:b  punctuation:)
+ 27 |     show("nand: ", a ~& b)
+    | builtin-fn:show  punctuation:(  string:"nand: "  punctuation:,  variable:a  keyword:~&  variable:b  punctuation:)
+ 28 |     show("nor: ", a ~| b)
+    | builtin-fn:show  punctuation:(  string:"nor: "  punctuation:,  variable:a  keyword:~|  variable:b  punctuation:)
+ 29 |     show("xnor: ", a ~^ b)
+    | builtin-fn:show  punctuation:(  string:"xnor: "  punctuation:,  variable:a  keyword:~^  variable:b  punctuation:)
+ 30 |     show("not: ", ~a)
+    | builtin-fn:show  punctuation:(  string:"not: "  punctuation:,  operator:~  variable:a  punctuation:)
+ 31 |     show("shl: ", a << 2)
+    | builtin-fn:show  punctuation:(  string:"shl: "  punctuation:,  variable:a  keyword:<<  number:2  punctuation:)
+ 32 |     show("shr: ", a >> 2)
+    | builtin-fn:show  punctuation:(  string:"shr: "  punctuation:,  variable:a  keyword:>>  number:2  punctuation:)
+ 33 | fi
+    | keyword:fi

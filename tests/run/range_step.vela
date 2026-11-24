@@ -1,0 +1,25 @@
+task main()
+    flex sum = 0
+    each i in 0..2..10
+        sum = sum + i
+    fi
+    show("step exclusive sum: ", sum)
+
+    flex sum_inc = 0
+    each i in 0..=10
+        sum_inc = sum_inc + i
+    fi
+    show("inc sum: ", sum_inc)
+
+    flex sum_step_inc = 0
+    each i in 0..2..=10
+        sum_step_inc = sum_step_inc + i
+    fi
+    show("step inc sum: ", sum_step_inc)
+
+    flex down = 0
+    each i in 10..-2..0
+        down = down + i
+    fi
+    show("down sum: ", down)
+fi

@@ -1,0 +1,11 @@
+task main()
+    fixed arr = [10, 20, 30]
+    each i, v in arr
+        show(i, ":", v)
+    fi
+    region r
+    fixed s = [100, 200, 300, ...] at r
+    each idx, item in s
+        show(idx, "->", item)
+    fi
+fi

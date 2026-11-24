@@ -201,7 +201,9 @@ impl Generator {
 
     fn sorted_events(&self) -> Vec<EventDef> {
         let mut list: Vec<EventDef> = self.events.values().cloned().collect();
-        list.sort_by(|a, b| (a.span.line, a.span.col, &a.name).cmp(&(b.span.line, b.span.col, &b.name)));
+        list.sort_by(|a, b| {
+            (a.span.line, a.span.col, &a.name).cmp(&(b.span.line, b.span.col, &b.name))
+        });
         list
     }
 
@@ -286,8 +288,10 @@ impl Generator {
                     .line(&format!("typedef struct {0} {0};", mangle(name)));
             }
             if let Item::Actor(a) = item {
-                self.w
-                    .line(&format!("typedef struct {0} {0};", mangle(&format!("{}Msg", a.name))));
+                self.w.line(&format!(
+                    "typedef struct {0} {0};",
+                    mangle(&format!("{}Msg", a.name))
+                ));
             }
         }
         for ty in &used.compounds {
@@ -313,11 +317,15 @@ impl Generator {
                     name: format!("{}Msg", a.name),
                     types: Vec::new(),
                     given: Vec::new(),
-                    variants: a.handlers.iter().map(|h| Variant {
-                        tag: h.name.clone(),
-                        payload: h.params.clone(),
-                        span: h.span,
-                    }).collect(),
+                    variants: a
+                        .handlers
+                        .iter()
+                        .map(|h| Variant {
+                            tag: h.name.clone(),
+                            payload: h.params.clone(),
+                            span: h.span,
+                        })
+                        .collect(),
                     follows: Vec::new(),
                     imitates: Vec::new(),
                     imitated: 0,
@@ -333,7 +341,13 @@ impl Generator {
             match def {
                 TypeDef::Item(Item::Shape(s)) => self.gen_shape(s),
                 TypeDef::Item(Item::Kind(k)) | TypeDef::ActorMsg(k) => self.gen_kind(k),
-                TypeDef::Item(Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_) | Item::Event(_)) => {}
+                TypeDef::Item(
+                    Item::Task(_)
+                    | Item::Macro(_)
+                    | Item::GlobalRegion(_)
+                    | Item::Actor(_)
+                    | Item::Event(_),
+                ) => {}
                 TypeDef::Compound(ty) => self.gen_compound(ty),
             }
         }
@@ -422,9 +436,14 @@ impl Generator {
                 let spawn_sig = if spawn_params.is_empty() {
                     format!("static int64_t {}__spawn(void)", actor_name)
                 } else {
-                    format!("static int64_t {}__spawn({})", actor_name, spawn_params.join(", "))
+                    format!(
+                        "static int64_t {}__spawn({})",
+                        actor_name,
+                        spawn_params.join(", ")
+                    )
                 };
-                self.w.line(&format!("static void {}__step(void*);", actor_name));
+                self.w
+                    .line(&format!("static void {}__step(void*);", actor_name));
                 self.w.line(&format!("{};", spawn_sig));
             }
         }
@@ -444,7 +463,9 @@ impl Generator {
         self.gen_writers(&used)?;
         self.gen_json_writers(&used)?;
 
-        if let Some(Item::GlobalRegion(g)) = items.iter().find(|i| matches!(i, Item::GlobalRegion(_))) {
+        if let Some(Item::GlobalRegion(g)) =
+            items.iter().find(|i| matches!(i, Item::GlobalRegion(_)))
+        {
             let layout = Layout {
                 shapes: &self.shapes,
                 kinds: &self.kinds,
@@ -479,7 +500,8 @@ impl Generator {
                                 format!("global variable '{}' has no type", bound.name),
                             )
                         })?;
-                        self.w.line(&format!("static {} {};", c_type(ty), c_ident(&bound.name)));
+                        self.w
+                            .line(&format!("static {} {};", c_type(ty), c_ident(&bound.name)));
                     }
                 }
             }
@@ -494,7 +516,11 @@ impl Generator {
                 ));
             } else {
                 let params = Self::capture_params(&e.captures);
-                self.w.line(&format!("static void {}({});", Self::event_fn_name(&e), params));
+                self.w.line(&format!(
+                    "static void {}({});",
+                    Self::event_fn_name(&e),
+                    params
+                ));
             }
         }
 
@@ -533,9 +559,9 @@ impl Generator {
         }
 
         if has_main {
-            let needs_sys = items.iter().any(
-                |i| matches!(i, Item::Task(t) if t.native && t.name.starts_with("std/sys.")),
-            );
+            let needs_sys = items
+                .iter()
+                .any(|i| matches!(i, Item::Task(t) if t.native && t.name.starts_with("std/sys.")));
             self.w.blank();
             // Output is C's usual: line by line to a terminal, in blocks to a
             // pipe or a file. `scan` flushes before it reads, and the runtime
@@ -546,12 +572,15 @@ impl Generator {
             } else {
                 self.w.open("int main(void)");
             }
-            if let Some(Item::GlobalRegion(g)) = items.iter().find(|i| matches!(i, Item::GlobalRegion(_))) {
+            if let Some(Item::GlobalRegion(g)) =
+                items.iter().find(|i| matches!(i, Item::GlobalRegion(_)))
+            {
                 for stmt in &g.stmts {
                     if let StmtKind::Binding { names, init, .. } = &stmt.kind {
                         let values = self.gen_value_list(names.len(), init, stmt.span)?;
                         for (bound, value) in names.iter().zip(values) {
-                            self.w.line(&format!("{} = {};", c_ident(&bound.name), value));
+                            self.w
+                                .line(&format!("{} = {};", c_ident(&bound.name), value));
                         }
                     }
                 }
@@ -905,7 +934,9 @@ impl Generator {
         self.w.open(&format!("struct {}", mangle(&s.name)));
         let has_listenable_events = self.events.values().any(|e| {
             (e.owner.as_deref() == Some(&s.name)
-                || e.owner.as_deref().is_some_and(|o| unqualified(o) == unqualified(&s.name)))
+                || e.owner
+                    .as_deref()
+                    .is_some_and(|o| unqualified(o) == unqualified(&s.name)))
                 && !e.shared
                 && !e.auto
         });
@@ -974,7 +1005,8 @@ impl Generator {
         self.w.open(&format!("typedef struct {}", ctx_struct));
         self.w.line("int64_t mailbox;");
         for field in &a.fields {
-            self.w.line(&format!("{} {};", c_type(&field.ty), c_ident(&field.name)));
+            self.w
+                .line(&format!("{} {};", c_type(&field.ty), c_ident(&field.name)));
         }
         self.w.close_with(&format!(" {};", ctx_struct));
 
@@ -989,8 +1021,14 @@ impl Generator {
         self.hidden.clear();
         self.task = format!("{}__step", actor_name);
 
-        self.w.open(&format!("static void {}__step(void* vela__raw_ctx)", actor_name));
-        self.w.line(&format!("{}* vela__ctx = ({}*)vela__raw_ctx;", ctx_struct, ctx_struct));
+        self.w.open(&format!(
+            "static void {}__step(void* vela__raw_ctx)",
+            actor_name
+        ));
+        self.w.line(&format!(
+            "{}* vela__ctx = ({}*)vela__raw_ctx;",
+            ctx_struct, ctx_struct
+        ));
         self.w.line("int64_t mailbox = vela__ctx->mailbox;");
         for field in &a.fields {
             self.w.line(&format!(
@@ -1004,7 +1042,8 @@ impl Generator {
 
         self.w.line(&format!("{} msg;", msg_struct));
         self.w.line("size_t vela__limit = 16;");
-        self.w.open("while (vela__limit > 0 && vela__rt__chan_try_recv(mailbox, &msg))");
+        self.w
+            .open("while (vela__limit > 0 && vela__rt__chan_try_recv(mailbox, &msg))");
         self.w.line("vela__limit--;");
         self.w.open("switch (msg.tag)");
         for handler in &a.handlers {
@@ -1040,7 +1079,8 @@ impl Generator {
         }
 
         // Reschedule if more messages remain, or park/free
-        self.w.line("vela__rt__chan* chan = vela__rt__chan_of(mailbox);");
+        self.w
+            .line("vela__rt__chan* chan = vela__rt__chan_of(mailbox);");
         self.w.open("if (chan == NULL)");
         self.w.line("free(vela__ctx);");
         self.w.line("return;");
@@ -1050,7 +1090,10 @@ impl Generator {
         self.w.open("if (chan->count > 0)");
         self.w.line("pthread_mutex_unlock(&chan->lock);");
         self.w.line("vela__rt__chan_unpin(chan);");
-        self.w.line(&format!("vela__rt__sched_submit({}__step, vela__ctx);", actor_name));
+        self.w.line(&format!(
+            "vela__rt__sched_submit({}__step, vela__ctx);",
+            actor_name
+        ));
         self.w.line("return;");
         self.w.close();
         self.w.open("if (chan->closed && chan->count == 0)");
@@ -1076,20 +1119,34 @@ impl Generator {
         let spawn_sig = if spawn_params.is_empty() {
             format!("static int64_t {}__spawn(void)", actor_name)
         } else {
-            format!("static int64_t {}__spawn({})", actor_name, spawn_params.join(", "))
+            format!(
+                "static int64_t {}__spawn({})",
+                actor_name,
+                spawn_params.join(", ")
+            )
         };
 
         self.w.open(&spawn_sig);
-        self.w.line(&format!("int64_t mailbox = vela__rt__chan_new(32, sizeof({}));", msg_struct));
-        self.w.line(&format!("{}* vela__ctx = ({}*)malloc(sizeof({}));", ctx_struct, ctx_struct, ctx_struct));
+        self.w.line(&format!(
+            "int64_t mailbox = vela__rt__chan_new(32, sizeof({}));",
+            msg_struct
+        ));
+        self.w.line(&format!(
+            "{}* vela__ctx = ({}*)malloc(sizeof({}));",
+            ctx_struct, ctx_struct, ctx_struct
+        ));
         self.w.open("if (vela__ctx == NULL)");
         self.w.line("vela__rt__out_of_memory();");
         self.w.close();
         self.w.line("vela__ctx->mailbox = mailbox;");
         for field in &a.fields {
-            self.w.line(&format!("vela__ctx->{0} = {0};", c_ident(&field.name)));
+            self.w
+                .line(&format!("vela__ctx->{0} = {0};", c_ident(&field.name)));
         }
-        self.w.line(&format!("vela__rt__chan_attach_actor(mailbox, {}__step, vela__ctx);", actor_name));
+        self.w.line(&format!(
+            "vela__rt__chan_attach_actor(mailbox, {}__step, vela__ctx);",
+            actor_name
+        ));
         self.w.line("return mailbox;");
         self.w.close();
 
@@ -1132,12 +1189,19 @@ impl Generator {
         }
         if is_member && let Some(shape) = &e.owner {
             self.pointers = [THIS.to_string()].into_iter().collect();
-            self.w.open(&format!("static void {}(struct {}* vela__this)", Self::event_fn_name(e), mangle(shape)));
+            self.w.open(&format!(
+                "static void {}(struct {}* vela__this)",
+                Self::event_fn_name(e),
+                mangle(shape)
+            ));
         } else {
             self.pointers.clear();
             let params = Self::capture_params(&e.captures);
-            self.w
-                .open(&format!("static void {}({})", Self::event_fn_name(e), params));
+            self.w.open(&format!(
+                "static void {}({})",
+                Self::event_fn_name(e),
+                params
+            ));
         }
 
         if let Some(cond) = &e.cond {
@@ -1146,7 +1210,8 @@ impl Generator {
                 parts.push(self.gen_condition(&part.value)?);
             }
             if !parts.is_empty() {
-                self.w.line(&format!("if (!({})) return;", parts.join(" && ")));
+                self.w
+                    .line(&format!("if (!({})) return;", parts.join(" && ")));
             }
         }
 
@@ -1269,9 +1334,12 @@ impl Generator {
     /// Emits the `on drop` hooks for a named variable (its C name) of a shape
     /// with drop events.
     fn gen_drop_hooks(&mut self, name: &str, shape: &str) -> Result<()> {
-        self.gen_member_hook(shape, &format!("&({})", c_ident(name)), &format!("({})", c_ident(name)), |ev| {
-            ev.trigger == EventTrigger::Lifecycle(LifecycleKind::Drop)
-        })?;
+        self.gen_member_hook(
+            shape,
+            &format!("&({})", c_ident(name)),
+            &format!("({})", c_ident(name)),
+            |ev| ev.trigger == EventTrigger::Lifecycle(LifecycleKind::Drop),
+        )?;
         self.gen_shared_hook(shape, |ev| {
             ev.trigger == EventTrigger::Lifecycle(LifecycleKind::Drop)
         });
@@ -1303,7 +1371,9 @@ impl Generator {
                         .into_iter()
                         .filter(|e| {
                             (e.owner.as_deref() == Some(&shape)
-                                || e.owner.as_deref().is_some_and(|o| unqualified(o) == unqualified(&shape)))
+                                || e.owner
+                                    .as_deref()
+                                    .is_some_and(|o| unqualified(o) == unqualified(&shape)))
                                 && !e.shared
                                 && trigger_matches_field(field_name, e)
                         })
@@ -1314,7 +1384,9 @@ impl Generator {
                         .values()
                         .filter(|e| {
                             (e.owner.as_deref() == Some(&shape)
-                                || e.owner.as_deref().is_some_and(|o| unqualified(o) == unqualified(&shape)))
+                                || e.owner
+                                    .as_deref()
+                                    .is_some_and(|o| unqualified(o) == unqualified(&shape)))
                                 && !e.shared
                                 && !e.auto
                         })
@@ -1325,8 +1397,14 @@ impl Generator {
                     if is_this {
                         for ev in matching_events {
                             if ev.auto {
-                                self.w.line(&format!("{}__{}(vela__this);", mangle(&shape), mangle(&ev.name)));
-                            } else if let Some(idx) = listenable_events.iter().position(|n| n == &ev.name) {
+                                self.w.line(&format!(
+                                    "{}__{}(vela__this);",
+                                    mangle(&shape),
+                                    mangle(&ev.name)
+                                ));
+                            } else if let Some(idx) =
+                                listenable_events.iter().position(|n| n == &ev.name)
+                            {
                                 self.w.line(&format!(
                                     "if (vela__this->vela__events__ & (1u << {})) {{ {}__{}(vela__this); }}",
                                     idx, mangle(&shape), mangle(&ev.name)
@@ -1337,11 +1415,22 @@ impl Generator {
                         let base_place = self.gen_place(base)?;
                         for ev in matching_events {
                             if ev.auto {
-                                self.w.line(&format!("{}__{}(&({}));", mangle(&shape), mangle(&ev.name), base_place));
-                            } else if let Some(idx) = listenable_events.iter().position(|n| n == &ev.name) {
+                                self.w.line(&format!(
+                                    "{}__{}(&({}));",
+                                    mangle(&shape),
+                                    mangle(&ev.name),
+                                    base_place
+                                ));
+                            } else if let Some(idx) =
+                                listenable_events.iter().position(|n| n == &ev.name)
+                            {
                                 self.w.line(&format!(
                                     "if ((({}).vela__events__) & (1u << {})) {{ {}__{}(&({})); }}",
-                                    base_place, idx, mangle(&shape), mangle(&ev.name), base_place
+                                    base_place,
+                                    idx,
+                                    mangle(&shape),
+                                    mangle(&ev.name),
+                                    base_place
                                 ));
                             }
                         }
@@ -1398,7 +1487,11 @@ impl Generator {
                             }
                         })
                         .collect();
-                    self.w.line(&format!("{}({});", Self::event_fn_name(&ev), args.join(", ")));
+                    self.w.line(&format!(
+                        "{}({});",
+                        Self::event_fn_name(&ev),
+                        args.join(", ")
+                    ));
                 }
             }
             _ => {}
@@ -2158,20 +2251,27 @@ impl Generator {
             ));
             self.w.line("return vela__rt__chan_send(handle, &item);");
             self.w.close();
-            self.w.line(&format!("#define vela__chan_send__{} vela__chan_dispatch__{}", word, word));
+            self.w.line(&format!(
+                "#define vela__chan_send__{} vela__chan_dispatch__{}",
+                word, word
+            ));
             // wait_and_receive
             self.w.open(&format!(
                 "VELA__RT__MAYBE_UNUSED static inline {} vela__chan_wait_and_receive__{}(vela__chan_t handle)",
                 ctype, word
             ));
             self.w.line(&format!("{} item;", ctype));
-            self.w.line(&format!("memset(&item, 0, sizeof({}));", ctype));
+            self.w
+                .line(&format!("memset(&item, 0, sizeof({}));", ctype));
             self.w.line("if (!vela__rt__chan_recv(handle, &item)) {");
             self.w.line("vela__rt__int_trap(\"wait_and_receive on a closed, drained channel\", \"wait_and_receive\");");
             self.w.line("}");
             self.w.line("return item;");
             self.w.close();
-            self.w.line(&format!("#define vela__chan_recv__{} vela__chan_wait_and_receive__{}", word, word));
+            self.w.line(&format!(
+                "#define vela__chan_recv__{} vela__chan_wait_and_receive__{}",
+                word, word
+            ));
             // receive
             let maybe_ty = Type::Maybe(Box::new(ty.clone()));
             let maybe_ctype = c_type(&maybe_ty);
@@ -2180,8 +2280,10 @@ impl Generator {
                 maybe_ctype, word
             ));
             self.w.line(&format!("{} item;", ctype));
-            self.w.line(&format!("memset(&item, 0, sizeof({}));", ctype));
-            self.w.line("bool ok = vela__rt__chan_try_recv(handle, &item);");
+            self.w
+                .line(&format!("memset(&item, 0, sizeof({}));", ctype));
+            self.w
+                .line("bool ok = vela__rt__chan_try_recv(handle, &item);");
             if is_pointer(ty) {
                 self.w.line("return ok ? item : NULL;");
             } else {
@@ -2191,7 +2293,10 @@ impl Generator {
                 ));
             }
             self.w.close();
-            self.w.line(&format!("#define vela__chan_try_recv__{} vela__chan_receive__{}", word, word));
+            self.w.line(&format!(
+                "#define vela__chan_try_recv__{} vela__chan_receive__{}",
+                word, word
+            ));
         }
         for ty in &used.commitments {
             let (ctype, word) = (c_type(ty), type_word(ty));
@@ -2200,7 +2305,8 @@ impl Generator {
                 ctype, word
             ));
             self.w.line(&format!("{} item;", ctype));
-            self.w.line(&format!("memset(&item, 0, sizeof({}));", ctype));
+            self.w
+                .line(&format!("memset(&item, 0, sizeof({}));", ctype));
             self.w.line("vela__rt__commit_wait(handle, &item);");
             self.w.line("return item;");
             self.w.close();
@@ -2211,8 +2317,10 @@ impl Generator {
                 maybe_ctype, word
             ));
             self.w.line(&format!("{} item;", ctype));
-            self.w.line(&format!("memset(&item, 0, sizeof({}));", ctype));
-            self.w.line("bool ok = vela__rt__commit_poll(handle, &item);");
+            self.w
+                .line(&format!("memset(&item, 0, sizeof({}));", ctype));
+            self.w
+                .line("bool ok = vela__rt__commit_poll(handle, &item);");
             if is_pointer(ty) {
                 self.w.line("return ok ? item : NULL;");
             } else {
@@ -3405,16 +3513,19 @@ impl Generator {
                 self.w.close();
                 self.w.line("first = false;");
                 if matches!(&**key, Type::Text(_)) {
-                    self.w.line("vela__rt__put_json_text(w, v->entries[i].key);");
+                    self.w
+                        .line("vela__rt__put_json_text(w, v->entries[i].key);");
                 } else if matches!(&**key, Type::Char) {
-                    self.w.line("vela__rt__put_json_char(w, v->entries[i].key);");
+                    self.w
+                        .line("vela__rt__put_json_char(w, v->entries[i].key);");
                 } else {
                     self.w.line("VELA__RT__PUT(w, \"\\\"\");");
                     self.w.line(&self.put_item(key, "v->entries[i].key"));
                     self.w.line("VELA__RT__PUT(w, \"\\\"\");");
                 }
                 self.w.line("VELA__RT__PUT(w, \":\");");
-                self.w.line(&self.put_json_item(value, "v->entries[i].value"));
+                self.w
+                    .line(&self.put_json_item(value, "v->entries[i].value"));
                 self.w.close();
                 self.w.line("VELA__RT__PUT(w, \"}\");");
             }
@@ -3472,10 +3583,8 @@ impl Generator {
                         if i > 0 {
                             self.w.line("VELA__RT__PUT(w, \",\");");
                         }
-                        self.w.line(&format!(
-                            "VELA__RT__PUT(w, \"\\\"{}\\\":\");",
-                            field.name
-                        ));
+                        self.w
+                            .line(&format!("VELA__RT__PUT(w, \"\\\"{}\\\":\");", field.name));
                         self.w.line(
                             &self.put_json_item(&field.ty, &format!("v.{}", c_ident(&field.name))),
                         );
@@ -3485,18 +3594,30 @@ impl Generator {
             }
             Type::Named(name, _) if self.kinds.contains_key(name) => {
                 let Some(kind) = self.kinds.get(name).cloned() else {
-                    return Err(Error::internal(format!("no kind '{}' to write as json", name)));
+                    return Err(Error::internal(format!(
+                        "no kind '{}' to write as json",
+                        name
+                    )));
                 };
                 self.w.open("switch (v.tag)");
                 for variant in &kind.variants {
                     self.w
                         .line(&format!("case {}:", tag_value(&kind.name, &variant.tag)));
                     if variant.payload.is_empty() {
-                        self.w.line(&format!("    VELA__RT__PUT(w, \"\\\"{}\\\"\");", variant.tag));
+                        self.w.line(&format!(
+                            "    VELA__RT__PUT(w, \"\\\"{}\\\"\");",
+                            variant.tag
+                        ));
                     } else {
-                        self.w.line(&format!("    VELA__RT__PUT(w, \"{{\\\"tag\\\":\\\"{}\\\"\");", variant.tag));
+                        self.w.line(&format!(
+                            "    VELA__RT__PUT(w, \"{{\\\"tag\\\":\\\"{}\\\"\");",
+                            variant.tag
+                        ));
                         for field in &variant.payload {
-                            self.w.line(&format!("    VELA__RT__PUT(w, \",\\\"{}\\\":\");", field.name));
+                            self.w.line(&format!(
+                                "    VELA__RT__PUT(w, \",\\\"{}\\\":\");",
+                                field.name
+                            ));
                             self.w.line(&format!(
                                 "    {}",
                                 self.put_json_item(
@@ -3734,7 +3855,9 @@ impl Generator {
         }
         let mut const_copy: Option<String> = None;
         for ev in hooks {
-            if let Some(owner) = &ev.owner && !ev.shared {
+            if let Some(owner) = &ev.owner
+                && !ev.shared
+            {
                 let (addr, place) = if self.const_vars.contains(THIS) {
                     let tmp = const_copy.get_or_insert_with(|| {
                         let tmp = self.fresh_temp("hook");
@@ -4465,8 +4588,10 @@ impl Generator {
             }
             StmtKind::Expr(e) => {
                 let expr = self.gen_expr(e)?;
-                if (matches!(e.kind, ExprKind::PlanB { .. } | ExprKind::Try(_) | ExprKind::ErrPipe { .. })
-                    || matches!(e.ty.as_ref(), Some(Type::Commitment(_))))
+                if (matches!(
+                    e.kind,
+                    ExprKind::PlanB { .. } | ExprKind::Try(_) | ExprKind::ErrPipe { .. }
+                ) || matches!(e.ty.as_ref(), Some(Type::Commitment(_))))
                     && !expr.is_empty()
                 {
                     self.w.line(&format!("(void){};", expr));
@@ -4835,7 +4960,7 @@ impl Generator {
                     named,
                 )?;
             }
-            StmtKind::Each(name, _, items, body, finally)
+            StmtKind::Each(name, second, items, body, finally)
                 if matches!(items.kind, ExprKind::Ref(_)) =>
             {
                 let ExprKind::Ref(place) = &items.kind else {
@@ -4844,7 +4969,11 @@ impl Generator {
                 let named = self.take_loop();
                 let ty = items.ty()?.clone();
                 let walked = self.fresh_temp("items");
-                let index = self.fresh_temp("index");
+                let index = if second.is_some() {
+                    c_ident(name)
+                } else {
+                    self.fresh_temp("index")
+                };
                 let (item, len) = match &ty {
                     Type::Array(item, count) => (item, format!("INT64_C({})", count)),
                     Type::Slice(item, _) => (item, format!("{}->len", walked)),
@@ -4864,14 +4993,24 @@ impl Generator {
                     "for (int64_t {0} = 0; {0} < {1}; {0}++)",
                     index, len
                 ));
+                let val_name = if let Some((sec, _)) = second {
+                    c_ident(sec)
+                } else {
+                    c_ident(name)
+                };
                 self.w.line(&format!(
                     "{} {} = {}->items[{}];",
                     c_type(item.as_ref()),
-                    c_ident(name),
+                    val_name,
                     walked,
                     index
                 ));
-                self.use_if_unread(name, body);
+                if let Some((sec, _)) = second {
+                    self.use_if_unread(name, body);
+                    self.use_if_unread(sec, body);
+                } else {
+                    self.use_if_unread(name, body);
+                }
                 self.gen_pass(body)?;
                 self.end_pass();
                 self.w.close();
@@ -4879,7 +5018,7 @@ impl Generator {
                 self.leave_loop();
                 self.w.close();
             }
-            StmtKind::Each(name, _, items, body, finally)
+            StmtKind::Each(name, second, items, body, finally)
                 if !matches!(items.kind, ExprKind::Range(..)) =>
             {
                 let named = self.take_loop();
@@ -4896,7 +5035,11 @@ impl Generator {
                 };
                 let value = self.gen_expr(items)?;
                 let walked = self.fresh_temp("items");
-                let index = self.fresh_temp("index");
+                let index = if second.is_some() {
+                    c_ident(name)
+                } else {
+                    self.fresh_temp("index")
+                };
                 let len = if len.is_empty() {
                     format!("{}.len", walked)
                 } else {
@@ -4910,14 +5053,24 @@ impl Generator {
                     "for (int64_t {0} = 0; {0} < {1}; {0}++)",
                     index, len
                 ));
+                let val_name = if let Some((sec, _)) = second {
+                    c_ident(sec)
+                } else {
+                    c_ident(name)
+                };
                 self.w.line(&format!(
                     "{} {} = {}.items[{}];",
                     c_type(item.as_ref()),
-                    c_ident(name),
+                    val_name,
                     walked,
                     index
                 ));
-                self.use_if_unread(name, body);
+                if let Some((sec, _)) = second {
+                    self.use_if_unread(name, body);
+                    self.use_if_unread(sec, body);
+                } else {
+                    self.use_if_unread(name, body);
+                }
                 self.gen_pass(body)?;
                 self.end_pass();
                 self.w.close();
@@ -4927,14 +5080,28 @@ impl Generator {
             }
             StmtKind::Each(name, _, range, body, finally) => {
                 let named = self.take_loop();
-                let (a, b) = self.gen_range(range)?;
+                let (a, b, step, inclusive) = self.gen_range(range)?;
                 let end = self.fresh_temp("end");
                 let name = c_ident(name);
                 self.enter_loop(named, finally.is_some());
-                self.w.open(&format!(
-                    "for (int64_t {} = {}, {} = {}; {} < {}; {}++)",
-                    name, a, end, b, name, end, name
-                ));
+                if let Some(s) = step {
+                    let step_var = self.fresh_temp("step");
+                    let cond = if inclusive {
+                        format!("({0} >= 0 ? {1} <= {2} : {1} >= {2})", step_var, name, end)
+                    } else {
+                        format!("({0} >= 0 ? {1} < {2} : {1} > {2})", step_var, name, end)
+                    };
+                    self.w.open(&format!(
+                        "for (int64_t {} = {}, {} = {}, {} = {}; {}; {} += {})",
+                        name, a, end, b, step_var, s, cond, name, step_var
+                    ));
+                } else {
+                    let op = if inclusive { "<=" } else { "<" };
+                    self.w.open(&format!(
+                        "for (int64_t {} = {}, {} = {}; {} {} {}; {}++)",
+                        name, a, end, b, name, op, end, name
+                    ));
+                }
                 self.gen_pass(body)?;
                 self.end_pass();
                 self.w.close();
@@ -5006,6 +5173,34 @@ impl Generator {
                         block.push(key);
                     }
                 }
+            }
+            StmtKind::Assert {
+                condition,
+                message,
+                negated,
+            } => {
+                let cond_c = self.gen_expr(condition)?;
+                let loc = self.location(condition.span);
+                let cond_escaped = escape_c_string(&cond_c);
+                let msg_c = if let Some(msg) = message {
+                    self.gen_expr(msg)?
+                } else {
+                    "(vela__rt__text){ \"\", 0 }".to_string()
+                };
+                let check = if *negated {
+                    format!("if ({})", cond_c)
+                } else {
+                    format!("if (!({}))", cond_c)
+                };
+                self.w.open(&check);
+                self.w.line(&format!(
+                    "vela__rt__assert_failed({}, \"{}\", {}, {});",
+                    loc,
+                    cond_escaped,
+                    msg_c,
+                    if *negated { 1 } else { 0 },
+                ));
+                self.w.close();
             }
         }
         Ok(())
@@ -5548,7 +5743,8 @@ impl Generator {
                     let ctype = c_type(&elem_ty);
                     let buf = self.fresh_temp("sel_recv");
                     self.w.line(&format!("{} {};", ctype, buf));
-                    self.w.line(&format!("memset(&{}, 0, sizeof({}));", buf, buf));
+                    self.w
+                        .line(&format!("memset(&{}, 0, sizeof({}));", buf, buf));
                     let handle = self.gen_expr(chan)?;
                     rt_entries.push(RtArm {
                         arm,
@@ -5604,7 +5800,11 @@ impl Generator {
         }
 
         let winner = self.fresh_temp("sel_win");
-        let has_ow = if sel.otherwise.is_some() { "true" } else { "false" };
+        let has_ow = if sel.otherwise.is_some() {
+            "true"
+        } else {
+            "false"
+        };
         let has_to = if has_timeout { "true" } else { "false" };
         if rt_entries.is_empty() {
             self.w.line(&format!(
@@ -6019,7 +6219,7 @@ impl Generator {
                 "a group's values given on whole outside a task that takes a group",
             )),
             ExprKind::StructInit { name, fields, .. } => self.gen_struct_init(name, fields),
-            ExprKind::Range(_, _) => Err(Error::internal_at(
+            ExprKind::Range(..) => Err(Error::internal_at(
                 e.span,
                 "range outside 'each' reached code generation",
             )),
@@ -6166,7 +6366,10 @@ impl Generator {
             let Some(operand_str) = written.get(i) else {
                 continue;
             };
-            if parts.get(i).is_some_and(|p| matches!(p.ty, Some(Type::Slice(..)))) {
+            if parts
+                .get(i)
+                .is_some_and(|p| matches!(p.ty, Some(Type::Slice(..))))
+            {
                 acc = format!(
                     "{}({}, {}, {})",
                     item_helper("concat", slice_ty),
@@ -6518,7 +6721,13 @@ impl Generator {
             }
             (Some(owner), _) => format!("{}__{}", mangle(owner), mangle(&e.name)),
             (None, Some(task)) => {
-                format!("{}__{}__{}_{}", mangle(task), mangle(&e.name), e.span.line, e.span.col)
+                format!(
+                    "{}__{}__{}_{}",
+                    mangle(task),
+                    mangle(&e.name),
+                    e.span.line,
+                    e.span.col
+                )
             }
             (None, None) => mangle(&e.name),
         }
@@ -6601,14 +6810,14 @@ impl Generator {
                             && filter(ev)
                     });
                     let any_shared = self.events.values().any(|ev| {
-                        self.event_belongs_to(ev.owner.as_deref(), shape)
-                            && ev.shared
-                            && filter(ev)
+                        self.event_belongs_to(ev.owner.as_deref(), shape) && ev.shared && filter(ev)
                     });
                     if any_member || any_shared {
-                        if !Self::is_c_lvalue_gen(base) || (any_member && self.is_const_base(base)) {
+                        if !Self::is_c_lvalue_gen(base) || (any_member && self.is_const_base(base))
+                        {
                             let tmp = self.fresh_temp("read");
-                            self.w.line(&format!("struct {} {} = {};", mangle(shape), tmp, b));
+                            self.w
+                                .line(&format!("struct {} {} = {};", mangle(shape), tmp, b));
                             if any_member {
                                 self.gen_member_hook(shape, &format!("&{}", tmp), &tmp, filter)?;
                             }
@@ -6618,19 +6827,10 @@ impl Generator {
                             return Ok(format!("{}.{}", tmp, c_ident(field)));
                         } else if !matches!(base.kind, ExprKind::Var(_)) {
                             let ptr = self.fresh_temp("read");
-                            self.w.line(&format!(
-                                "struct {}* {} = &({});",
-                                mangle(shape),
-                                ptr,
-                                b
-                            ));
+                            self.w
+                                .line(&format!("struct {}* {} = &({});", mangle(shape), ptr, b));
                             if any_member {
-                                self.gen_member_hook(
-                                    shape,
-                                    &ptr,
-                                    &format!("(*{})", ptr),
-                                    filter,
-                                )?;
+                                self.gen_member_hook(shape, &ptr, &format!("(*{})", ptr), filter)?;
                             }
                             if any_shared {
                                 self.gen_shared_hook(shape, filter);
@@ -6684,8 +6884,12 @@ impl Generator {
 
     #[inline(never)]
     fn gen_event_listen(&mut self, name: &str, args: &[Expr]) -> Result<String> {
-        let Some((shape_name, _)) = name.split_once("__event_listen") else { unreachable!() };
-        let Some(receiver) = args.first() else { unreachable!() };
+        let Some((shape_name, _)) = name.split_once("__event_listen") else {
+            unreachable!()
+        };
+        let Some(receiver) = args.first() else {
+            unreachable!()
+        };
         let place = self.gen_place(receiver)?;
 
         let mut listenable_events: Vec<String> = self
@@ -6693,7 +6897,9 @@ impl Generator {
             .values()
             .filter(|e| {
                 (e.owner.as_deref() == Some(shape_name)
-                    || e.owner.as_deref().is_some_and(|o| unqualified(o) == unqualified(shape_name)))
+                    || e.owner
+                        .as_deref()
+                        .is_some_and(|o| unqualified(o) == unqualified(shape_name)))
                     && !e.shared
                     && !e.auto
             })
@@ -6721,14 +6927,20 @@ impl Generator {
             m
         };
 
-        Ok(format!("(({}).vela__events__ |= {}u, (void)0)", place, mask))
+        Ok(format!(
+            "(({}).vela__events__ |= {}u, (void)0)",
+            place, mask
+        ))
     }
 
     #[inline(never)]
     fn gen_channel_call(&mut self, e: &Expr, name: &str, args: &[Expr]) -> Result<Option<String>> {
         if name == CHAN_NEW {
             let Some(arg0) = args.first() else {
-                return Err(Error::internal_at(e.span, "chan_new called without capacity"));
+                return Err(Error::internal_at(
+                    e.span,
+                    "chan_new called without capacity",
+                ));
             };
             let cap = self.gen_expr(arg0)?;
             let Type::Chan(inner) = e.ty()? else {
@@ -6738,21 +6950,33 @@ impl Generator {
                 Type::Own(p) => p.as_ref(),
                 other => other,
             };
-            return Ok(Some(format!("vela__rt__chan_new({}, (int64_t)sizeof({}))", cap, c_type(payload))));
+            return Ok(Some(format!(
+                "vela__rt__chan_new({}, (int64_t)sizeof({}))",
+                cap,
+                c_type(payload)
+            )));
         }
         if (name == DISPATCH || name == "send")
             && let Some(arg0) = args.first()
             && matches!(arg0.ty(), Ok(Type::Chan(_) | Type::Actor(_)))
         {
             let Some((_, rest)) = args.split_first() else {
-                return Err(Error::internal_at(e.span, "dispatch called without channel"));
+                return Err(Error::internal_at(
+                    e.span,
+                    "dispatch called without channel",
+                ));
             };
             let Some(arg1) = rest.first() else {
                 return Err(Error::internal_at(e.span, "dispatch called without item"));
             };
             let chan = self.gen_expr(arg0)?;
             let item = self.gen_expr(arg1)?;
-            return Ok(Some(self.gen_chan_dispatch(arg0.ty()?, &chan, &item, e.span)?));
+            return Ok(Some(self.gen_chan_dispatch(
+                arg0.ty()?,
+                &chan,
+                &item,
+                e.span,
+            )?));
         }
         if name == "cancelled" && args.is_empty() && matches!(e.ty(), Ok(Type::Bool)) {
             return Ok(Some("vela__rt__commit_is_cancelled()".to_string()));
@@ -6765,7 +6989,11 @@ impl Generator {
             && matches!(arg0.ty(), Ok(Type::Chan(_) | Type::Commitment(_)))
         {
             let chan = self.gen_expr(arg0)?;
-            return Ok(Some(self.gen_chan_wait_and_receive(arg0.ty()?, &chan, e.span)?));
+            return Ok(Some(self.gen_chan_wait_and_receive(
+                arg0.ty()?,
+                &chan,
+                e.span,
+            )?));
         }
         if (name == RECEIVE || name == "poll" || name == "try_recv" || name == "recieve")
             && let Some(arg0) = args.first()
@@ -6779,7 +7007,11 @@ impl Generator {
                 Type::Own(p) => p.as_ref(),
                 other => other,
             };
-            return Ok(Some(format!("vela__chan_receive__{}({})", type_word(payload), chan)));
+            return Ok(Some(format!(
+                "vela__chan_receive__{}({})",
+                type_word(payload),
+                chan
+            )));
         }
         if (name == RECEIVE || name == "poll" || name == "try_recv" || name == "recieve")
             && let Some(arg0) = args.first()
@@ -6793,7 +7025,11 @@ impl Generator {
                 Type::Own(p) => p.as_ref(),
                 other => other,
             };
-            return Ok(Some(format!("vela__commit_poll__{}({})", type_word(payload), chan)));
+            return Ok(Some(format!(
+                "vela__commit_poll__{}({})",
+                type_word(payload),
+                chan
+            )));
         }
         if name == "poll"
             && let Some(arg0) = args.first()
@@ -6829,16 +7065,28 @@ impl Generator {
             )));
         }
         if name == "then" && args.len() == 2 {
-            let Some((arg0, rest)) = args.split_first() else { unreachable!() };
-            let Some(arg1) = rest.first() else { unreachable!() };
+            let Some((arg0, rest)) = args.split_first() else {
+                unreachable!()
+            };
+            let Some(arg1) = rest.first() else {
+                unreachable!()
+            };
             if matches!(arg0.ty(), Ok(Type::Commitment(_))) {
                 return Ok(Some(self.gen_commit_combinator(e, arg0, arg1, false)?));
             }
-            return Ok(Some(self.gen_invoke(e, arg1, std::slice::from_ref(arg0))?));
+            return Ok(Some(self.gen_invoke(
+                e,
+                arg1,
+                std::slice::from_ref(arg0),
+            )?));
         }
         if name == "recover" && args.len() == 2 {
-            let Some((arg0, rest)) = args.split_first() else { unreachable!() };
-            let Some(arg1) = rest.first() else { unreachable!() };
+            let Some((arg0, rest)) = args.split_first() else {
+                unreachable!()
+            };
+            let Some(arg1) = rest.first() else {
+                unreachable!()
+            };
             return Ok(Some(self.gen_commit_combinator(e, arg0, arg1, true)?));
         }
         if name == CLOSE
@@ -7068,10 +7316,12 @@ impl Generator {
                 c_ident(dest_r)
             ));
         }
-        let scope_var = self
-            .pending_commit_scope
-            .clone()
-            .or_else(|| self.block_commitments.last().and_then(|s| s.as_ref()).cloned());
+        let scope_var = self.pending_commit_scope.clone().or_else(|| {
+            self.block_commitments
+                .last()
+                .and_then(|s| s.as_ref())
+                .cloned()
+        });
         if let Some(scope_var) = scope_var {
             self.w.line(&format!(
                 "vela__rt__commit_scope_push(&{}, {});",
@@ -7105,8 +7355,7 @@ impl Generator {
             if *ty == Type::Region {
                 let wr = wr_var.as_deref().unwrap_or("NULL");
                 self.w.line(&format!("(void){};", tmp));
-                self.w
-                    .line(&format!("{}->arg_{} = {};", ctx_var, idx, wr));
+                self.w.line(&format!("{}->arg_{} = {};", ctx_var, idx, wr));
             } else if !matches!(ty, Type::Task(_) | Type::Closure(_))
                 && !ty.regions().is_empty()
                 && self.needs_fix(&fix_type(ty))
@@ -7121,12 +7370,13 @@ impl Generator {
                     tmp
                 ));
             } else {
-                self.w
-                    .line(&format!("{}->arg_{} = {};", ctx_var, idx, tmp));
+                self.w.line(&format!("{}->arg_{} = {};", ctx_var, idx, tmp));
             }
         }
-        self.w
-            .line(&format!("vela__rt__commit_start({}, {});", fn_name, ctx_var));
+        self.w.line(&format!(
+            "vela__rt__commit_start({}, {});",
+            fn_name, ctx_var
+        ));
 
         let saved_w = std::mem::take(&mut self.w);
         let saved_piped = std::mem::take(&mut self.piped);
@@ -7155,14 +7405,14 @@ impl Generator {
         }
         self.w.close_with(&format!(" {};", ctx_ty));
         self.w.blank();
-        self.w.open(&format!("static void {}(void* __raw)", fn_name));
+        self.w
+            .open(&format!("static void {}(void* __raw)", fn_name));
         self.w
             .line(&format!("{} __ctx = *({}*)__raw;", ctx_ty, ctx_ty));
         self.w.line("free(__raw);");
         self.w
             .line("vela__chan_t __prev_commit = vela__rt__current_commitment;");
-        self.w
-            .line("vela__rt__current_commitment = __ctx.handle;");
+        self.w.line("vela__rt__current_commitment = __ctx.handle;");
         if payload_ty != Type::Nothing {
             self.w.line(&format!("{} __res;", payload_c));
         }
@@ -7187,8 +7437,7 @@ impl Generator {
         })();
         self.leave_block(&[]);
         self.w.close();
-        self.w
-            .line("vela__rt__current_commitment = __prev_commit;");
+        self.w.line("vela__rt__current_commitment = __prev_commit;");
         if payload_ty == Type::Nothing {
             self.w.line("uint8_t __res = 1;");
         }
@@ -7274,7 +7523,8 @@ impl Generator {
         };
         let src_tmp = self.fresh_temp("csrc");
         let fn_tmp = self.fresh_temp("cfn");
-        self.w.line(&format!("vela__chan_t {} = {};", src_tmp, src_h));
+        self.w
+            .line(&format!("vela__chan_t {} = {};", src_tmp, src_h));
         self.w
             .line(&format!("{} {} = {};", c_type(&fn_ty), fn_tmp, fn_val));
 
@@ -7299,10 +7549,12 @@ impl Generator {
                 c_ident(dest_r)
             ));
         }
-        let scope_var = self
-            .pending_commit_scope
-            .clone()
-            .or_else(|| self.block_commitments.last().and_then(|s| s.as_ref()).cloned());
+        let scope_var = self.pending_commit_scope.clone().or_else(|| {
+            self.block_commitments
+                .last()
+                .and_then(|s| s.as_ref())
+                .cloned()
+        });
         if let Some(scope_var) = scope_var {
             self.w.line(&format!(
                 "vela__rt__commit_scope_push(&{}, {});",
@@ -7325,11 +7577,12 @@ impl Generator {
         self.w.close();
         self.w
             .line(&format!("{}->handle = {};", ctx_var, handle_var));
-        self.w
-            .line(&format!("{}->src = {};", ctx_var, src_tmp));
+        self.w.line(&format!("{}->src = {};", ctx_var, src_tmp));
         self.w.line(&format!("{}->fn = {};", ctx_var, fn_tmp));
-        self.w
-            .line(&format!("vela__rt__commit_start({}, {});", fn_name, ctx_var));
+        self.w.line(&format!(
+            "vela__rt__commit_start({}, {});",
+            fn_name, ctx_var
+        ));
 
         let saved_w = std::mem::take(&mut self.w);
         self.w.open("typedef struct");
@@ -7339,14 +7592,14 @@ impl Generator {
         self.w.close_with(&format!(" {};", ctx_ty));
         self.w.blank();
 
-        self.w.open(&format!("static void {}(void* __raw)", fn_name));
+        self.w
+            .open(&format!("static void {}(void* __raw)", fn_name));
         self.w
             .line(&format!("{} __ctx = *({}*)__raw;", ctx_ty, ctx_ty));
         self.w.line("free(__raw);");
         self.w
             .line("vela__chan_t __prev_commit = vela__rt__current_commitment;");
-        self.w
-            .line("vela__rt__current_commitment = __ctx.handle;");
+        self.w.line("vela__rt__current_commitment = __ctx.handle;");
         self.w
             .line("vela__rt__region* __wr = vela__rt__commit_worker_region_ptr(__ctx.handle);");
         if src_payload == Type::Nothing {
@@ -7372,7 +7625,11 @@ impl Generator {
                 if is_pointer(inner) {
                     return inner_val;
                 }
-                return format!("(({}){{ .has = true, .value = {} }})", c_type(to), inner_val);
+                return format!(
+                    "(({}){{ .has = true, .value = {} }})",
+                    c_type(to),
+                    inner_val
+                );
             }
             if matches!(from, Type::Named(..)) && matches!(to, Type::Named(..)) {
                 return format!("{}({})", widen_helper(from, to), val);
@@ -7380,9 +7637,16 @@ impl Generator {
             format!("(({})({}))", c_type(to), val)
         }
 
-        let hidden0 = self.hidden_of_type(&fn_task).first().copied().unwrap_or(false);
+        let hidden0 = self
+            .hidden_of_type(&fn_task)
+            .first()
+            .copied()
+            .unwrap_or(false);
         let build_cb_call = |w: &mut CWriter, src_ty: &Type, src_lval: &str| -> String {
-            let Some(p0) = (*src_ty != Type::Nothing).then(|| fn_task.params.first()).flatten() else {
+            let Some(p0) = (*src_ty != Type::Nothing)
+                .then(|| fn_task.params.first())
+                .flatten()
+            else {
                 return "(__ctx.fn)()".to_string();
             };
             let adapted = adapt_commit_value(src_ty, p0, src_lval);
@@ -7513,8 +7777,7 @@ impl Generator {
                 }
             }
         }
-        self.w
-            .line("vela__rt__current_commitment = __prev_commit;");
+        self.w.line("vela__rt__current_commitment = __prev_commit;");
         self.w
             .line("vela__rt__commit_complete(__ctx.handle, &__res);");
         self.w.close();
@@ -7762,6 +8025,7 @@ impl Generator {
         let op_s = match op {
             UnaryOp::Neg => "-",
             UnaryOp::Not => "!",
+            UnaryOp::BitNot => "~",
         };
         Ok(format!("({}{})", op_s, expr))
     }
@@ -7928,7 +8192,7 @@ impl Generator {
         index: &Expr,
         place: Option<String>,
     ) -> Result<String> {
-        if let ExprKind::Range(from, to) = &index.kind {
+        if let ExprKind::Range(from, to, ..) = &index.kind {
             return self.gen_slice(e, base, from, to);
         }
         let at = self.location(e.span);
@@ -8150,7 +8414,12 @@ impl Generator {
         Ok(result)
     }
 
-    fn emit_early_fail_return(&mut self, err_expr: &str, err_from: &Type, span: Span) -> Result<()> {
+    fn emit_early_fail_return(
+        &mut self,
+        err_expr: &str,
+        err_from: &Type,
+        span: Span,
+    ) -> Result<()> {
         let ret = self.ret.clone();
         let Type::Or(_, err_task) = &ret else {
             return Err(Error::internal_at(
@@ -8596,14 +8865,20 @@ impl Generator {
         }
         if op == BinaryOp::Mul && matches!(l.ty()?, Type::Array(..)) {
             let (Type::Array(_, count_res), Type::Array(_, count_arr)) = (e.ty()?, l.ty()?) else {
-                return Err(Error::internal_at(e.span, "an array repeat that is no longer one"));
+                return Err(Error::internal_at(
+                    e.span,
+                    "an array repeat that is no longer one",
+                ));
             };
             let mult = count_res / count_arr;
             return Ok(format!("{}({})", array_repeat_helper(l.ty()?, mult), left));
         }
         if op == BinaryOp::Mul && matches!(r.ty()?, Type::Array(..)) {
             let (Type::Array(_, count_res), Type::Array(_, count_arr)) = (e.ty()?, r.ty()?) else {
-                return Err(Error::internal_at(e.span, "an array repeat that is no longer one"));
+                return Err(Error::internal_at(
+                    e.span,
+                    "an array repeat that is no longer one",
+                ));
             };
             let mult = count_res / count_arr;
             return Ok(format!("{}({})", array_repeat_helper(r.ty()?, mult), right));
@@ -8752,6 +9027,17 @@ impl Generator {
             BinaryOp::Ge => ">=",
             BinaryOp::And => "&&",
             BinaryOp::Or => "||",
+            BinaryOp::Xor => "!=",
+            BinaryOp::Nand => return Ok(format!("!({} && {})", left, right)),
+            BinaryOp::Nor => return Ok(format!("!({} || {})", left, right)),
+            BinaryOp::BitAnd => "&",
+            BinaryOp::BitOr => "|",
+            BinaryOp::BitXor => "^",
+            BinaryOp::BitNand => return Ok(format!("~({} & {})", left, right)),
+            BinaryOp::BitNor => return Ok(format!("~({} | {})", left, right)),
+            BinaryOp::BitXnor => return Ok(format!("~({} ^ {})", left, right)),
+            BinaryOp::Shl => "<<",
+            BinaryOp::Shr => ">>",
         };
         let right = match op {
             BinaryOp::Eq
@@ -8783,12 +9069,16 @@ impl Generator {
         }
     }
 
-    fn gen_range(&mut self, e: &Expr) -> Result<(String, String)> {
+    fn gen_range(&mut self, e: &Expr) -> Result<(String, String, Option<String>, bool)> {
         match &e.kind {
-            ExprKind::Range(a, b) => {
+            ExprKind::Range(a, b, step, inclusive) => {
                 let [av, bv] = <[String; 2]>::try_from(self.gen_operands(&[a, b])?)
                     .map_err(|_| Error::internal_at(e.span, "a range without two ends"))?;
-                Ok((av, bv))
+                let step_v = match step {
+                    Some(s) => Some(self.gen_expr(s)?),
+                    None => None,
+                };
+                Ok((av, bv, step_v, *inclusive))
             }
             _ => Err(Error::internal_at(
                 e.span,
@@ -8959,11 +9249,19 @@ impl Generator {
             Type::Uint64 => format!("vela__rt__put_uint(w, {});", value),
             ty if ty.is_integer() => format!("vela__rt__put_int(w, (int64_t){});", value),
             Type::Char => format!("vela__rt__put_json_char(w, {});", value),
-            ty if ty.is_float() => format!("vela__rt__put_json_float(w, (double){}, {});", value, *ty == Type::Float32),
+            ty if ty.is_float() => format!(
+                "vela__rt__put_json_float(w, (double){}, {});",
+                value,
+                *ty == Type::Float32
+            ),
             Type::Bool => format!("vela__rt__put_bool(w, {});", value),
             Type::Text(_) => format!("vela__rt__put_json_text(w, {});", value),
             Type::None => "VELA__RT__PUT(w, \"null\");".to_string(),
-            _ => format!("{}(w, {});", json_write_helper(&ty.without_regions()), value),
+            _ => format!(
+                "{}(w, {});",
+                json_write_helper(&ty.without_regions()),
+                value
+            ),
         }
     }
 }
@@ -9230,9 +9528,11 @@ fn has_prelude(e: &Expr) -> bool {
         | ExprKind::Lookup(a, b)
         | ExprKind::ChanSend(a, b)
         | ExprKind::Binary(_, a, b)
-        | ExprKind::Range(a, b)
         | ExprKind::Repeat { value: a, count: b } => {
             has_prelude(a) || has_prelude(b) || ordered(&[a, b])
+        }
+        ExprKind::Range(a, b, step, _) => {
+            has_prelude(a) || has_prelude(b) || step.as_deref().is_some_and(has_prelude)
         }
         ExprKind::Call { name, args, .. } => {
             matches!(
@@ -9920,6 +10220,14 @@ impl UsedTypes {
                         self.block(ow);
                     }
                 }
+                StmtKind::Assert {
+                    condition, message, ..
+                } => {
+                    self.expr(condition);
+                    if let Some(msg) = message {
+                        self.expr(msg);
+                    }
+                }
             }
         }
     }
@@ -10198,7 +10506,14 @@ impl UsedTypes {
                 self.expr(a);
                 self.expr(b);
             }
-            ExprKind::Range(a, b) | ExprKind::ChanSend(a, b) => {
+            ExprKind::Range(a, b, step, _) => {
+                self.expr(a);
+                self.expr(b);
+                if let Some(s) = step {
+                    self.expr(s);
+                }
+            }
+            ExprKind::ChanSend(a, b) => {
                 self.expr(a);
                 self.expr(b);
             }
@@ -10397,6 +10712,9 @@ fn stmt_reads(stmt: &Stmt, name: &str) -> bool {
         StmtKind::Step { target, value, .. } => expr(target) || expr(value),
         StmtKind::Send(values) | StmtKind::SetResults(_, values) => values.iter().any(expr),
         StmtKind::Break(_, value) => value.as_deref().is_some_and(expr),
+        StmtKind::Assert {
+            condition, message, ..
+        } => expr(condition) || message.as_ref().is_some_and(expr),
         StmtKind::Region { .. } | StmtKind::Continue(_) => false,
         StmtKind::Named(_, inner) => stmt_reads(inner, name),
         StmtKind::Event(e) => {
@@ -10507,9 +10825,9 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
             false
         }
         ExprKind::Doing(inner) => {
-            e.ty.as_ref().is_some_and(|ty| {
-                matches!(ty, Type::Commitment(c) if c.regions().contains(&name))
-            }) || expr_reads(inner, name)
+            e.ty.as_ref()
+                .is_some_and(|ty| matches!(ty, Type::Commitment(c) if c.regions().contains(&name)))
+                || expr_reads(inner, name)
         }
         ExprKind::Field(inner, _)
         | ExprKind::Unary(_, inner)
@@ -10528,20 +10846,24 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         | ExprKind::Lookup(a, b)
         | ExprKind::ChanSend(a, b)
         | ExprKind::Binary(_, a, b)
-        | ExprKind::Range(a, b)
         | ExprKind::Repeat { value: a, count: b } => expr_reads(a, name) || expr_reads(b, name),
+        ExprKind::Range(a, b, step, _) => {
+            expr_reads(a, name)
+                || expr_reads(b, name)
+                || step.as_deref().is_some_and(|s| expr_reads(s, name))
+        }
         ExprKind::Call {
             name: callee, args, ..
         } => {
             ((callee == "then" || callee == "recover")
-                && e.ty.as_ref().is_some_and(|ty| {
-                    matches!(ty, Type::Commitment(c) if c.regions().contains(&name))
-                }))
+                && e.ty.as_ref().is_some_and(
+                    |ty| matches!(ty, Type::Commitment(c) if c.regions().contains(&name)),
+                ))
                 || args.iter().any(|arg| expr_reads(arg, name))
         }
-        ExprKind::Construct { args, .. }
-        | ExprKind::Array(args)
-        | ExprKind::Tuple(args) => args.iter().any(|arg| expr_reads(arg, name)),
+        ExprKind::Construct { args, .. } | ExprKind::Array(args) | ExprKind::Tuple(args) => {
+            args.iter().any(|arg| expr_reads(arg, name))
+        }
         ExprKind::MethodCall { value, args, .. } => {
             expr_reads(value, name) || args.iter().any(|arg| expr_reads(arg, name))
         }
@@ -10567,8 +10889,9 @@ fn expr_reads(e: &Expr, name: &str) -> bool {
         ExprKind::Join { parts, region, .. } => {
             region == name || parts.iter().any(|part| expr_reads(part, name))
         }
-        ExprKind::ToText { value, region, .. }
-        | ExprKind::ToJson { value, region, .. } => region == name || expr_reads(value, name),
+        ExprKind::ToText { value, region, .. } | ExprKind::ToJson { value, region, .. } => {
+            region == name || expr_reads(value, name)
+        }
         ExprKind::Copy { value, region, .. } | ExprKind::Shortcut { value, region, .. } => {
             region.as_deref() == Some(name) || expr_reads(value, name)
         }
@@ -10595,6 +10918,9 @@ fn stmt_has_doing(stmt: &Stmt) -> bool {
             values.iter().any(expr_has_doing)
         }
         StmtKind::Break(_, value) => value.as_deref().is_some_and(expr_has_doing),
+        StmtKind::Assert {
+            condition, message, ..
+        } => expr_has_doing(condition) || message.as_ref().is_some_and(expr_has_doing),
         StmtKind::Region { .. } | StmtKind::Continue(_) => false,
         StmtKind::Named(_, inner) => stmt_has_doing(inner),
         StmtKind::Event(e) => {
@@ -10606,18 +10932,18 @@ fn stmt_has_doing(stmt: &Stmt) -> bool {
         StmtKind::Turns(turns) => turns.iter().any(|b| block_has_doing(b)),
         StmtKind::Binding { names, init, .. } => {
             names.iter().any(|b| {
-                b.ty.as_ref().is_some_and(|t| {
-                    matches!(t, Type::Maybe(m) if matches!(m.as_ref(), Type::Commitment(_)))
-                })
+                b.ty.as_ref().is_some_and(
+                    |t| matches!(t, Type::Maybe(m) if matches!(m.as_ref(), Type::Commitment(_))),
+                )
             }) || init.iter().any(expr_has_doing)
         }
         StmtKind::Assign(targets, values) => {
             targets.iter().any(target_has_doing) || values.iter().any(expr_has_doing)
         }
         StmtKind::When(arms, else_b) => {
-            arms.iter()
-                .any(|arm| arm.cond.parts().any(|p| expr_has_doing(&p.value)) || block_has_doing(&arm.body))
-                || else_b.as_deref().is_some_and(block_has_doing)
+            arms.iter().any(|arm| {
+                arm.cond.parts().any(|p| expr_has_doing(&p.value)) || block_has_doing(&arm.body)
+            }) || else_b.as_deref().is_some_and(block_has_doing)
         }
         StmtKind::Loop(cond, body, finally) => {
             cond.parts().any(|p| expr_has_doing(&p.value))
@@ -10712,8 +11038,10 @@ fn expr_has_doing(e: &Expr) -> bool {
         | ExprKind::Lookup(a, b)
         | ExprKind::ChanSend(a, b)
         | ExprKind::Binary(_, a, b)
-        | ExprKind::Range(a, b)
         | ExprKind::Repeat { value: a, count: b } => expr_has_doing(a) || expr_has_doing(b),
+        ExprKind::Range(a, b, step, _) => {
+            expr_has_doing(a) || expr_has_doing(b) || step.as_deref().is_some_and(expr_has_doing)
+        }
         ExprKind::Call { name, args, .. } => {
             matches!(
                 (name.as_str(), args.first().and_then(|a| a.ty.as_ref())),
@@ -10752,7 +11080,11 @@ fn type_name(item: &Item) -> Option<&str> {
         Item::Shape(s) => Some(&s.name),
         Item::Kind(k) if !k.types.is_empty() => None,
         Item::Kind(k) => Some(&k.name),
-        Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_) | Item::Event(_) => None,
+        Item::Task(_)
+        | Item::Macro(_)
+        | Item::GlobalRegion(_)
+        | Item::Actor(_)
+        | Item::Event(_) => None,
     }
 }
 
@@ -10776,7 +11108,11 @@ fn value_dependencies(ty: &Type) -> Vec<String> {
     }
 }
 
-fn type_order<'a>(items: &'a [Item], actor_msgs: &'a [KindDef], compounds: &'a [Type]) -> Result<Vec<TypeDef<'a>>> {
+fn type_order<'a>(
+    items: &'a [Item],
+    actor_msgs: &'a [KindDef],
+    compounds: &'a [Type],
+) -> Result<Vec<TypeDef<'a>>> {
     let mut by_name: HashMap<String, TypeDef<'a>> = HashMap::new();
     let mut names = Vec::new();
     for item in items {
@@ -10866,7 +11202,13 @@ fn dependencies_of(def: &TypeDef) -> Vec<String> {
             .collect(),
         TypeDef::Item(Item::Kind(k)) => kind_value_dependencies(k),
         TypeDef::ActorMsg(k) => kind_value_dependencies(k),
-        TypeDef::Item(Item::Task(_) | Item::Macro(_) | Item::GlobalRegion(_) | Item::Actor(_) | Item::Event(_)) => Vec::new(),
+        TypeDef::Item(
+            Item::Task(_)
+            | Item::Macro(_)
+            | Item::GlobalRegion(_)
+            | Item::Actor(_)
+            | Item::Event(_),
+        ) => Vec::new(),
         TypeDef::Compound(Type::Maybe(inner)) => value_dependencies(inner),
         TypeDef::Compound(Type::Or(value, error)) => value_dependencies(value)
             .into_iter()
@@ -10906,8 +11248,12 @@ fn changes_nothing(e: &Expr) -> bool {
         ExprKind::Index(a, b)
         | ExprKind::Lookup(a, b)
         | ExprKind::ChanSend(a, b)
-        | ExprKind::Binary(_, a, b)
-        | ExprKind::Range(a, b) => changes_nothing(a) && changes_nothing(b),
+        | ExprKind::Binary(_, a, b) => changes_nothing(a) && changes_nothing(b),
+        ExprKind::Range(a, b, step, _) => {
+            changes_nothing(a)
+                && changes_nothing(b)
+                && step.as_deref().map_or(true, changes_nothing)
+        }
         ExprKind::Array(items) | ExprKind::Tuple(items) => items.iter().all(changes_nothing),
         _ => false,
     }
@@ -11062,7 +11408,9 @@ fn collides_with_c(name: &str) -> bool {
     C_RESERVED.contains(&name)
         || name.starts_with("vela_")
         || name.ends_with("_t")
-        || name.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+        || name
+            .chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
 }
 
 const C_RESERVED: &[&str] = &[
@@ -11344,8 +11692,7 @@ fn events_in_task(block: &[Stmt]) -> Vec<&EventDef> {
                     out.extend(events_in_task(body));
                 }
             }
-            StmtKind::Loop(_, body, finally)
-            | StmtKind::Each(_, _, _, body, finally) => {
+            StmtKind::Loop(_, body, finally) | StmtKind::Each(_, _, _, body, finally) => {
                 out.extend(events_in_task(body));
                 if let Some(finally) = finally {
                     out.extend(events_in_task(finally));
@@ -11384,13 +11731,11 @@ fn events_in_task(block: &[Stmt]) -> Vec<&EventDef> {
 
 fn trigger_matches_field(field_name: &str, e: &EventDef) -> bool {
     match &e.trigger {
-        EventTrigger::Change(targets) => {
-            targets.iter().any(|t| {
-                let clean = t.strip_prefix('.').unwrap_or(t);
-                let clean = clean.split_once('.').map_or(clean, |(_, f)| f);
-                clean == field_name
-            })
-        }
+        EventTrigger::Change(targets) => targets.iter().any(|t| {
+            let clean = t.strip_prefix('.').unwrap_or(t);
+            let clean = clean.split_once('.').map_or(clean, |(_, f)| f);
+            clean == field_name
+        }),
         EventTrigger::Lifecycle(LifecycleKind::Change) => true,
         _ => false,
     }
@@ -11398,12 +11743,10 @@ fn trigger_matches_field(field_name: &str, e: &EventDef) -> bool {
 
 fn trigger_matches_var(var_name: &str, e: &EventDef) -> bool {
     match &e.trigger {
-        EventTrigger::Change(targets) => {
-            targets.iter().any(|t| {
-                let clean = t.strip_prefix('.').unwrap_or(t);
-                clean == var_name
-            })
-        }
+        EventTrigger::Change(targets) => targets.iter().any(|t| {
+            let clean = t.strip_prefix('.').unwrap_or(t);
+            clean == var_name
+        }),
         _ => false,
     }
 }

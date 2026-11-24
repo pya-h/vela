@@ -57,7 +57,7 @@ const KEYWORD: i32 = 0;
 const LOOP_PARTS_SNIPPET: &str = "loop flex ${i} = ${start} || ${condition} || ${step}\n\t${}\nfi";
 
 const STATEMENT_KEYWORDS: &[&str] = &[
-    "fixed", "flex", "when", "loop", "endless", "each", "block", "match", "select", "region", "actor",
+    "assert", "fixed", "flex", "when", "loop", "endless", "each", "block", "match", "select", "region", "actor",
 ];
 const VALUE_KEYWORDS: &[&str] = &[
     "true", "false", "none", "not", "new", "fail", "match", "when", "select", "spawn", "rush",

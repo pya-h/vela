@@ -154,6 +154,29 @@ static inline _Noreturn void vela__rt__int_trap(const char* what, const char* at
     abort();
 }
 
+static inline _Noreturn void vela__rt__assert_failed(
+    const char* at,
+    const char* cond,
+    vela__rt__text msg,
+    int negated
+) {
+    fflush(stdout);
+    if (msg.len > 0 && msg.bytes != NULL) {
+        if (negated) {
+            fprintf(stderr, "vela: assertion failed at %s: !assert %s (message: %.*s)\n", at, cond, (int)msg.len, msg.bytes);
+        } else {
+            fprintf(stderr, "vela: assertion failed at %s: assert %s (message: %.*s)\n", at, cond, (int)msg.len, msg.bytes);
+        }
+    } else {
+        if (negated) {
+            fprintf(stderr, "vela: assertion failed at %s: !assert %s\n", at, cond);
+        } else {
+            fprintf(stderr, "vela: assertion failed at %s: assert %s\n", at, cond);
+        }
+    }
+    abort();
+}
+
 #if defined(__GNUC__) && !defined(VELA__RT__PORTABLE_ARITHMETIC)
 #define VELA__RT__OVERFLOW_BUILTINS 1
 #else

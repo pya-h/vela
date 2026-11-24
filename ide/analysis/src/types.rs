@@ -295,7 +295,11 @@ impl Checked {
                 let (item, value) = match (&range.kind, &range.ty) {
                     (ExprKind::Range(..), _) => (Some(Type::Int), None),
                     (_, Some(Type::Array(items, _) | Type::Slice(items, _))) => {
-                        (Some((**items).clone()), None)
+                        if second.is_some() {
+                            (Some(Type::Int), Some((**items).clone()))
+                        } else {
+                            (Some((**items).clone()), None)
+                        }
                     }
                     (_, Some(Type::Map(key, value, _))) => {
                         (Some((**key).clone()), Some((**value).clone()))
@@ -357,6 +361,12 @@ impl Checked {
                     }
                 }
                 self.block(&e.body, kinds);
+            }
+            StmtKind::Assert { condition, message, .. } => {
+                self.expr(condition, kinds);
+                if let Some(msg) = message {
+                    self.expr(msg, kinds);
+                }
             }
         }
     }
@@ -490,10 +500,16 @@ impl Checked {
             | ExprKind::Lookup(a, b)
             | ExprKind::ChanSend(a, b)
             | ExprKind::Binary(_, a, b)
-            | ExprKind::Range(a, b)
             | ExprKind::Repeat { value: a, count: b } => {
                 self.expr(a, kinds);
                 self.expr(b, kinds);
+            }
+            ExprKind::Range(a, b, step, _) => {
+                self.expr(a, kinds);
+                self.expr(b, kinds);
+                if let Some(s) = step {
+                    self.expr(s, kinds);
+                }
             }
             // Lowered method calls use `Owner__on__method`; strip `__of__` args from specialized types.
             ExprKind::Call { name, args, .. } if let Some((owner, _)) = method_parts(name) => {

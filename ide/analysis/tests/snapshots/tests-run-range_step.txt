@@ -1,0 +1,44 @@
+  1 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  2 |     flex sum = 0
+    | keyword:flex  variable:sum  operator:=  number:0
+  3 |     each i in 0..2..10
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  number:2  operator:..  number:10
+  4 |         sum = sum + i
+    | variable:sum  operator:=  variable:sum  operator:+  variable:i
+  5 |     fi
+    | keyword:fi
+  6 |     show("step exclusive sum: ", sum)
+    | builtin-fn:show  punctuation:(  string:"step exclusive sum: "  punctuation:,  variable:sum  punctuation:)
+  8 |     flex sum_inc = 0
+    | keyword:flex  variable:sum_inc  operator:=  number:0
+  9 |     each i in 0..=10
+    | keyword:each  variable:i  keyword:in  number:0  keyword:..=  number:10
+ 10 |         sum_inc = sum_inc + i
+    | variable:sum_inc  operator:=  variable:sum_inc  operator:+  variable:i
+ 11 |     fi
+    | keyword:fi
+ 12 |     show("inc sum: ", sum_inc)
+    | builtin-fn:show  punctuation:(  string:"inc sum: "  punctuation:,  variable:sum_inc  punctuation:)
+ 14 |     flex sum_step_inc = 0
+    | keyword:flex  variable:sum_step_inc  operator:=  number:0
+ 15 |     each i in 0..2..=10
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  number:2  keyword:..=  number:10
+ 16 |         sum_step_inc = sum_step_inc + i
+    | variable:sum_step_inc  operator:=  variable:sum_step_inc  operator:+  variable:i
+ 17 |     fi
+    | keyword:fi
+ 18 |     show("step inc sum: ", sum_step_inc)
+    | builtin-fn:show  punctuation:(  string:"step inc sum: "  punctuation:,  variable:sum_step_inc  punctuation:)
+ 20 |     flex down = 0
+    | keyword:flex  variable:down  operator:=  number:0
+ 21 |     each i in 10..-2..0
+    | keyword:each  variable:i  keyword:in  number:10  operator:..  operator:-  number:2  operator:..  number:0
+ 22 |         down = down + i
+    | variable:down  operator:=  variable:down  operator:+  variable:i
+ 23 |     fi
+    | keyword:fi
+ 24 |     show("down sum: ", down)
+    | builtin-fn:show  punctuation:(  string:"down sum: "  punctuation:,  variable:down  punctuation:)
+ 25 | fi
+    | keyword:fi

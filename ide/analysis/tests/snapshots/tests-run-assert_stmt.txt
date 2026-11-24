@@ -1,0 +1,14 @@
+  1 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+  2 |     assert 1 == 1
+    | keyword:assert  number:1  operator:==  number:1
+  3 |     assert 2 + 2 == 4, "math holds"
+    | keyword:assert  number:2  operator:+  number:2  operator:==  number:4  punctuation:,  string:"math holds"
+  4 |     !assert 1 == 2
+    | operator:!  keyword:assert  number:1  operator:==  number:2
+  5 |     !assert false, "false is not true"
+    | operator:!  keyword:assert  keyword:false  punctuation:,  string:"false is not true"
+  6 |     show("assert ok")
+    | builtin-fn:show  punctuation:(  string:"assert ok"  punctuation:)
+  7 | fi
+    | keyword:fi
