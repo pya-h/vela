@@ -578,7 +578,8 @@ vela__rt__add(a, <span class="number">2</span>, <span class="number">17</span>) 
 <span class="keyword">include</span> std/collections {sort}
 
 <span class="keyword">task</span> main()
-    <span class="keyword">each</span> a <span class="keyword">in</span> args()
+    <span class="keyword">region</span> r
+    <span class="keyword">each</span> a <span class="keyword">in</span> args(r)
         show(a)
     <span class="keyword">fi</span>
 <span class="keyword">fi</span></pre>

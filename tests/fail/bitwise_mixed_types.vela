@@ -1,0 +1,5 @@
+; error: 3:23: an int8 and an int16 don't mix in bitwise operation: turn one into the other first
+task main()
+    fixed x = int8(1) & int16(2)
+    show(x)
+fi

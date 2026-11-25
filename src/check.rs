@@ -14042,7 +14042,7 @@ impl Checker {
             return Ok(CallSetup::Checked(Type::Nothing));
         }
         if name == CHAN_NEW {
-            let Some((elem_ty, _)) = types.first().cloned() else {
+            let Some((raw_ty, at)) = types.first().cloned() else {
                 return err(
                     span,
                     "'chan_new' takes one type argument naming what the channel carries, as in 'chan_new<int>(10)'",
@@ -14053,6 +14053,10 @@ impl Checker {
                     span,
                     "'chan_new' takes one type argument naming what the channel carries, as in 'chan_new<int>(10)'",
                 );
+            }
+            let elem_ty = self.resolve_type(&raw_ty, at, TypePlace::Body)?;
+            if let Some((slot, _)) = types.first_mut() {
+                *slot = elem_ty.clone();
             }
             if args.len() != 1 {
                 return err(span, format!("'chan_new' takes 1 argument (capacity), got {}", args.len()));
@@ -24763,7 +24767,7 @@ impl Checker {
                     };
                     self.settle_applications(ty, at)?;
                 }
-                if !types.is_empty() && !is_sys_parse_task(name) {
+                if !types.is_empty() && !is_sys_parse_task(name) && name != CHAN_NEW {
                     made.needed.push((
                         name.clone(),
                         types.iter().map(|(ty, _)| ty.clone()).collect(),

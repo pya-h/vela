@@ -1,0 +1,125 @@
+include std/random {Rng}
+include std/txt
+
+task check_range_oracle(start: int, step: int, end_v: int, inc: bool) -> int
+    flex each_count = 0
+    flex each_sum = 0
+    flex each_xor = 0
+    when inc
+        each x in start..step..=end_v
+            each_count += 1
+            each_sum += x
+            each_xor = each_xor ^^ x
+        fi
+    else
+        each x in start..step..end_v
+            each_count += 1
+            each_sum += x
+            each_xor = each_xor ^^ x
+        fi
+    fi
+
+    flex ref_count = 0
+    flex ref_sum = 0
+    flex ref_xor = 0
+    flex cur = start
+    endless
+        flex keep = false
+        when step > 0
+            when inc
+                keep = cur <= end_v
+            else
+                keep = cur < end_v
+            fi
+        else
+            when inc
+                keep = cur >= end_v
+            else
+                keep = cur > end_v
+            fi
+        fi
+        when !keep
+            break
+        fi
+        ref_count += 1
+        ref_sum += cur
+        ref_xor = ref_xor ^^ cur
+        cur += step
+    fi
+
+    assert each_count == ref_count
+    assert each_sum == ref_sum
+    assert each_xor == ref_xor
+    <- each_count
+fi
+
+task main()
+    region r default
+    flex rng = Rng.new(4242)
+    flex total_passes = 0
+
+    ; 100 dynamic randomized (start, step, end, inclusive) cases against oracle loop
+    each rcase in 0..100
+        fixed a = rng.next_int(-40, 40) + (rcase % 2)
+        fixed b = rng.next_int(-40, 40)
+        flex s = rng.next_int(1, 9)
+        when rng.next_bool()
+            s = -s
+        fi
+        fixed inc = rng.next_bool()
+        total_passes += check_range_oracle(a, s, b, inc)
+    fi
+
+    ; Explicit corner cases driven dynamically (single element, crossing zero, empty)
+    each k in -2..3
+        fixed base = k * 10
+        assert check_range_oracle(base, 1, base, true) == 1
+        assert check_range_oracle(base, 1, base, false) == 0
+        assert check_range_oracle(base, -2, base, true) == 1
+        assert check_range_oracle(base, -2, base + 5, false) == 0
+        assert check_range_oracle(base, 2, base - 5, true) == 0
+    fi
+
+    ; Dynamic indexed each (`each i, v in &xs` and `each i, v in xs`) + dynamic inclusive slicing
+    flex slice_trials = 0
+    flex text_buf = "abcdefghijklmnopqrstuvwxyz0123456789"
+    each trial in 0..20
+        fixed n = rng.next_int(2, 18)
+        flex xs = new [int]() at r
+        each j in 0..n
+            xs.add(rng.next_int(-50, 50))
+        fi
+
+        ; Live indexed iteration & mutation via `&xs`
+        each idx, v in &xs
+            assert xs[idx] == v
+            xs[idx] = v + idx
+        fi
+        each idx, v in xs
+            assert v == xs[idx]
+        fi
+
+        ; Dynamic inclusive slice xs[lo..=hi] and text[lo..=hi]
+        fixed lo = rng.next_int(0, n - 1)
+        fixed hi = rng.next_int(lo, n - 1)
+        fixed sub = xs[lo..=hi]
+        assert sub.len == hi - lo + 1
+        each k, item in sub
+            assert item == xs[lo + k]
+        fi
+
+        fixed tsub = text_buf[lo..=hi]
+        assert tsub.len == hi - lo + 1
+        assert tsub == txt.join([text_buf[lo..hi + 1], ...] at r, "", r)
+        slice_trials += 1 + (trial * 0)
+    fi
+
+    ; Dynamic map-form stepped range comprehension
+    fixed mapped: [int]@r = each v in 2..3..=14
+        v * 2
+    fi { new [int]() at r }
+    assert mapped.len == 5
+    assert mapped[0] == 4 and mapped[4] == 28
+
+    show("range_oracle_cases=100 slice_trials=", slice_trials, " ok=", total_passes > 0)
+fi

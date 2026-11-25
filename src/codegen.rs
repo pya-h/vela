@@ -3222,6 +3222,13 @@ impl Generator {
             "static {} {}(vela__rt__text {}, {} def, bool parse_similars{}{})",
             or_ty, fn_name, key_param, maybe_ty, trim_param, r_param
         ));
+        self.w.line("(void)parse_similars;");
+        if !trim_param.is_empty() {
+            self.w.line("(void)trim_whitespace;");
+        }
+        if !r_param.is_empty() {
+            self.w.line("(void)r;");
+        }
         self.w.line("const char* val_ptr = NULL;");
         self.w.line("size_t val_len = 0;");
         if is_flag {
@@ -3311,6 +3318,11 @@ impl Generator {
             )
         };
         self.w.open(&sig);
+        self.w.line("(void)parse_similars;");
+        self.w.line("(void)trim_whitespace;");
+        if has_text {
+            self.w.line("(void)r;");
+        }
         let mode_expr = format!(
             "(mode.tag == {0}) ? VELA__RT__ENV_CAST_NONE : \
              (mode.tag == {1}) ? VELA__RT__ENV_CAST_UPPERCASE : \

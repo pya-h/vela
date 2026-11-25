@@ -1,0 +1,176 @@
+include std/random {Rng}
+
+task bump_side(flex& counter: int, val: bool) -> bool
+    counter += 1
+    <- val
+fi
+
+task verify_identities_i64(a: int, b: int)
+    fixed and_lhs = a & b
+    fixed and_rhs = ~(~a | ~b)
+    assert and_lhs == and_rhs
+
+    fixed or_lhs = a | b
+    fixed or_rhs = ~(~a & ~b)
+    assert or_lhs == or_rhs
+
+    fixed nand_lhs = a ~& b
+    fixed nand_rhs = ~(a & b)
+    assert nand_lhs == nand_rhs
+
+    fixed nor_lhs = a ~| b
+    fixed nor_rhs = ~(a | b)
+    assert nor_lhs == nor_rhs
+
+    fixed xnor_lhs = a ~^ b
+    fixed xnor_rhs = ~(a ^^ b)
+    assert xnor_lhs == xnor_rhs
+
+    fixed xor_lhs = a ^^ b
+    fixed xor_rhs = (a | b) & ~(a & b)
+    assert xor_lhs == xor_rhs
+
+    fixed xor_self = a ^^ a
+    assert xor_self == 0
+    fixed xor_zero = a ^^ 0
+    assert xor_zero == a
+    fixed dbl_not = ~(~a)
+    assert dbl_not == a
+fi
+
+task verify_unit_identities(a: unit, b: unit, shift: int)
+    fixed and_l = a & b
+    fixed and_r = ~(~a | ~b)
+    assert and_l == and_r
+
+    fixed or_l = a | b
+    fixed or_r = ~(~a & ~b)
+    assert or_l == or_r
+
+    fixed nand_l = a ~& b
+    fixed nand_r = ~(a & b)
+    assert nand_l == nand_r
+
+    fixed nor_l = a ~| b
+    fixed nor_r = ~(a | b)
+    assert nor_l == nor_r
+
+    fixed xnor_l = a ~^ b
+    fixed xnor_r = ~(a ^^ b)
+    assert xnor_l == xnor_r
+
+    fixed dbl = ~(~a)
+    assert dbl == a
+    fixed mask: unit = unit(255) >> shift
+    fixed roundtrip = ((a & mask) << shift) >> shift
+    assert roundtrip == (a & mask)
+fi
+
+task verify_sizes(r: int, k: int)
+    fixed a8 = int8((r % 256) - 128)
+    fixed b8 = int8(((r / 7) % 256) - 128)
+    fixed n8 = a8 ~& b8
+    fixed n8r = ~(a8 & b8)
+    assert n8 == n8r
+    fixed r8 = a8 ~| b8
+    fixed r8r = ~(a8 | b8)
+    assert r8 == r8r
+    fixed x8 = a8 ~^ b8
+    fixed x8r = ~(a8 ^^ b8)
+    assert x8 == x8r
+    fixed d8 = ~(~a8)
+    assert d8 == a8
+    fixed s8 = k % 7
+    fixed sh8 = a8 << s8
+    assert (sh8 >> s8) <= a8 or (sh8 >> s8) > a8
+
+    fixed a16 = int16((r % 65536) - 32768)
+    fixed b16 = int16(((r / 13) % 65536) - 32768)
+    fixed x16 = a16 ^^ b16
+    fixed x16r = (a16 | b16) & ~(a16 & b16)
+    assert x16 == x16r
+    fixed n16 = a16 ~& b16
+    fixed n16r = ~(a16 & b16)
+    assert n16 == n16r
+
+    fixed u16a = uint16(r % 65536)
+    fixed u16b = uint16((r / 17) % 65536)
+    fixed s16 = k % 16
+    fixed mask16 = uint16(65535) >> s16
+    fixed rt16 = ((u16a & mask16) << s16) >> s16
+    assert rt16 == (u16a & mask16)
+    fixed r16 = u16a ~| u16b
+    fixed r16r = ~(u16a | u16b)
+    assert r16 == r16r
+
+    fixed a32 = int32((r % 2000000) - 1000000)
+    fixed b32 = int32(((r / 29) % 2000000) - 1000000)
+    fixed x32 = a32 ~^ b32
+    fixed x32r = ~(a32 ^^ b32)
+    assert x32 == x32r
+    fixed sh32 = a32 >> (k % 8)
+    assert (sh32 << 0) == sh32
+
+    fixed u32a = uint32(r % 10000000)
+    fixed s32 = k % 32
+    fixed mask32 = uint32(4294967295) >> s32
+    fixed rt32 = ((u32a & mask32) << s32) >> s32
+    assert rt32 == (u32a & mask32)
+
+    fixed u64a = uint64(r) * uint64(1000003) + uint64(k)
+    fixed u64b = uint64(k) * uint64(999983)
+    fixed n64 = u64a ~& u64b
+    fixed n64r = ~(u64a & u64b)
+    assert n64 == n64r
+    fixed s64 = k % 64
+    fixed all64 = ~uint64(0)
+    fixed mask64 = all64 >> uint64(s64)
+    fixed rt64 = ((u64a & mask64) << uint64(s64)) >> s64
+    assert rt64 == (u64a & mask64)
+fi
+
+task main()
+    flex rng = Rng.new(9001)
+    flex trial_count = 0
+    each step_idx in 0..40
+        fixed a = rng.next_int(-1000000000, 1000000000)
+        fixed b = rng.next_int(-1000000000, 1000000000)
+        verify_identities_i64(a, b)
+
+        fixed ua = unit(rng.next_int(0, 255))
+        fixed ub = unit(rng.next_int(0, 255))
+        fixed sh = rng.next_int(0, 7)
+        verify_unit_identities(ua, ub, sh)
+
+        fixed pos_r = rng.next_int(0, 100000000)
+        verify_sizes(pos_r, step_idx)
+
+        ; Dynamic logic short-circuit & xor/nand/nor checks
+        flex calls = 0
+        fixed lhs = rng.next_bool()
+        fixed rhs = rng.next_bool()
+        fixed expect_xor = (lhs and !rhs) or (!lhs and rhs)
+        assert (lhs xor rhs) == expect_xor
+        assert (lhs nand rhs) == !(lhs and rhs)
+        assert (lhs nor rhs) == !(lhs or rhs)
+
+        fixed sc1 = false nand bump_side(&calls, rhs)
+        assert sc1 and calls == 0
+        fixed sc2 = true nor bump_side(&calls, rhs)
+        assert !sc2 and calls == 0
+        fixed sc3 = true nand bump_side(&calls, rhs)
+        assert sc3 == !rhs and calls == 1
+        trial_count += 1
+    fi
+
+    ; Power-of-two shift consistency across 0..63
+    flex pow2 = 1
+    each s in 0..63
+        assert (1 << s) == pow2
+        when s < 62
+            pow2 *= 2
+        fi
+    fi
+
+    show("dynamic_bitwise_trials=", trial_count)
+fi

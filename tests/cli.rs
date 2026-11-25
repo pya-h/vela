@@ -1007,3 +1007,133 @@ fn rejects_zero_step_and_stepped_slices() {
     assert!(!out2.status.success());
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn sys_flags_all_scalar_types_and_all_cast_modes_matrix() {
+    let dir = temp_dir("sys-matrix");
+    let src = dir.join("matrix.vela");
+    let exe = dir.join("matrix");
+    let env_file = dir.join("cast_modes.env");
+
+    std::fs::write(
+        &env_file,
+        "exactKey=raw_ok\n\
+         upper_val=UP\n\
+         LOWER_VAL=lo\n\
+         APP_PORT=7070\n\
+         APP_NAME=vela_app\n\
+         USERS=4096\n\
+         RETRY_LIMIT=5\n",
+    )
+    .unwrap();
+
+    std::fs::write(
+        &src,
+        "include std/sys\n\n\
+shape ExactShape\n\
+    exactKey: text\n\
+fi\n\
+shape UpperShape\n\
+    UPPER_VAL: text\n\
+fi\n\
+shape LowerShape\n\
+    lower_val: text\n\
+fi\n\
+shape CamelShape\n\
+    appPort: int\n\
+fi\n\
+shape PascalShape\n\
+    AppName: text\n\
+fi\n\
+shape CapitalShape\n\
+    Users: int\n\
+fi\n\
+shape SnakeShape\n\
+    retry_limit: int\n\
+fi\n\n\
+task run_checks(env_path: text@r, r: region default) -> nothing ~ sys.EnvsFailure\n\
+    fixed i8v = sys.flag<int8>(\"i8\", int8(0)) { int8(-99) }\n\
+    fixed i16v = sys.flag<int16>(\"i16\", int16(0)) { int16(0) }\n\
+    fixed i32v = sys.flag<int32>(\"i32\", int32(0)) { int32(0) }\n\
+    fixed u8v = sys.flag<unit>(\"u8\", unit(0)) { unit(0) }\n\
+    fixed u16v = sys.flag<uint16>(\"u16\", uint16(0)) { uint16(0) }\n\
+    fixed u32v = sys.flag<uint32>(\"u32\", uint32(0)) { uint32(0) }\n\
+    fixed u64v = sys.flag<uint64>(\"u64\", uint64(0)) { uint64(0) }\n\
+    fixed f32v = sys.flag<float32>(\"f32\", float32(0.0)) { float32(0.0) }\n\
+    fixed chv = sys.flag<char>(\"ch\", 'a') { '!' }\n\
+    fixed msg = sys.flag(\"msg\", \"def\")@r { \"bad\" }\n\
+    show(\"scalars=\", i8v, \",\", i16v, \",\", i32v, \",\", u8v, \",\", u16v, \",\", u32v, \",\", u64v, \",\", f32v, \",\", chv)\n\
+    show(\"msg=\", msg)\n\n\
+    fixed c_none: ExactShape@r = sys.envs(sys.EnvNameCastModes.NONE, env_path)!\n\
+    fixed c_up: UpperShape@r = sys.envs(sys.EnvNameCastModes.UPPERCASE, env_path)!\n\
+    fixed c_lo: LowerShape@r = sys.envs(sys.EnvNameCastModes.LOWERCASE, env_path)!\n\
+    fixed c_cam: CamelShape = sys.envs(sys.EnvNameCastModes.CAMELCASE, env_path)!\n\
+    fixed c_pas: PascalShape@r = sys.envs(sys.EnvNameCastModes.PASCALCASE, env_path)!\n\
+    fixed c_cap: CapitalShape = sys.envs(sys.EnvNameCastModes.CAPITALCASE, env_path)!\n\
+    fixed c_snk: SnakeShape = sys.envs(sys.EnvNameCastModes.SNAKE_CASE, env_path)!\n\
+    show(\"casts=\", c_none.exactKey, \",\", c_up.UPPER_VAL, \",\", c_lo.lower_val, \",\", c_cam.appPort, \",\", c_pas.AppName, \",\", c_cap.Users, \",\", c_snk.retry_limit)\n\
+fi\n\n\
+task main()\n\
+    region r default\n\
+    fixed argv = sys.args()\n\
+    run_checks(argv[1], r) {\n\
+        failure err\n\
+            show(\"err=\", err)\n\
+    }\n\
+fi\n",
+    )
+    .unwrap();
+
+    let out = vela(&[src.to_str().unwrap(), "-o", exe.to_str().unwrap()]);
+    assert!(out.status.success(), "{}", stderr(&out));
+
+    // Run 1: valid typed scalars + quoted value with spaces and '=' + all 7 cast modes
+    let run1 = Command::new(&exe)
+        .args([
+            env_file.to_str().unwrap(),
+            "i8=-120",
+            "i16=32000",
+            "i32=-100000",
+            "u8=250",
+            "u16=65000",
+            "u32=4000000",
+            "u64=9000000000",
+            "f32=1.25",
+            "ch=Z",
+            "msg=hello world = ok",
+        ])
+        .output()
+        .unwrap();
+    assert!(run1.status.success(), "{}", String::from_utf8_lossy(&run1.stderr));
+    let stdout1 = String::from_utf8_lossy(&run1.stdout);
+    assert!(
+        stdout1.contains("scalars=-120,32000,-100000,250,65000,4000000,9000000000,1.25,Z\n"),
+        "{}",
+        stdout1
+    );
+    assert!(stdout1.contains("msg=hello world = ok\n"), "{}", stdout1);
+    assert!(
+        stdout1.contains("casts=raw_ok,UP,lo,7070,vela_app,4096,5\n"),
+        "{}",
+        stdout1
+    );
+
+    // Run 2: out-of-range int8 (300) triggers Plan B fallback (-99), multi-char flag triggers Plan B ('!') via `vela run`
+    let run2 = vela(&[
+        "run",
+        src.to_str().unwrap(),
+        "--",
+        env_file.to_str().unwrap(),
+        "i8=300",
+        "ch=ab",
+    ]);
+    assert!(run2.status.success(), "{}", stderr(&run2));
+    let stdout2 = String::from_utf8_lossy(&run2.stdout);
+    assert!(
+        stdout2.contains("scalars=-99,0,0,0,0,0,0,0,!\n"),
+        "{}",
+        stdout2
+    );
+    assert!(stdout2.contains("msg=def\n"), "{}", stdout2);
+    let _ = std::fs::remove_dir_all(&dir);
+}

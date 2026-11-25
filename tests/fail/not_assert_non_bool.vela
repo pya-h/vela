@@ -1,0 +1,4 @@
+; error: 3:13: expected type bool, got int
+task main()
+    !assert 42
+fi

@@ -1,0 +1,226 @@
+  1 | include std/random {Rng}
+    | keyword:include  module:std  operator:/  module:random  punctuation:{  type:Rng  punctuation:}
+  2 | include std/txt
+    | keyword:include  module:std  operator:/  module:txt
+  4 | task check_range_oracle(start: int, step: int, end_v: int, inc: bool) -> int
+    | keyword:task  task:check_range_oracle  punctuation:(  parameter:start  punctuation::  type-builtin:int  punctuation:,  parameter:step  punctuation::  type-builtin:int  punctuation:,  parameter:end_v  punctuation::  type-builtin:int  punctuation:,  parameter:inc  punctuation::  type-builtin:bool  punctuation:)  operator:->  type-builtin:int
+  5 |     flex each_count = 0
+    | keyword:flex  variable:each_count  operator:=  number:0
+  6 |     flex each_sum = 0
+    | keyword:flex  variable:each_sum  operator:=  number:0
+  7 |     flex each_xor = 0
+    | keyword:flex  variable:each_xor  operator:=  number:0
+  8 |     when inc
+    | keyword:when  parameter:inc
+  9 |         each x in start..step..=end_v
+    | keyword:each  variable:x  keyword:in  parameter:start  operator:..  parameter:step  operator:..=  parameter:end_v
+ 10 |             each_count += 1
+    | variable:each_count  operator:+=  number:1
+ 11 |             each_sum += x
+    | variable:each_sum  operator:+=  variable:x
+ 12 |             each_xor = each_xor ^^ x
+    | variable:each_xor  operator:=  variable:each_xor  operator:^^  variable:x
+ 13 |         fi
+    | keyword:fi
+ 14 |     else
+    | keyword:else
+ 15 |         each x in start..step..end_v
+    | keyword:each  variable:x  keyword:in  parameter:start  operator:..  parameter:step  operator:..  parameter:end_v
+ 16 |             each_count += 1
+    | variable:each_count  operator:+=  number:1
+ 17 |             each_sum += x
+    | variable:each_sum  operator:+=  variable:x
+ 18 |             each_xor = each_xor ^^ x
+    | variable:each_xor  operator:=  variable:each_xor  operator:^^  variable:x
+ 19 |         fi
+    | keyword:fi
+ 20 |     fi
+    | keyword:fi
+ 22 |     flex ref_count = 0
+    | keyword:flex  variable:ref_count  operator:=  number:0
+ 23 |     flex ref_sum = 0
+    | keyword:flex  variable:ref_sum  operator:=  number:0
+ 24 |     flex ref_xor = 0
+    | keyword:flex  variable:ref_xor  operator:=  number:0
+ 25 |     flex cur = start
+    | keyword:flex  variable:cur  operator:=  parameter:start
+ 26 |     endless
+    | keyword:endless
+ 27 |         flex keep = false
+    | keyword:flex  variable:keep  operator:=  keyword:false
+ 28 |         when step > 0
+    | keyword:when  parameter:step  operator:>  number:0
+ 29 |             when inc
+    | keyword:when  parameter:inc
+ 30 |                 keep = cur <= end_v
+    | variable:keep  operator:=  variable:cur  operator:<=  parameter:end_v
+ 31 |             else
+    | keyword:else
+ 32 |                 keep = cur < end_v
+    | variable:keep  operator:=  variable:cur  operator:<  parameter:end_v
+ 33 |             fi
+    | keyword:fi
+ 34 |         else
+    | keyword:else
+ 35 |             when inc
+    | keyword:when  parameter:inc
+ 36 |                 keep = cur >= end_v
+    | variable:keep  operator:=  variable:cur  operator:>=  parameter:end_v
+ 37 |             else
+    | keyword:else
+ 38 |                 keep = cur > end_v
+    | variable:keep  operator:=  variable:cur  operator:>  parameter:end_v
+ 39 |             fi
+    | keyword:fi
+ 40 |         fi
+    | keyword:fi
+ 41 |         when !keep
+    | keyword:when  operator:!  variable:keep
+ 42 |             break
+    | keyword:break
+ 43 |         fi
+    | keyword:fi
+ 44 |         ref_count += 1
+    | variable:ref_count  operator:+=  number:1
+ 45 |         ref_sum += cur
+    | variable:ref_sum  operator:+=  variable:cur
+ 46 |         ref_xor = ref_xor ^^ cur
+    | variable:ref_xor  operator:=  variable:ref_xor  operator:^^  variable:cur
+ 47 |         cur += step
+    | variable:cur  operator:+=  parameter:step
+ 48 |     fi
+    | keyword:fi
+ 50 |     assert each_count == ref_count
+    | keyword:assert  variable:each_count  operator:==  variable:ref_count
+ 51 |     assert each_sum == ref_sum
+    | keyword:assert  variable:each_sum  operator:==  variable:ref_sum
+ 52 |     assert each_xor == ref_xor
+    | keyword:assert  variable:each_xor  operator:==  variable:ref_xor
+ 53 |     <- each_count
+    | keyword:<-  variable:each_count
+ 54 | fi
+    | keyword:fi
+ 56 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 57 |     region r default
+    | keyword:region  region:r  keyword:default
+ 58 |     flex rng = Rng.new(4242)
+    | keyword:flex  variable:rng  operator:=  type:Rng  punctuation:.  method:new  punctuation:(  number:4242  punctuation:)
+ 59 |     flex total_passes = 0
+    | keyword:flex  variable:total_passes  operator:=  number:0
+ 61 |     ; 100 dynamic randomized (start, step, end, inclusive) cases against oracle loop
+    | comment:; 100 dynamic randomized (start, step, end, inclusive) cases against oracle loop
+ 62 |     each rcase in 0..100
+    | keyword:each  variable:rcase  keyword:in  number:0  operator:..  number:100
+ 63 |         fixed a = rng.next_int(-40, 40) + (rcase % 2)
+    | keyword:fixed  variable:a  operator:=  variable:rng  punctuation:.  method:next_int  punctuation:(  operator:-  number:40  punctuation:,  number:40  punctuation:)  operator:+  punctuation:(  variable:rcase  operator:%  number:2  punctuation:)
+ 64 |         fixed b = rng.next_int(-40, 40)
+    | keyword:fixed  variable:b  operator:=  variable:rng  punctuation:.  method:next_int  punctuation:(  operator:-  number:40  punctuation:,  number:40  punctuation:)
+ 65 |         flex s = rng.next_int(1, 9)
+    | keyword:flex  variable:s  operator:=  variable:rng  punctuation:.  method:next_int  punctuation:(  number:1  punctuation:,  number:9  punctuation:)
+ 66 |         when rng.next_bool()
+    | keyword:when  variable:rng  punctuation:.  method:next_bool  punctuation:(  punctuation:)
+ 67 |             s = -s
+    | variable:s  operator:=  operator:-  variable:s
+ 68 |         fi
+    | keyword:fi
+ 69 |         fixed inc = rng.next_bool()
+    | keyword:fixed  variable:inc  operator:=  variable:rng  punctuation:.  method:next_bool  punctuation:(  punctuation:)
+ 70 |         total_passes += check_range_oracle(a, s, b, inc)
+    | variable:total_passes  operator:+=  task:check_range_oracle  punctuation:(  variable:a  punctuation:,  variable:s  punctuation:,  variable:b  punctuation:,  variable:inc  punctuation:)
+ 71 |     fi
+    | keyword:fi
+ 73 |     ; Explicit corner cases driven dynamically (single element, crossing zero, empty)
+    | comment:; Explicit corner cases driven dynamically (single element, crossing zero, empty)
+ 74 |     each k in -2..3
+    | keyword:each  variable:k  keyword:in  operator:-  number:2  operator:..  number:3
+ 75 |         fixed base = k * 10
+    | keyword:fixed  variable:base  operator:=  variable:k  operator:*  number:10
+ 76 |         assert check_range_oracle(base, 1, base, true) == 1
+    | keyword:assert  task:check_range_oracle  punctuation:(  variable:base  punctuation:,  number:1  punctuation:,  variable:base  punctuation:,  keyword:true  punctuation:)  operator:==  number:1
+ 77 |         assert check_range_oracle(base, 1, base, false) == 0
+    | keyword:assert  task:check_range_oracle  punctuation:(  variable:base  punctuation:,  number:1  punctuation:,  variable:base  punctuation:,  keyword:false  punctuation:)  operator:==  number:0
+ 78 |         assert check_range_oracle(base, -2, base, true) == 1
+    | keyword:assert  task:check_range_oracle  punctuation:(  variable:base  punctuation:,  operator:-  number:2  punctuation:,  variable:base  punctuation:,  keyword:true  punctuation:)  operator:==  number:1
+ 79 |         assert check_range_oracle(base, -2, base + 5, false) == 0
+    | keyword:assert  task:check_range_oracle  punctuation:(  variable:base  punctuation:,  operator:-  number:2  punctuation:,  variable:base  operator:+  number:5  punctuation:,  keyword:false  punctuation:)  operator:==  number:0
+ 80 |         assert check_range_oracle(base, 2, base - 5, true) == 0
+    | keyword:assert  task:check_range_oracle  punctuation:(  variable:base  punctuation:,  number:2  punctuation:,  variable:base  operator:-  number:5  punctuation:,  keyword:true  punctuation:)  operator:==  number:0
+ 81 |     fi
+    | keyword:fi
+ 83 |     ; Dynamic indexed each (`each i, v in &xs` and `each i, v in xs`) + dynamic inclusive slicing
+    | comment:; Dynamic indexed each (`each i, v in &xs` and `each i, v in xs`) + dynamic inclusive slicing
+ 84 |     flex slice_trials = 0
+    | keyword:flex  variable:slice_trials  operator:=  number:0
+ 85 |     flex text_buf = "abcdefghijklmnopqrstuvwxyz0123456789"
+    | keyword:flex  variable:text_buf  operator:=  string:"abcdefghijklmnopqrstuvwxyz0123456789"
+ 86 |     each trial in 0..20
+    | keyword:each  variable:trial  keyword:in  number:0  operator:..  number:20
+ 87 |         fixed n = rng.next_int(2, 18)
+    | keyword:fixed  variable:n  operator:=  variable:rng  punctuation:.  method:next_int  punctuation:(  number:2  punctuation:,  number:18  punctuation:)
+ 88 |         flex xs = new [int]() at r
+    | keyword:flex  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+ 89 |         each j in 0..n
+    | keyword:each  variable:j  keyword:in  number:0  operator:..  variable:n
+ 90 |             xs.add(rng.next_int(-50, 50))
+    | variable:xs  punctuation:.  field:add  punctuation:(  variable:rng  punctuation:.  method:next_int  punctuation:(  operator:-  number:50  punctuation:,  number:50  punctuation:)  punctuation:)
+ 91 |         fi
+    | keyword:fi
+ 93 |         ; Live indexed iteration & mutation via `&xs`
+    | comment:; Live indexed iteration & mutation via `&xs`
+ 94 |         each idx, v in &xs
+    | keyword:each  variable:idx  punctuation:,  variable:v  keyword:in  operator:&  variable:xs
+ 95 |             assert xs[idx] == v
+    | keyword:assert  variable:xs  punctuation:[  variable:idx  punctuation:]  operator:==  variable:v
+ 96 |             xs[idx] = v + idx
+    | variable:xs  punctuation:[  variable:idx  punctuation:]  operator:=  variable:v  operator:+  variable:idx
+ 97 |         fi
+    | keyword:fi
+ 98 |         each idx, v in xs
+    | keyword:each  variable:idx  punctuation:,  variable:v  keyword:in  variable:xs
+ 99 |             assert v == xs[idx]
+    | keyword:assert  variable:v  operator:==  variable:xs  punctuation:[  variable:idx  punctuation:]
+100 |         fi
+    | keyword:fi
+102 |         ; Dynamic inclusive slice xs[lo..=hi] and text[lo..=hi]
+    | comment:; Dynamic inclusive slice xs[lo..=hi] and text[lo..=hi]
+103 |         fixed lo = rng.next_int(0, n - 1)
+    | keyword:fixed  variable:lo  operator:=  variable:rng  punctuation:.  method:next_int  punctuation:(  number:0  punctuation:,  variable:n  operator:-  number:1  punctuation:)
+104 |         fixed hi = rng.next_int(lo, n - 1)
+    | keyword:fixed  variable:hi  operator:=  variable:rng  punctuation:.  method:next_int  punctuation:(  variable:lo  punctuation:,  variable:n  operator:-  number:1  punctuation:)
+105 |         fixed sub = xs[lo..=hi]
+    | keyword:fixed  variable:sub  operator:=  variable:xs  punctuation:[  variable:lo  operator:..=  variable:hi  punctuation:]
+106 |         assert sub.len == hi - lo + 1
+    | keyword:assert  variable:sub  punctuation:.  field:len  operator:==  variable:hi  operator:-  variable:lo  operator:+  number:1
+107 |         each k, item in sub
+    | keyword:each  variable:k  punctuation:,  variable:item  keyword:in  variable:sub
+108 |             assert item == xs[lo + k]
+    | keyword:assert  variable:item  operator:==  variable:xs  punctuation:[  variable:lo  operator:+  variable:k  punctuation:]
+109 |         fi
+    | keyword:fi
+111 |         fixed tsub = text_buf[lo..=hi]
+    | keyword:fixed  variable:tsub  operator:=  variable:text_buf  punctuation:[  variable:lo  operator:..=  variable:hi  punctuation:]
+112 |         assert tsub.len == hi - lo + 1
+    | keyword:assert  variable:tsub  punctuation:.  field:len  operator:==  variable:hi  operator:-  variable:lo  operator:+  number:1
+113 |         assert tsub == txt.join([text_buf[lo..hi + 1], ...] at r, "", r)
+    | keyword:assert  variable:tsub  operator:==  module:txt  punctuation:.  task:join  punctuation:(  punctuation:[  variable:text_buf  punctuation:[  variable:lo  operator:..  variable:hi  operator:+  number:1  punctuation:]  punctuation:,  keyword:...  punctuation:]  keyword:at  region:r  punctuation:,  string:""  punctuation:,  region:r  punctuation:)
+114 |         slice_trials += 1 + (trial * 0)
+    | variable:slice_trials  operator:+=  number:1  operator:+  punctuation:(  variable:trial  operator:*  number:0  punctuation:)
+115 |     fi
+    | keyword:fi
+117 |     ; Dynamic map-form stepped range comprehension
+    | comment:; Dynamic map-form stepped range comprehension
+118 |     fixed mapped: [int]@r = each v in 2..3..=14
+    | keyword:fixed  variable:mapped  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  operator:=  keyword:each  variable:v  keyword:in  number:2  operator:..  number:3  operator:..=  number:14
+119 |         v * 2
+    | variable:v  operator:*  number:2
+120 |     fi { new [int]() at r }
+    | keyword:fi  punctuation:{  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r  punctuation:}
+121 |     assert mapped.len == 5
+    | keyword:assert  variable:mapped  punctuation:.  field:len  operator:==  number:5
+122 |     assert mapped[0] == 4 and mapped[4] == 28
+    | keyword:assert  variable:mapped  punctuation:[  number:0  punctuation:]  operator:==  number:4  keyword:and  variable:mapped  punctuation:[  number:4  punctuation:]  operator:==  number:28
+124 |     show("range_oracle_cases=100 slice_trials=", slice_trials, " ok=", total_passes > 0)
+    | builtin-fn:show  punctuation:(  string:"range_oracle_cases=100 slice_trials="  punctuation:,  variable:slice_trials  punctuation:,  string:" ok="  punctuation:,  variable:total_passes  operator:>  number:0  punctuation:)
+125 | fi
+    | keyword:fi

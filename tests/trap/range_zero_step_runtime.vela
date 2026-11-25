@@ -1,0 +1,7 @@
+; trap: range step cannot be zero at 4:22 in task 'main'
+task main()
+    flex step = 0
+    each i in 0..step..5
+        show(i)
+    fi
+fi

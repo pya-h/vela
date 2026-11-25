@@ -1,0 +1,6 @@
+; error: 3:10: expected type bool, got int
+task main()
+    when 1 xor 2
+        show("x")
+    fi
+fi

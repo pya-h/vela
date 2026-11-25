@@ -1,0 +1,5 @@
+; trap: assertion failed at 4:13 in task 'main': !assert active (message: expected inactive)
+task main()
+    flex active = true
+    !assert active, "expected inactive"
+fi

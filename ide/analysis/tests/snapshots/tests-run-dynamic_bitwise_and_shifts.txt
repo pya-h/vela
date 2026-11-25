@@ -1,0 +1,298 @@
+  1 | include std/random {Rng}
+    | keyword:include  module:std  operator:/  module:random  punctuation:{  type:Rng  punctuation:}
+  3 | task bump_side(flex& counter: int, val: bool) -> bool
+    | keyword:task  task:bump_side  punctuation:(  keyword:flex  keyword:&  parameter:counter  punctuation::  type-builtin:int  punctuation:,  parameter:val  punctuation::  type-builtin:bool  punctuation:)  operator:->  type-builtin:bool
+  4 |     counter += 1
+    | parameter:counter  operator:+=  number:1
+  5 |     <- val
+    | keyword:<-  parameter:val
+  6 | fi
+    | keyword:fi
+  8 | task verify_identities_i64(a: int, b: int)
+    | keyword:task  task:verify_identities_i64  punctuation:(  parameter:a  punctuation::  type-builtin:int  punctuation:,  parameter:b  punctuation::  type-builtin:int  punctuation:)
+  9 |     fixed and_lhs = a & b
+    | keyword:fixed  variable:and_lhs  operator:=  parameter:a  operator:&  parameter:b
+ 10 |     fixed and_rhs = ~(~a | ~b)
+    | keyword:fixed  variable:and_rhs  operator:=  operator:~  punctuation:(  operator:~  parameter:a  operator:|  operator:~  parameter:b  punctuation:)
+ 11 |     assert and_lhs == and_rhs
+    | keyword:assert  variable:and_lhs  operator:==  variable:and_rhs
+ 13 |     fixed or_lhs = a | b
+    | keyword:fixed  variable:or_lhs  operator:=  parameter:a  operator:|  parameter:b
+ 14 |     fixed or_rhs = ~(~a & ~b)
+    | keyword:fixed  variable:or_rhs  operator:=  operator:~  punctuation:(  operator:~  parameter:a  operator:&  operator:~  parameter:b  punctuation:)
+ 15 |     assert or_lhs == or_rhs
+    | keyword:assert  variable:or_lhs  operator:==  variable:or_rhs
+ 17 |     fixed nand_lhs = a ~& b
+    | keyword:fixed  variable:nand_lhs  operator:=  parameter:a  operator:~&  parameter:b
+ 18 |     fixed nand_rhs = ~(a & b)
+    | keyword:fixed  variable:nand_rhs  operator:=  operator:~  punctuation:(  parameter:a  operator:&  parameter:b  punctuation:)
+ 19 |     assert nand_lhs == nand_rhs
+    | keyword:assert  variable:nand_lhs  operator:==  variable:nand_rhs
+ 21 |     fixed nor_lhs = a ~| b
+    | keyword:fixed  variable:nor_lhs  operator:=  parameter:a  operator:~|  parameter:b
+ 22 |     fixed nor_rhs = ~(a | b)
+    | keyword:fixed  variable:nor_rhs  operator:=  operator:~  punctuation:(  parameter:a  operator:|  parameter:b  punctuation:)
+ 23 |     assert nor_lhs == nor_rhs
+    | keyword:assert  variable:nor_lhs  operator:==  variable:nor_rhs
+ 25 |     fixed xnor_lhs = a ~^ b
+    | keyword:fixed  variable:xnor_lhs  operator:=  parameter:a  operator:~^  parameter:b
+ 26 |     fixed xnor_rhs = ~(a ^^ b)
+    | keyword:fixed  variable:xnor_rhs  operator:=  operator:~  punctuation:(  parameter:a  operator:^^  parameter:b  punctuation:)
+ 27 |     assert xnor_lhs == xnor_rhs
+    | keyword:assert  variable:xnor_lhs  operator:==  variable:xnor_rhs
+ 29 |     fixed xor_lhs = a ^^ b
+    | keyword:fixed  variable:xor_lhs  operator:=  parameter:a  operator:^^  parameter:b
+ 30 |     fixed xor_rhs = (a | b) & ~(a & b)
+    | keyword:fixed  variable:xor_rhs  operator:=  punctuation:(  parameter:a  operator:|  parameter:b  punctuation:)  operator:&  operator:~  punctuation:(  parameter:a  operator:&  parameter:b  punctuation:)
+ 31 |     assert xor_lhs == xor_rhs
+    | keyword:assert  variable:xor_lhs  operator:==  variable:xor_rhs
+ 33 |     fixed xor_self = a ^^ a
+    | keyword:fixed  variable:xor_self  operator:=  parameter:a  operator:^^  parameter:a
+ 34 |     assert xor_self == 0
+    | keyword:assert  variable:xor_self  operator:==  number:0
+ 35 |     fixed xor_zero = a ^^ 0
+    | keyword:fixed  variable:xor_zero  operator:=  parameter:a  operator:^^  number:0
+ 36 |     assert xor_zero == a
+    | keyword:assert  variable:xor_zero  operator:==  parameter:a
+ 37 |     fixed dbl_not = ~(~a)
+    | keyword:fixed  variable:dbl_not  operator:=  operator:~  punctuation:(  operator:~  parameter:a  punctuation:)
+ 38 |     assert dbl_not == a
+    | keyword:assert  variable:dbl_not  operator:==  parameter:a
+ 39 | fi
+    | keyword:fi
+ 41 | task verify_unit_identities(a: unit, b: unit, shift: int)
+    | keyword:task  task:verify_unit_identities  punctuation:(  parameter:a  punctuation::  type-builtin:unit  punctuation:,  parameter:b  punctuation::  type-builtin:unit  punctuation:,  parameter:shift  punctuation::  type-builtin:int  punctuation:)
+ 42 |     fixed and_l = a & b
+    | keyword:fixed  variable:and_l  operator:=  parameter:a  operator:&  parameter:b
+ 43 |     fixed and_r = ~(~a | ~b)
+    | keyword:fixed  variable:and_r  operator:=  operator:~  punctuation:(  operator:~  parameter:a  operator:|  operator:~  parameter:b  punctuation:)
+ 44 |     assert and_l == and_r
+    | keyword:assert  variable:and_l  operator:==  variable:and_r
+ 46 |     fixed or_l = a | b
+    | keyword:fixed  variable:or_l  operator:=  parameter:a  operator:|  parameter:b
+ 47 |     fixed or_r = ~(~a & ~b)
+    | keyword:fixed  variable:or_r  operator:=  operator:~  punctuation:(  operator:~  parameter:a  operator:&  operator:~  parameter:b  punctuation:)
+ 48 |     assert or_l == or_r
+    | keyword:assert  variable:or_l  operator:==  variable:or_r
+ 50 |     fixed nand_l = a ~& b
+    | keyword:fixed  variable:nand_l  operator:=  parameter:a  operator:~&  parameter:b
+ 51 |     fixed nand_r = ~(a & b)
+    | keyword:fixed  variable:nand_r  operator:=  operator:~  punctuation:(  parameter:a  operator:&  parameter:b  punctuation:)
+ 52 |     assert nand_l == nand_r
+    | keyword:assert  variable:nand_l  operator:==  variable:nand_r
+ 54 |     fixed nor_l = a ~| b
+    | keyword:fixed  variable:nor_l  operator:=  parameter:a  operator:~|  parameter:b
+ 55 |     fixed nor_r = ~(a | b)
+    | keyword:fixed  variable:nor_r  operator:=  operator:~  punctuation:(  parameter:a  operator:|  parameter:b  punctuation:)
+ 56 |     assert nor_l == nor_r
+    | keyword:assert  variable:nor_l  operator:==  variable:nor_r
+ 58 |     fixed xnor_l = a ~^ b
+    | keyword:fixed  variable:xnor_l  operator:=  parameter:a  operator:~^  parameter:b
+ 59 |     fixed xnor_r = ~(a ^^ b)
+    | keyword:fixed  variable:xnor_r  operator:=  operator:~  punctuation:(  parameter:a  operator:^^  parameter:b  punctuation:)
+ 60 |     assert xnor_l == xnor_r
+    | keyword:assert  variable:xnor_l  operator:==  variable:xnor_r
+ 62 |     fixed dbl = ~(~a)
+    | keyword:fixed  variable:dbl  operator:=  operator:~  punctuation:(  operator:~  parameter:a  punctuation:)
+ 63 |     assert dbl == a
+    | keyword:assert  variable:dbl  operator:==  parameter:a
+ 64 |     fixed mask: unit = unit(255) >> shift
+    | keyword:fixed  variable:mask  punctuation::  type-builtin:unit  operator:=  type-builtin:unit  punctuation:(  number:255  punctuation:)  operator:>>  parameter:shift
+ 65 |     fixed roundtrip = ((a & mask) << shift) >> shift
+    | keyword:fixed  variable:roundtrip  operator:=  punctuation:(  punctuation:(  parameter:a  operator:&  variable:mask  punctuation:)  operator:<<  parameter:shift  punctuation:)  operator:>>  parameter:shift
+ 66 |     assert roundtrip == (a & mask)
+    | keyword:assert  variable:roundtrip  operator:==  punctuation:(  parameter:a  operator:&  variable:mask  punctuation:)
+ 67 | fi
+    | keyword:fi
+ 69 | task verify_sizes(r: int, k: int)
+    | keyword:task  task:verify_sizes  punctuation:(  parameter:r  punctuation::  type-builtin:int  punctuation:,  parameter:k  punctuation::  type-builtin:int  punctuation:)
+ 70 |     fixed a8 = int8((r % 256) - 128)
+    | keyword:fixed  variable:a8  operator:=  type-builtin:int8  punctuation:(  punctuation:(  parameter:r  operator:%  number:256  punctuation:)  operator:-  number:128  punctuation:)
+ 71 |     fixed b8 = int8(((r / 7) % 256) - 128)
+    | keyword:fixed  variable:b8  operator:=  type-builtin:int8  punctuation:(  punctuation:(  punctuation:(  parameter:r  operator:/  number:7  punctuation:)  operator:%  number:256  punctuation:)  operator:-  number:128  punctuation:)
+ 72 |     fixed n8 = a8 ~& b8
+    | keyword:fixed  variable:n8  operator:=  variable:a8  operator:~&  variable:b8
+ 73 |     fixed n8r = ~(a8 & b8)
+    | keyword:fixed  variable:n8r  operator:=  operator:~  punctuation:(  variable:a8  operator:&  variable:b8  punctuation:)
+ 74 |     assert n8 == n8r
+    | keyword:assert  variable:n8  operator:==  variable:n8r
+ 75 |     fixed r8 = a8 ~| b8
+    | keyword:fixed  variable:r8  operator:=  variable:a8  operator:~|  variable:b8
+ 76 |     fixed r8r = ~(a8 | b8)
+    | keyword:fixed  variable:r8r  operator:=  operator:~  punctuation:(  variable:a8  operator:|  variable:b8  punctuation:)
+ 77 |     assert r8 == r8r
+    | keyword:assert  variable:r8  operator:==  variable:r8r
+ 78 |     fixed x8 = a8 ~^ b8
+    | keyword:fixed  variable:x8  operator:=  variable:a8  operator:~^  variable:b8
+ 79 |     fixed x8r = ~(a8 ^^ b8)
+    | keyword:fixed  variable:x8r  operator:=  operator:~  punctuation:(  variable:a8  operator:^^  variable:b8  punctuation:)
+ 80 |     assert x8 == x8r
+    | keyword:assert  variable:x8  operator:==  variable:x8r
+ 81 |     fixed d8 = ~(~a8)
+    | keyword:fixed  variable:d8  operator:=  operator:~  punctuation:(  operator:~  variable:a8  punctuation:)
+ 82 |     assert d8 == a8
+    | keyword:assert  variable:d8  operator:==  variable:a8
+ 83 |     fixed s8 = k % 7
+    | keyword:fixed  variable:s8  operator:=  parameter:k  operator:%  number:7
+ 84 |     fixed sh8 = a8 << s8
+    | keyword:fixed  variable:sh8  operator:=  variable:a8  operator:<<  variable:s8
+ 85 |     assert (sh8 >> s8) <= a8 or (sh8 >> s8) > a8
+    | keyword:assert  punctuation:(  variable:sh8  operator:>>  variable:s8  punctuation:)  operator:<=  variable:a8  keyword:or  punctuation:(  variable:sh8  operator:>>  variable:s8  punctuation:)  operator:>  variable:a8
+ 87 |     fixed a16 = int16((r % 65536) - 32768)
+    | keyword:fixed  variable:a16  operator:=  type-builtin:int16  punctuation:(  punctuation:(  parameter:r  operator:%  number:65536  punctuation:)  operator:-  number:32768  punctuation:)
+ 88 |     fixed b16 = int16(((r / 13) % 65536) - 32768)
+    | keyword:fixed  variable:b16  operator:=  type-builtin:int16  punctuation:(  punctuation:(  punctuation:(  parameter:r  operator:/  number:13  punctuation:)  operator:%  number:65536  punctuation:)  operator:-  number:32768  punctuation:)
+ 89 |     fixed x16 = a16 ^^ b16
+    | keyword:fixed  variable:x16  operator:=  variable:a16  operator:^^  variable:b16
+ 90 |     fixed x16r = (a16 | b16) & ~(a16 & b16)
+    | keyword:fixed  variable:x16r  operator:=  punctuation:(  variable:a16  operator:|  variable:b16  punctuation:)  operator:&  operator:~  punctuation:(  variable:a16  operator:&  variable:b16  punctuation:)
+ 91 |     assert x16 == x16r
+    | keyword:assert  variable:x16  operator:==  variable:x16r
+ 92 |     fixed n16 = a16 ~& b16
+    | keyword:fixed  variable:n16  operator:=  variable:a16  operator:~&  variable:b16
+ 93 |     fixed n16r = ~(a16 & b16)
+    | keyword:fixed  variable:n16r  operator:=  operator:~  punctuation:(  variable:a16  operator:&  variable:b16  punctuation:)
+ 94 |     assert n16 == n16r
+    | keyword:assert  variable:n16  operator:==  variable:n16r
+ 96 |     fixed u16a = uint16(r % 65536)
+    | keyword:fixed  variable:u16a  operator:=  type-builtin:uint16  punctuation:(  parameter:r  operator:%  number:65536  punctuation:)
+ 97 |     fixed u16b = uint16((r / 17) % 65536)
+    | keyword:fixed  variable:u16b  operator:=  type-builtin:uint16  punctuation:(  punctuation:(  parameter:r  operator:/  number:17  punctuation:)  operator:%  number:65536  punctuation:)
+ 98 |     fixed s16 = k % 16
+    | keyword:fixed  variable:s16  operator:=  parameter:k  operator:%  number:16
+ 99 |     fixed mask16 = uint16(65535) >> s16
+    | keyword:fixed  variable:mask16  operator:=  type-builtin:uint16  punctuation:(  number:65535  punctuation:)  operator:>>  variable:s16
+100 |     fixed rt16 = ((u16a & mask16) << s16) >> s16
+    | keyword:fixed  variable:rt16  operator:=  punctuation:(  punctuation:(  variable:u16a  operator:&  variable:mask16  punctuation:)  operator:<<  variable:s16  punctuation:)  operator:>>  variable:s16
+101 |     assert rt16 == (u16a & mask16)
+    | keyword:assert  variable:rt16  operator:==  punctuation:(  variable:u16a  operator:&  variable:mask16  punctuation:)
+102 |     fixed r16 = u16a ~| u16b
+    | keyword:fixed  variable:r16  operator:=  variable:u16a  operator:~|  variable:u16b
+103 |     fixed r16r = ~(u16a | u16b)
+    | keyword:fixed  variable:r16r  operator:=  operator:~  punctuation:(  variable:u16a  operator:|  variable:u16b  punctuation:)
+104 |     assert r16 == r16r
+    | keyword:assert  variable:r16  operator:==  variable:r16r
+106 |     fixed a32 = int32((r % 2000000) - 1000000)
+    | keyword:fixed  variable:a32  operator:=  type-builtin:int32  punctuation:(  punctuation:(  parameter:r  operator:%  number:2000000  punctuation:)  operator:-  number:1000000  punctuation:)
+107 |     fixed b32 = int32(((r / 29) % 2000000) - 1000000)
+    | keyword:fixed  variable:b32  operator:=  type-builtin:int32  punctuation:(  punctuation:(  punctuation:(  parameter:r  operator:/  number:29  punctuation:)  operator:%  number:2000000  punctuation:)  operator:-  number:1000000  punctuation:)
+108 |     fixed x32 = a32 ~^ b32
+    | keyword:fixed  variable:x32  operator:=  variable:a32  operator:~^  variable:b32
+109 |     fixed x32r = ~(a32 ^^ b32)
+    | keyword:fixed  variable:x32r  operator:=  operator:~  punctuation:(  variable:a32  operator:^^  variable:b32  punctuation:)
+110 |     assert x32 == x32r
+    | keyword:assert  variable:x32  operator:==  variable:x32r
+111 |     fixed sh32 = a32 >> (k % 8)
+    | keyword:fixed  variable:sh32  operator:=  variable:a32  operator:>>  punctuation:(  parameter:k  operator:%  number:8  punctuation:)
+112 |     assert (sh32 << 0) == sh32
+    | keyword:assert  punctuation:(  variable:sh32  operator:<<  number:0  punctuation:)  operator:==  variable:sh32
+114 |     fixed u32a = uint32(r % 10000000)
+    | keyword:fixed  variable:u32a  operator:=  type-builtin:uint32  punctuation:(  parameter:r  operator:%  number:10000000  punctuation:)
+115 |     fixed s32 = k % 32
+    | keyword:fixed  variable:s32  operator:=  parameter:k  operator:%  number:32
+116 |     fixed mask32 = uint32(4294967295) >> s32
+    | keyword:fixed  variable:mask32  operator:=  type-builtin:uint32  punctuation:(  number:4294967295  punctuation:)  operator:>>  variable:s32
+117 |     fixed rt32 = ((u32a & mask32) << s32) >> s32
+    | keyword:fixed  variable:rt32  operator:=  punctuation:(  punctuation:(  variable:u32a  operator:&  variable:mask32  punctuation:)  operator:<<  variable:s32  punctuation:)  operator:>>  variable:s32
+118 |     assert rt32 == (u32a & mask32)
+    | keyword:assert  variable:rt32  operator:==  punctuation:(  variable:u32a  operator:&  variable:mask32  punctuation:)
+120 |     fixed u64a = uint64(r) * uint64(1000003) + uint64(k)
+    | keyword:fixed  variable:u64a  operator:=  type-builtin:uint64  punctuation:(  parameter:r  punctuation:)  operator:*  type-builtin:uint64  punctuation:(  number:1000003  punctuation:)  operator:+  type-builtin:uint64  punctuation:(  parameter:k  punctuation:)
+121 |     fixed u64b = uint64(k) * uint64(999983)
+    | keyword:fixed  variable:u64b  operator:=  type-builtin:uint64  punctuation:(  parameter:k  punctuation:)  operator:*  type-builtin:uint64  punctuation:(  number:999983  punctuation:)
+122 |     fixed n64 = u64a ~& u64b
+    | keyword:fixed  variable:n64  operator:=  variable:u64a  operator:~&  variable:u64b
+123 |     fixed n64r = ~(u64a & u64b)
+    | keyword:fixed  variable:n64r  operator:=  operator:~  punctuation:(  variable:u64a  operator:&  variable:u64b  punctuation:)
+124 |     assert n64 == n64r
+    | keyword:assert  variable:n64  operator:==  variable:n64r
+125 |     fixed s64 = k % 64
+    | keyword:fixed  variable:s64  operator:=  parameter:k  operator:%  number:64
+126 |     fixed all64 = ~uint64(0)
+    | keyword:fixed  variable:all64  operator:=  operator:~  type-builtin:uint64  punctuation:(  number:0  punctuation:)
+127 |     fixed mask64 = all64 >> uint64(s64)
+    | keyword:fixed  variable:mask64  operator:=  variable:all64  operator:>>  type-builtin:uint64  punctuation:(  variable:s64  punctuation:)
+128 |     fixed rt64 = ((u64a & mask64) << uint64(s64)) >> s64
+    | keyword:fixed  variable:rt64  operator:=  punctuation:(  punctuation:(  variable:u64a  operator:&  variable:mask64  punctuation:)  operator:<<  type-builtin:uint64  punctuation:(  variable:s64  punctuation:)  punctuation:)  operator:>>  variable:s64
+129 |     assert rt64 == (u64a & mask64)
+    | keyword:assert  variable:rt64  operator:==  punctuation:(  variable:u64a  operator:&  variable:mask64  punctuation:)
+130 | fi
+    | keyword:fi
+132 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+133 |     flex rng = Rng.new(9001)
+    | keyword:flex  variable:rng  operator:=  type:Rng  punctuation:.  method:new  punctuation:(  number:9001  punctuation:)
+134 |     flex trial_count = 0
+    | keyword:flex  variable:trial_count  operator:=  number:0
+135 |     each step_idx in 0..40
+    | keyword:each  variable:step_idx  keyword:in  number:0  operator:..  number:40
+136 |         fixed a = rng.next_int(-1000000000, 1000000000)
+    | keyword:fixed  variable:a  operator:=  variable:rng  punctuation:.  method:next_int  punctuation:(  operator:-  number:1000000000  punctuation:,  number:1000000000  punctuation:)
+137 |         fixed b = rng.next_int(-1000000000, 1000000000)
+    | keyword:fixed  variable:b  operator:=  variable:rng  punctuation:.  method:next_int  punctuation:(  operator:-  number:1000000000  punctuation:,  number:1000000000  punctuation:)
+138 |         verify_identities_i64(a, b)
+    | task:verify_identities_i64  punctuation:(  variable:a  punctuation:,  variable:b  punctuation:)
+140 |         fixed ua = unit(rng.next_int(0, 255))
+    | keyword:fixed  variable:ua  operator:=  type-builtin:unit  punctuation:(  variable:rng  punctuation:.  method:next_int  punctuation:(  number:0  punctuation:,  number:255  punctuation:)  punctuation:)
+141 |         fixed ub = unit(rng.next_int(0, 255))
+    | keyword:fixed  variable:ub  operator:=  type-builtin:unit  punctuation:(  variable:rng  punctuation:.  method:next_int  punctuation:(  number:0  punctuation:,  number:255  punctuation:)  punctuation:)
+142 |         fixed sh = rng.next_int(0, 7)
+    | keyword:fixed  variable:sh  operator:=  variable:rng  punctuation:.  method:next_int  punctuation:(  number:0  punctuation:,  number:7  punctuation:)
+143 |         verify_unit_identities(ua, ub, sh)
+    | task:verify_unit_identities  punctuation:(  variable:ua  punctuation:,  variable:ub  punctuation:,  variable:sh  punctuation:)
+145 |         fixed pos_r = rng.next_int(0, 100000000)
+    | keyword:fixed  variable:pos_r  operator:=  variable:rng  punctuation:.  method:next_int  punctuation:(  number:0  punctuation:,  number:100000000  punctuation:)
+146 |         verify_sizes(pos_r, step_idx)
+    | task:verify_sizes  punctuation:(  variable:pos_r  punctuation:,  variable:step_idx  punctuation:)
+148 |         ; Dynamic logic short-circuit & xor/nand/nor checks
+    | comment:; Dynamic logic short-circuit & xor/nand/nor checks
+149 |         flex calls = 0
+    | keyword:flex  variable:calls  operator:=  number:0
+150 |         fixed lhs = rng.next_bool()
+    | keyword:fixed  variable:lhs  operator:=  variable:rng  punctuation:.  method:next_bool  punctuation:(  punctuation:)
+151 |         fixed rhs = rng.next_bool()
+    | keyword:fixed  variable:rhs  operator:=  variable:rng  punctuation:.  method:next_bool  punctuation:(  punctuation:)
+152 |         fixed expect_xor = (lhs and !rhs) or (!lhs and rhs)
+    | keyword:fixed  variable:expect_xor  operator:=  punctuation:(  variable:lhs  keyword:and  operator:!  variable:rhs  punctuation:)  keyword:or  punctuation:(  operator:!  variable:lhs  keyword:and  variable:rhs  punctuation:)
+153 |         assert (lhs xor rhs) == expect_xor
+    | keyword:assert  punctuation:(  variable:lhs  keyword:xor  variable:rhs  punctuation:)  operator:==  variable:expect_xor
+154 |         assert (lhs nand rhs) == !(lhs and rhs)
+    | keyword:assert  punctuation:(  variable:lhs  keyword:nand  variable:rhs  punctuation:)  operator:==  operator:!  punctuation:(  variable:lhs  keyword:and  variable:rhs  punctuation:)
+155 |         assert (lhs nor rhs) == !(lhs or rhs)
+    | keyword:assert  punctuation:(  variable:lhs  keyword:nor  variable:rhs  punctuation:)  operator:==  operator:!  punctuation:(  variable:lhs  keyword:or  variable:rhs  punctuation:)
+157 |         fixed sc1 = false nand bump_side(&calls, rhs)
+    | keyword:fixed  variable:sc1  operator:=  keyword:false  keyword:nand  task:bump_side  punctuation:(  operator:&  variable:calls  punctuation:,  variable:rhs  punctuation:)
+158 |         assert sc1 and calls == 0
+    | keyword:assert  variable:sc1  keyword:and  variable:calls  operator:==  number:0
+159 |         fixed sc2 = true nor bump_side(&calls, rhs)
+    | keyword:fixed  variable:sc2  operator:=  keyword:true  keyword:nor  task:bump_side  punctuation:(  operator:&  variable:calls  punctuation:,  variable:rhs  punctuation:)
+160 |         assert !sc2 and calls == 0
+    | keyword:assert  operator:!  variable:sc2  keyword:and  variable:calls  operator:==  number:0
+161 |         fixed sc3 = true nand bump_side(&calls, rhs)
+    | keyword:fixed  variable:sc3  operator:=  keyword:true  keyword:nand  task:bump_side  punctuation:(  operator:&  variable:calls  punctuation:,  variable:rhs  punctuation:)
+162 |         assert sc3 == !rhs and calls == 1
+    | keyword:assert  variable:sc3  operator:==  operator:!  variable:rhs  keyword:and  variable:calls  operator:==  number:1
+163 |         trial_count += 1
+    | variable:trial_count  operator:+=  number:1
+164 |     fi
+    | keyword:fi
+166 |     ; Power-of-two shift consistency across 0..63
+    | comment:; Power-of-two shift consistency across 0..63
+167 |     flex pow2 = 1
+    | keyword:flex  variable:pow2  operator:=  number:1
+168 |     each s in 0..63
+    | keyword:each  variable:s  keyword:in  number:0  operator:..  number:63
+169 |         assert (1 << s) == pow2
+    | keyword:assert  punctuation:(  number:1  operator:<<  variable:s  punctuation:)  operator:==  variable:pow2
+170 |         when s < 62
+    | keyword:when  variable:s  operator:<  number:62
+171 |             pow2 *= 2
+    | variable:pow2  operator:*=  number:2
+172 |         fi
+    | keyword:fi
+173 |     fi
+    | keyword:fi
+175 |     show("dynamic_bitwise_trials=", trial_count)
+    | builtin-fn:show  punctuation:(  string:"dynamic_bitwise_trials="  punctuation:,  variable:trial_count  punctuation:)
+176 | fi
+    | keyword:fi

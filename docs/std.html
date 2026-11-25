@@ -484,7 +484,10 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
       <pre><span class="keyword">include</span> std/gui {Window, Canvas, GuiEvent, Point, Rect, Color, Style, Button, ProgressBar}
 
 <span class="keyword">task</span> main()
-    <span class="keyword">flex</span> win = Window.open(<span class="string">"GUI Application"</span>, 340, 220) { <span class="keyword">failure</span> _ &lt;- }
+    <span class="keyword">flex</span> win = Window.open(<span class="string">"GUI Application"</span>, 340, 220) {
+        <span class="keyword">failure</span> _
+            <span class="keyword">&lt;-</span>
+    }
     <span class="keyword">fixed</span> btn = Button { rect: Rect { x: 30, y: 120, width: 90, height: 36 }, label: <span class="string">"Action"</span>, style: Style.primary() }
     <span class="keyword">fixed</span> canvas = win.canvas()
 
@@ -581,7 +584,7 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r <span class="keyword">default</span>
-    <span class="keyword">fixed</span> raw = <span class="string">"\{&quot;name&quot;: &quot;Vela&quot;, &quot;stars&quot;: 100, &quot;active&quot;: true\}"</span>
+    <span class="keyword">fixed</span> raw = <span class="string">"\{\&quot;name\&quot;: \&quot;Vela\&quot;, \&quot;stars\&quot;: 100, \&quot;active\&quot;: true\}"</span>
     <span class="keyword">fixed</span> doc = parse(raw, r) { Json.Null }
     <span class="keyword">fixed</span> name = doc.get(<span class="string">"name"</span>) { Json.Null }.as_text() { <span class="string">""</span> }
     <span class="keyword">fixed</span> stars = doc.get(<span class="string">"stars"</span>) { Json.Null }.as_int() { 0 }
@@ -750,16 +753,23 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
     rate_limit: maybe float
 <span class="keyword">fi</span>
 
-<span class="keyword">task</span> main() -&gt; nothing ~ sys.EnvsFailure
+<span class="keyword">task</span> load_config(r: <span class="keyword">region</span>) -&gt; AppConfig@r ~ sys.EnvsFailure
+    <span class="keyword">&lt;-</span> sys.envs(sys.EnvNameCastModes.SNAKE_CASE, <span class="string">".env"</span>) <span class="keyword">at</span> r
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
     <span class="keyword">region</span> r
     <span class="comment">; 1. Typed CLI flag parsing from argv (name=value)</span>
-    <span class="keyword">fixed</span> port = sys.flag&lt;<span class="type">int</span>&gt;(<span class="string">"port"</span>, <span class="number">8080</span>)!
-    <span class="keyword">fixed</span> verbose = sys.flag(<span class="string">"verbose"</span>, <span class="keyword">false</span>, <span class="keyword">true</span>)!  <span class="comment">; parse_similars=true</span>
-    <span class="keyword">fixed</span> token = sys.flag&lt;text&gt;(<span class="string">"token"</span>) { <span class="string">"anonymous"</span> } <span class="comment">; Plan B on missing</span>
+    <span class="keyword">fixed</span> port = sys.flag&lt;<span class="type">int</span>&gt;(<span class="string">"port"</span>, <span class="number">8080</span>) { <span class="number">8080</span> }
+    <span class="keyword">fixed</span> verbose = sys.flag(<span class="string">"verbose"</span>, <span class="keyword">false</span>, <span class="keyword">true</span>) { <span class="keyword">false</span> } <span class="comment">; parse_similars=true</span>
+    <span class="keyword">fixed</span> token = sys.flag(<span class="string">"token"</span>, <span class="string">"anonymous"</span>)@r { <span class="string">"anonymous"</span> }
 
     <span class="comment">; 2. Deserialize .env file directly into AppConfig shape with SNAKE_CASE casting</span>
-    <span class="keyword">fixed</span> conf: AppConfig@r = sys.envs(sys.EnvNameCastModes.SNAKE_CASE, <span class="string">".env"</span>)!
-    show(<span class="string">"Server running at "</span>, conf.host, <span class="string">":"</span>, conf.port)
+    <span class="keyword">when</span> load_config(r) <span class="keyword">is</span> {conf}
+        show(<span class="string">"Server running at "</span>, conf.host, <span class="string">":"</span>, conf.port)
+    <span class="keyword">else</span>
+        show(<span class="string">"Default port="</span>, port, <span class="string">" verbose="</span>, verbose, <span class="string">" token="</span>, token)
+    <span class="keyword">fi</span>
 <span class="keyword">fi</span></pre>
       <table>
         <tr><th>Task / Shape</th><th>Role</th></tr>
@@ -784,11 +794,12 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
       <pre><span class="keyword">include</span> std/time {now_ms, monotonic_ns, sleep, Duration}
 
 <span class="keyword">task</span> main()
+    <span class="keyword">region</span> r <span class="keyword">default</span>
     <span class="keyword">fixed</span> start = monotonic_ns()
     sleep(<span class="number">50</span>)                               <span class="comment">; sleep 50 milliseconds</span>
     <span class="keyword">fixed</span> elapsed_ns = monotonic_ns() - start
     <span class="keyword">fixed</span> dur = Duration { ms: elapsed_ns / <span class="number">1000000</span> }
-    show(<span class="string">"Elapsed: "</span>, dur.seconds(), <span class="string">"s ("</span>, dur.str(), <span class="string">")"</span>)
+    show(<span class="string">"Elapsed: "</span>, dur.seconds(), <span class="string">"s ("</span>, dur.str(r), <span class="string">")"</span>)
 <span class="keyword">fi</span></pre>
       <table>
         <tr><th>Name</th><th>Role</th></tr>

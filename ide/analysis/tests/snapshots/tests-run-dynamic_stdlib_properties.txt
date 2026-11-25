@@ -1,0 +1,346 @@
+  1 | include std/collections
+    | keyword:include  module:std  operator:/  module:collections
+  2 | include std/int512 {Int512, int512, int512_from_uint64}
+    | keyword:include  module:std  operator:/  module:int512  punctuation:{  type:Int512  punctuation:,  task:int512  punctuation:,  task:int512_from_uint64  punctuation:}
+  3 | include std/json {Json, parse, stringify}
+    | keyword:include  module:std  operator:/  module:json  punctuation:{  type:Json  punctuation:,  task:parse  punctuation:,  task:stringify  punctuation:}
+  4 | include std/random {Rng}
+    | keyword:include  module:std  operator:/  module:random  punctuation:{  type:Rng  punctuation:}
+  5 | include std/sync {channel}
+    | keyword:include  module:std  operator:/  module:sync  punctuation:{  task:channel  punctuation:}
+  6 | include std/txt
+    | keyword:include  module:std  operator:/  module:txt
+  8 | shape WorkPacket
+    | keyword:shape  type:WorkPacket
+  9 |     id: int
+    | field:id  punctuation::  type-builtin:int
+ 10 |     weight: int
+    | field:weight  punctuation::  type-builtin:int
+ 11 | fi
+    | keyword:fi
+ 13 | kind AppErr
+    | keyword:kind  type:AppErr
+ 14 |     BadValue(code: int)
+    | variant:BadValue  punctuation:(  field:code  punctuation::  type-builtin:int  punctuation:)
+ 15 |     Wrapped(msg: text)
+    | variant:Wrapped  punctuation:(  field:msg  punctuation::  type-builtin:text  punctuation:)
+ 16 | fi
+    | keyword:fi
+ 18 | task wrap_err(why: text) -> AppErr
+    | keyword:task  task:wrap_err  punctuation:(  parameter:why  punctuation::  type-builtin:text  punctuation:)  operator:->  type:AppErr
+ 19 |     <- AppErr.BadValue(why.len)
+    | keyword:<-  type:AppErr  punctuation:.  variant:BadValue  punctuation:(  parameter:why  punctuation:.  field:len  punctuation:)
+ 20 | fi
+    | keyword:fi
+ 22 | task dynamic_fallible(n: int) -> int ~ text
+    | keyword:task  task:dynamic_fallible  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type-builtin:text
+ 23 |     when n < 0
+    | keyword:when  parameter:n  operator:<  number:0
+ 24 |         <- fail "neg"
+    | keyword:<-  keyword:fail  string:"neg"
+ 25 |     fi
+    | keyword:fi
+ 26 |     <- n * 2 + 1
+    | keyword:<-  parameter:n  operator:*  number:2  operator:+  number:1
+ 27 | fi
+    | keyword:fi
+ 29 | task chained_fallible(n: int) -> int ~ AppErr
+    | keyword:task  task:chained_fallible  punctuation:(  parameter:n  punctuation::  type-builtin:int  punctuation:)  operator:->  type-builtin:int  operator:~  type:AppErr
+ 30 |     fixed v = dynamic_fallible(n) !> wrap_err
+    | keyword:fixed  variable:v  operator:=  task:dynamic_fallible  punctuation:(  parameter:n  punctuation:)  operator:!>  task:wrap_err
+ 31 |     <- v + 10
+    | keyword:<-  variable:v  operator:+  number:10
+ 32 | fi
+    | keyword:fi
+ 34 | task worker_send(ch: Chan[own WorkPacket], count: int, offset: int)
+    | keyword:task  task:worker_send  punctuation:(  parameter:ch  punctuation::  type:Chan  punctuation:[  keyword:own  type:WorkPacket  punctuation:]  punctuation:,  parameter:count  punctuation::  type-builtin:int  punctuation:,  parameter:offset  punctuation::  type-builtin:int  punctuation:)
+ 35 |     each i in 0..count
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  parameter:count
+ 36 |         fixed pkt = WorkPacket { id: offset + i, weight: (i + 1) * 3 }
+    | keyword:fixed  variable:pkt  operator:=  type:WorkPacket  punctuation:{  field:id  punctuation::  parameter:offset  operator:+  variable:i  punctuation:,  field:weight  punctuation::  punctuation:(  variable:i  operator:+  number:1  punctuation:)  operator:*  number:3  punctuation:}
+ 37 |         own pkt ->> ch
+    | keyword:own  variable:pkt  operator:->>  parameter:ch
+ 38 |     fi
+    | keyword:fi
+ 39 | fi
+    | keyword:fi
+ 41 | task verify_sort_properties(flex xs: [int]@r, r: region)
+    | keyword:task  task:verify_sort_properties  punctuation:(  keyword:flex  parameter:xs  punctuation::  punctuation:[  type-builtin:int  punctuation:]  operator:@  region:r  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)
+ 42 |     fixed n = xs.len
+    | keyword:fixed  variable:n  operator:=  parameter:xs  punctuation:.  field:len
+ 43 |     flex xor_before = 0
+    | keyword:flex  variable:xor_before  operator:=  number:0
+ 44 |     flex sum_before = 0
+    | keyword:flex  variable:sum_before  operator:=  number:0
+ 45 |     each x in xs
+    | keyword:each  variable:x  keyword:in  parameter:xs
+ 46 |         xor_before = xor_before ^^ x
+    | variable:xor_before  operator:=  variable:xor_before  operator:^^  variable:x
+ 47 |         sum_before += x
+    | variable:sum_before  operator:+=  variable:x
+ 48 |     fi
+    | keyword:fi
+ 50 |     collections.sort(xs)
+    | module:collections  punctuation:.  task:sort  punctuation:(  parameter:xs  punctuation:)
+ 52 |     flex xor_after = 0
+    | keyword:flex  variable:xor_after  operator:=  number:0
+ 53 |     flex sum_after = 0
+    | keyword:flex  variable:sum_after  operator:=  number:0
+ 54 |     each i, x in xs
+    | keyword:each  variable:i  punctuation:,  variable:x  keyword:in  parameter:xs
+ 55 |         xor_after = xor_after ^^ x
+    | variable:xor_after  operator:=  variable:xor_after  operator:^^  variable:x
+ 56 |         sum_after += x
+    | variable:sum_after  operator:+=  variable:x
+ 57 |         when i + 1 < n
+    | keyword:when  variable:i  operator:+  number:1  operator:<  variable:n
+ 58 |             assert x <= xs[i + 1], "sort order violated at {i}" at r
+    | keyword:assert  variable:x  operator:<=  parameter:xs  punctuation:[  variable:i  operator:+  number:1  punctuation:]  punctuation:,  string:"sort order violated at {  variable:i  string:}"  keyword:at  region:r
+ 59 |         fi
+    | keyword:fi
+ 60 |     fi
+    | keyword:fi
+ 61 |     assert xor_before == xor_after
+    | keyword:assert  variable:xor_before  operator:==  variable:xor_after
+ 62 |     assert sum_before == sum_after
+    | keyword:assert  variable:sum_before  operator:==  variable:sum_after
+ 64 |     when n > 0
+    | keyword:when  variable:n  operator:>  number:0
+ 65 |         fixed mid_val = xs[n / 2]
+    | keyword:fixed  variable:mid_val  operator:=  parameter:xs  punctuation:[  variable:n  operator:/  number:2  punctuation:]
+ 66 |         assert collections.contains(xs, mid_val)
+    | keyword:assert  module:collections  punctuation:.  task:contains  punctuation:(  parameter:xs  punctuation:,  variable:mid_val  punctuation:)
+ 67 |     fi
+    | keyword:fi
+ 69 |     ; Check reverse involution via reversed()
+    | comment:; Check reverse involution via reversed()
+ 70 |     fixed rev1 = collections.reversed(xs, r)
+    | keyword:fixed  variable:rev1  operator:=  module:collections  punctuation:.  task:reversed  punctuation:(  parameter:xs  punctuation:,  region:r  punctuation:)
+ 71 |     fixed rev2 = collections.reversed(rev1, r)
+    | keyword:fixed  variable:rev2  operator:=  module:collections  punctuation:.  task:reversed  punctuation:(  variable:rev1  punctuation:,  region:r  punctuation:)
+ 72 |     assert rev2.len == n
+    | keyword:assert  variable:rev2  punctuation:.  field:len  operator:==  variable:n
+ 73 |     each i, v in xs
+    | keyword:each  variable:i  punctuation:,  variable:v  keyword:in  parameter:xs
+ 74 |         assert rev2[i] == v
+    | keyword:assert  variable:rev2  punctuation:[  variable:i  punctuation:]  operator:==  variable:v
+ 75 |     fi
+    | keyword:fi
+ 76 | fi
+    | keyword:fi
+ 78 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 79 |     region r default
+    | keyword:region  region:r  keyword:default
+ 80 |     flex rng = Rng.new(2026)
+    | keyword:flex  variable:rng  operator:=  type:Rng  punctuation:.  method:new  punctuation:(  number:2026  punctuation:)
+ 82 |     ; 1. Dynamic std/sync::channel<T> + rush concurrency verification
+    | comment:; 1. Dynamic std/sync::channel<T> + rush concurrency verification
+ 83 |     each trial in 1..=5
+    | keyword:each  variable:trial  keyword:in  number:1  operator:..=  number:5
+ 84 |         fixed cap = trial * 2
+    | keyword:fixed  variable:cap  operator:=  variable:trial  operator:*  number:2
+ 85 |         fixed ch = channel<own WorkPacket>(cap)
+    | keyword:fixed  variable:ch  operator:=  task:channel  punctuation:<  keyword:own  type:WorkPacket  punctuation:>  punctuation:(  variable:cap  punctuation:)
+ 86 |         fixed count = trial * 4
+    | keyword:fixed  variable:count  operator:=  variable:trial  operator:*  number:4
+ 87 |         fixed c1 = rush worker_send(ch, count, 100 * trial)
+    | keyword:fixed  variable:c1  operator:=  keyword:rush  task:worker_send  punctuation:(  variable:ch  punctuation:,  variable:count  punctuation:,  number:100  operator:*  variable:trial  punctuation:)
+ 88 |         flex total_w = 0
+    | keyword:flex  variable:total_w  operator:=  number:0
+ 89 |         each ri in 0..count
+    | keyword:each  variable:ri  keyword:in  number:0  operator:..  variable:count
+ 90 |             fixed pkt = <<- ch
+    | keyword:fixed  variable:pkt  operator:=  operator:<<-  variable:ch
+ 91 |             total_w += pkt.weight + (ri * 0)
+    | variable:total_w  operator:+=  variable:pkt  punctuation:.  field:weight  operator:+  punctuation:(  variable:ri  operator:*  number:0  punctuation:)
+ 92 |         fi
+    | keyword:fi
+ 93 |         <<- c1
+    | operator:<<-  variable:c1
+ 94 |         ch.close()
+    | variable:ch  punctuation:.  field:close  punctuation:(  punctuation:)
+ 95 |         fixed expected_w = (count * (count + 1) / 2) * 3
+    | keyword:fixed  variable:expected_w  operator:=  punctuation:(  variable:count  operator:*  punctuation:(  variable:count  operator:+  number:1  punctuation:)  operator:/  number:2  punctuation:)  operator:*  number:3
+ 96 |         assert total_w == expected_w
+    | keyword:assert  variable:total_w  operator:==  variable:expected_w
+ 97 |     fi
+    | keyword:fi
+ 99 |     ; 2. Dynamic collections.sort across sizes spanning insertion (<16) and heapsort/quicksort cutoffs
+    | comment:; 2. Dynamic collections.sort across sizes spanning insertion (<16) and heapsort/quicksort cutoffs
+100 |     fixed sizes = [0, 1, 2, 7, 15, 16, 17, 33, 64, 120]
+    | keyword:fixed  variable:sizes  operator:=  punctuation:[  number:0  punctuation:,  number:1  punctuation:,  number:2  punctuation:,  number:7  punctuation:,  number:15  punctuation:,  number:16  punctuation:,  number:17  punctuation:,  number:33  punctuation:,  number:64  punctuation:,  number:120  punctuation:]
+101 |     each n in sizes
+    | keyword:each  variable:n  keyword:in  variable:sizes
+102 |         flex rand_xs = new [int]() at r
+    | keyword:flex  variable:rand_xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+103 |         each ri in 0..n
+    | keyword:each  variable:ri  keyword:in  number:0  operator:..  variable:n
+104 |             rand_xs.add(rng.next_int(-200, 200) + (ri * 0))
+    | variable:rand_xs  punctuation:.  field:add  punctuation:(  variable:rng  punctuation:.  method:next_int  punctuation:(  operator:-  number:200  punctuation:,  number:200  punctuation:)  operator:+  punctuation:(  variable:ri  operator:*  number:0  punctuation:)  punctuation:)
+105 |         fi
+    | keyword:fi
+106 |         verify_sort_properties(rand_xs, r)
+    | task:verify_sort_properties  punctuation:(  variable:rand_xs  punctuation:,  region:r  punctuation:)
+108 |         ; Also check already-sorted and reverse-sorted slices
+    | comment:; Also check already-sorted and reverse-sorted slices
+109 |         flex rev_xs = new [int]() at r
+    | keyword:flex  variable:rev_xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+110 |         each j in 0..n
+    | keyword:each  variable:j  keyword:in  number:0  operator:..  variable:n
+111 |             rev_xs.add(n - j)
+    | variable:rev_xs  punctuation:.  field:add  punctuation:(  variable:n  operator:-  variable:j  punctuation:)
+112 |         fi
+    | keyword:fi
+113 |         verify_sort_properties(rev_xs, r)
+    | task:verify_sort_properties  punctuation:(  variable:rev_xs  punctuation:,  region:r  punctuation:)
+114 |     fi
+    | keyword:fi
+116 |     ; 3. Dynamic std/txt roundtrips & properties
+    | comment:; 3. Dynamic std/txt roundtrips & properties
+117 |     fixed vocab = ["alpha", "beta", "gamma", "delta", "epsilon"]
+    | keyword:fixed  variable:vocab  operator:=  punctuation:[  string:"alpha"  punctuation:,  string:"beta"  punctuation:,  string:"gamma"  punctuation:,  string:"delta"  punctuation:,  string:"epsilon"  punctuation:]
+118 |     each trial in 0..25
+    | keyword:each  variable:trial  keyword:in  number:0  operator:..  number:25
+119 |         region inner default
+    | keyword:region  region:inner  keyword:default
+120 |         flex chosen = new [text]() at inner
+    | keyword:flex  variable:chosen  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:inner
+121 |         fixed word_count = rng.next_int(1, 6)
+    | keyword:fixed  variable:word_count  operator:=  variable:rng  punctuation:.  method:next_int  punctuation:(  number:1  punctuation:,  number:6  punctuation:)
+122 |         each wi in 0..word_count
+    | keyword:each  variable:wi  keyword:in  number:0  operator:..  variable:word_count
+123 |             chosen.add(vocab[rng.next_int(0, 4)] + (when wi < 0 "" else "" fi) at inner)
+    | variable:chosen  punctuation:.  field:add  punctuation:(  variable:vocab  punctuation:[  variable:rng  punctuation:.  method:next_int  punctuation:(  number:0  punctuation:,  number:4  punctuation:)  punctuation:]  operator:+  punctuation:(  keyword:when  variable:wi  operator:<  number:0  string:""  keyword:else  string:""  keyword:fi  punctuation:)  keyword:at  region:inner  punctuation:)
+124 |         fi
+    | keyword:fi
+125 |         fixed joined = txt.join(chosen, "::", inner)
+    | keyword:fixed  variable:joined  operator:=  module:txt  punctuation:.  task:join  punctuation:(  variable:chosen  punctuation:,  string:"::"  punctuation:,  region:inner  punctuation:)
+126 |         fixed split_back = txt.split(joined, "::", inner)
+    | keyword:fixed  variable:split_back  operator:=  module:txt  punctuation:.  task:split  punctuation:(  variable:joined  punctuation:,  string:"::"  punctuation:,  region:inner  punctuation:)
+127 |         assert split_back.len == chosen.len
+    | keyword:assert  variable:split_back  punctuation:.  field:len  operator:==  variable:chosen  punctuation:.  field:len
+128 |         each idx, w in chosen
+    | keyword:each  variable:idx  punctuation:,  variable:w  keyword:in  variable:chosen
+129 |             assert split_back[idx] == w
+    | keyword:assert  variable:split_back  punctuation:[  variable:idx  punctuation:]  operator:==  variable:w
+130 |         fi
+    | keyword:fi
+132 |         fixed padded = "  " + joined + "\t\n" at inner
+    | keyword:fixed  variable:padded  operator:=  string:"  "  operator:+  variable:joined  operator:+  string:"  escape:\t  escape:\n  string:"  keyword:at  region:inner
+133 |         fixed trimmed = txt.trim(padded)
+    | keyword:fixed  variable:trimmed  operator:=  module:txt  punctuation:.  task:trim  punctuation:(  variable:padded  punctuation:)
+134 |         assert trimmed == joined
+    | keyword:assert  variable:trimmed  operator:==  variable:joined
+135 |         assert txt.trim(trimmed) == trimmed
+    | keyword:assert  module:txt  punctuation:.  task:trim  punctuation:(  variable:trimmed  punctuation:)  operator:==  variable:trimmed
+137 |         when txt.strip_prefix(trimmed, chosen[0]) is {rest}
+    | keyword:when  module:txt  punctuation:.  task:strip_prefix  punctuation:(  variable:trimmed  punctuation:,  variable:chosen  punctuation:[  number:0  punctuation:]  punctuation:)  keyword:is  punctuation:{  variable:rest  punctuation:}
+138 |             assert txt.starts_with(trimmed, chosen[0])
+    | keyword:assert  module:txt  punctuation:.  task:starts_with  punctuation:(  variable:trimmed  punctuation:,  variable:chosen  punctuation:[  number:0  punctuation:]  punctuation:)
+139 |             assert (chosen[0] + rest at inner) == trimmed
+    | keyword:assert  punctuation:(  variable:chosen  punctuation:[  number:0  punctuation:]  operator:+  variable:rest  keyword:at  region:inner  punctuation:)  operator:==  variable:trimmed
+140 |         else
+    | keyword:else
+141 |             assert false
+    | keyword:assert  keyword:false
+142 |         fi
+    | keyword:fi
+144 |         ; Inner -> outer replacement safety
+    | comment:; Inner -> outer replacement safety
+145 |         fixed rep_out = txt.replace(joined, "alpha", "OMEGA", r)
+    | keyword:fixed  variable:rep_out  operator:=  module:txt  punctuation:.  task:replace  punctuation:(  variable:joined  punctuation:,  string:"alpha"  punctuation:,  string:"OMEGA"  punctuation:,  region:r  punctuation:)
+146 |         !assert txt.contains(rep_out, "alpha")
+    | operator:!  keyword:assert  module:txt  punctuation:.  task:contains  punctuation:(  variable:rep_out  punctuation:,  string:"alpha"  punctuation:)
+147 |         assert trial >= 0
+    | keyword:assert  variable:trial  operator:>=  number:0
+148 |     fi
+    | keyword:fi
+150 |     ; 4. Dynamic std/int512 algebraic identities past 64-bit limbs
+    | comment:; 4. Dynamic std/int512 algebraic identities past 64-bit limbs
+151 |     each i5 in 0..25
+    | keyword:each  variable:i5  keyword:in  number:0  operator:..  number:25
+152 |         fixed lo_a = uint64(rng.next_int(1, 1000000000) + i5)
+    | keyword:fixed  variable:lo_a  operator:=  type-builtin:uint64  punctuation:(  variable:rng  punctuation:.  method:next_int  punctuation:(  number:1  punctuation:,  number:1000000000  punctuation:)  operator:+  variable:i5  punctuation:)
+153 |         fixed hi_a = uint64(rng.next_int(1, 1000000000))
+    | keyword:fixed  variable:hi_a  operator:=  type-builtin:uint64  punctuation:(  variable:rng  punctuation:.  method:next_int  punctuation:(  number:1  punctuation:,  number:1000000000  punctuation:)  punctuation:)
+154 |         fixed lo_b = uint64(rng.next_int(1, 1000000000))
+    | keyword:fixed  variable:lo_b  operator:=  type-builtin:uint64  punctuation:(  variable:rng  punctuation:.  method:next_int  punctuation:(  number:1  punctuation:,  number:1000000000  punctuation:)  punctuation:)
+155 |         flex a5 = int512_from_uint64(hi_a).times(int512_from_uint64(uint64(1) << 62)).plus(int512_from_uint64(lo_a))
+    | keyword:flex  variable:a5  operator:=  task:int512_from_uint64  punctuation:(  variable:hi_a  punctuation:)  punctuation:.  method:times  punctuation:(  task:int512_from_uint64  punctuation:(  type-builtin:uint64  punctuation:(  number:1  punctuation:)  operator:<<  number:62  punctuation:)  punctuation:)  punctuation:.  method:plus  punctuation:(  task:int512_from_uint64  punctuation:(  variable:lo_a  punctuation:)  punctuation:)
+156 |         flex b5 = int512_from_uint64(lo_b).plus(int512(1))
+    | keyword:flex  variable:b5  operator:=  task:int512_from_uint64  punctuation:(  variable:lo_b  punctuation:)  punctuation:.  method:plus  punctuation:(  task:int512  punctuation:(  number:1  punctuation:)  punctuation:)
+157 |         when rng.next_bool()
+    | keyword:when  variable:rng  punctuation:.  method:next_bool  punctuation:(  punctuation:)
+158 |             a5 = -a5
+    | variable:a5  operator:=  operator:-  variable:a5
+159 |         fi
+    | keyword:fi
+160 |         when rng.next_bool()
+    | keyword:when  variable:rng  punctuation:.  method:next_bool  punctuation:(  punctuation:)
+161 |             b5 = -b5
+    | variable:b5  operator:=  operator:-  variable:b5
+162 |         fi
+    | keyword:fi
+163 |         fixed q5 = a5.div(b5)
+    | keyword:fixed  variable:q5  operator:=  variable:a5  punctuation:.  method:div  punctuation:(  variable:b5  punctuation:)
+164 |         fixed r5 = a5.rem(b5)
+    | keyword:fixed  variable:r5  operator:=  variable:a5  punctuation:.  method:rem  punctuation:(  variable:b5  punctuation:)
+165 |         assert q5.times(b5).plus(r5).cmp(a5) == 0
+    | keyword:assert  variable:q5  punctuation:.  method:times  punctuation:(  variable:b5  punctuation:)  punctuation:.  method:plus  punctuation:(  variable:r5  punctuation:)  punctuation:.  method:cmp  punctuation:(  variable:a5  punctuation:)  operator:==  number:0
+166 |         assert a5.plus(b5).minus(b5).cmp(a5) == 0
+    | keyword:assert  variable:a5  punctuation:.  method:plus  punctuation:(  variable:b5  punctuation:)  punctuation:.  method:minus  punctuation:(  variable:b5  punctuation:)  punctuation:.  method:cmp  punctuation:(  variable:a5  punctuation:)  operator:==  number:0
+167 |     fi
+    | keyword:fi
+169 |     ; 5. Dynamic std/json build -> stringify -> parse roundtrip
+    | comment:; 5. Dynamic std/json build -> stringify -> parse roundtrip
+170 |     each t in 0..15
+    | keyword:each  variable:t  keyword:in  number:0  operator:..  number:15
+171 |         fixed id_v = rng.next_int(-5000, 5000)
+    | keyword:fixed  variable:id_v  operator:=  variable:rng  punctuation:.  method:next_int  punctuation:(  operator:-  number:5000  punctuation:,  number:5000  punctuation:)
+172 |         fixed fl_v = rng.next_bool()
+    | keyword:fixed  variable:fl_v  operator:=  variable:rng  punctuation:.  method:next_bool  punctuation:(  punctuation:)
+173 |         flex obj_props = new [text: Json]() at r
+    | keyword:flex  variable:obj_props  operator:=  keyword:new  punctuation:[  type-builtin:text  punctuation::  type:Json  punctuation:]  punctuation:(  punctuation:)  keyword:at  region:r
+174 |         obj_props["id"] = Json.Int(id_v)
+    | variable:obj_props  punctuation:[  string:"id"  punctuation:]  operator:=  type:Json  punctuation:.  variant:Int  punctuation:(  variable:id_v  punctuation:)
+175 |         obj_props["flag"] = Json.Bool(fl_v)
+    | variable:obj_props  punctuation:[  string:"flag"  punctuation:]  operator:=  type:Json  punctuation:.  variant:Bool  punctuation:(  variable:fl_v  punctuation:)
+176 |         obj_props["tag"] = Json.Str("v_{t}\"q\\n" at r)
+    | variable:obj_props  punctuation:[  string:"tag"  punctuation:]  operator:=  type:Json  punctuation:.  variant:Str  punctuation:(  string:"v_{  variable:t  string:}  escape:\"  string:q  escape:\\  string:n"  keyword:at  region:r  punctuation:)
+177 |         fixed tree: Json@r = Json.Object(obj_props)
+    | keyword:fixed  variable:tree  punctuation::  type:Json  operator:@  region:r  operator:=  type:Json  punctuation:.  variant:Object  punctuation:(  variable:obj_props  punctuation:)
+178 |         fixed serialized = stringify(tree, r)
+    | keyword:fixed  variable:serialized  operator:=  task:stringify  punctuation:(  variable:tree  punctuation:,  region:r  punctuation:)
+179 |         fixed parsed = parse(serialized, r) { Json.Null }
+    | keyword:fixed  variable:parsed  operator:=  task:parse  punctuation:(  variable:serialized  punctuation:,  region:r  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}
+180 |         fixed got_id = parsed.get("id") { Json.Null }.as_int() { -99999 }
+    | keyword:fixed  variable:got_id  operator:=  variable:parsed  punctuation:.  method:get  punctuation:(  string:"id"  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}  punctuation:.  method:as_int  punctuation:(  punctuation:)  punctuation:{  operator:-  number:99999  punctuation:}
+181 |         fixed got_flag = parsed.get("flag") { Json.Null }.as_bool() { !fl_v }
+    | keyword:fixed  variable:got_flag  operator:=  variable:parsed  punctuation:.  method:get  punctuation:(  string:"flag"  punctuation:)  punctuation:{  type:Json  punctuation:.  variant:Null  punctuation:}  punctuation:.  method:as_bool  punctuation:(  punctuation:)  punctuation:{  operator:!  variable:fl_v  punctuation:}
+182 |         assert got_id == id_v
+    | keyword:assert  variable:got_id  operator:==  variable:id_v
+183 |         assert got_flag == fl_v
+    | keyword:assert  variable:got_flag  operator:==  variable:fl_v
+184 |     fi
+    | keyword:fi
+186 |     ; 6. Dynamic ! / !> error chaining
+    | comment:; 6. Dynamic ! / !> error chaining
+187 |     each val in -5..=5
+    | keyword:each  variable:val  keyword:in  operator:-  number:5  operator:..=  number:5
+188 |         when chained_fallible(val) is {ok_v}
+    | keyword:when  task:chained_fallible  punctuation:(  variable:val  punctuation:)  keyword:is  punctuation:{  variable:ok_v  punctuation:}
+189 |             assert val >= 0 and ok_v == val * 2 + 11
+    | keyword:assert  variable:val  operator:>=  number:0  keyword:and  variable:ok_v  operator:==  variable:val  operator:*  number:2  operator:+  number:11
+190 |         else
+    | keyword:else
+191 |             assert val < 0
+    | keyword:assert  variable:val  operator:<  number:0
+192 |         fi
+    | keyword:fi
+193 |     fi
+    | keyword:fi
+195 |     show("dynamic_stdlib_ok=true")
+    | builtin-fn:show  punctuation:(  string:"dynamic_stdlib_ok=true"  punctuation:)
+196 | fi
+    | keyword:fi

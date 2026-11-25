@@ -558,14 +558,22 @@ xor  nand  nor</pre>
         If the condition fails, the process traps immediately, printing the source location and failed expression to standard error.
         An optional message expression (literal string, interpolation, or regional text <code>text@r</code>) can be provided after a comma:
       </p>
-      <pre><span class="keyword">task</span> deposit(flex balance: int, amount: int)
+      <pre><span class="keyword">task</span> deposit(flex&amp; balance: int, amount: int)
     <span class="keyword">assert</span> amount &gt; <span class="number">0</span>, <span class="string">"deposit amount must be positive"</span>
     balance += amount
     <span class="keyword">!assert</span> balance &lt; <span class="number">0</span>   <span class="comment">; verifies balance is not negative</span>
 <span class="keyword">fi</span>
 
-<span class="keyword">task</span> verify_equal&lt;T: same&gt;(a: T, b: T, r: <span class="keyword">region</span>)
-    <span class="keyword">assert</span> a == b, <span class="string">"mismatch between values"</span> <span class="keyword">at</span> r
+<span class="keyword">task</span> verify_equal&lt;T: same&gt;(a: T, b: T)
+    <span class="keyword">assert</span> a == b, <span class="string">"values must match"</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">flex</span> bal = <span class="number">100</span>
+    deposit(&amp;bal, <span class="number">25</span>)
+    verify_equal(bal, <span class="number">125</span>)
+    <span class="keyword">assert</span> bal &gt; <span class="number">0</span>, <span class="string">"invalid balance: {bal}"</span> <span class="keyword">at</span> r
 <span class="keyword">fi</span></pre>
       <p>
         Assertions compile to direct C runtime checks with zero allocation overhead when they succeed.
@@ -4250,6 +4258,7 @@ show(total)</pre>
         <li><strong>Inclusive slicing</strong>: <code>xs[1..=3]</code> and <code>text[1..=3]</code> slice from index 1 up to and including index 3 (equivalent to <code>1..4</code>). Slices do not permit step values; write an <code>each</code> loop or iterator to stride through elements.</li>
       </ul>
       <pre><span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
     <span class="keyword">fixed</span> words = [<span class="string">"alpha"</span>, <span class="string">"beta"</span>, <span class="string">"gamma"</span>]
     <span class="keyword">each</span> i, w <span class="keyword">in</span> words
         show(i, <span class="string">": "</span>, w)               <span class="comment">; 0: alpha, 1: beta, 2: gamma</span>
@@ -4259,6 +4268,7 @@ show(total)</pre>
     <span class="keyword">each</span> n <span class="keyword">in</span> <span class="number">0</span>..<span class="number">2</span>..=<span class="number">8</span>
         evens.add(n)                   <span class="comment">; [0, 2, 4, 6, 8]</span>
     <span class="keyword">fi</span>
+    show(evens)
 <span class="keyword">fi</span></pre>
 
       <h3 id="loop-values">Loops that give a value</h3>

@@ -448,6 +448,27 @@ fn docs_guide_programs() {
 }
 
 #[test]
+fn docs_std_programs() {
+    let page = fs::read_to_string(project_root().join("docs/std.html")).unwrap();
+    let programs = guide_programs(&page);
+    assert!(programs.len() >= 10, "found only {} whole programs in docs/std.html", programs.len());
+    let scratch = scratch_dir("std-docs");
+    let mut failures = Vec::new();
+    for (i, (code, wanted)) in programs.iter().enumerate() {
+        if wanted.is_some()
+            || code.lines().any(|line| line.trim_start().starts_with("include ") && !line.trim_start().starts_with("include std/"))
+        {
+            continue;
+        }
+        let source = scratch.join(format!("std_doc{:02}.vela", i));
+        fs::write(&source, code).unwrap();
+        failures.extend(check_strict_c(&source, &scratch));
+    }
+    let _ = fs::remove_dir_all(&scratch);
+    report("docs/std.html", failures);
+}
+
+#[test]
 fn docs_generated_c() {
     let page = fs::read_to_string(project_root().join("docs/regions.html")).unwrap();
     let (_, code, _) = doc_programs(&page).into_iter().find(|(name, _, _)| name == "01_first.vela").unwrap();

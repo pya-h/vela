@@ -1,0 +1,6 @@
+; error: 2:10: shift count must be in 0..64
+#BAD = 1 << 64
+
+task main()
+    show(BAD)
+fi

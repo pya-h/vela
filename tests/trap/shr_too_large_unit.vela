@@ -1,0 +1,6 @@
+; trap: shift count out of range at 5:12 in task 'main'
+task main()
+    flex u = unit(7)
+    flex shift = 8
+    show(u >> shift)
+fi

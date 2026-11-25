@@ -1,0 +1,196 @@
+include std/collections
+include std/int512 {Int512, int512, int512_from_uint64}
+include std/json {Json, parse, stringify}
+include std/random {Rng}
+include std/sync {channel}
+include std/txt
+
+shape WorkPacket
+    id: int
+    weight: int
+fi
+
+kind AppErr
+    BadValue(code: int)
+    Wrapped(msg: text)
+fi
+
+task wrap_err(why: text) -> AppErr
+    <- AppErr.BadValue(why.len)
+fi
+
+task dynamic_fallible(n: int) -> int ~ text
+    when n < 0
+        <- fail "neg"
+    fi
+    <- n * 2 + 1
+fi
+
+task chained_fallible(n: int) -> int ~ AppErr
+    fixed v = dynamic_fallible(n) !> wrap_err
+    <- v + 10
+fi
+
+task worker_send(ch: Chan[own WorkPacket], count: int, offset: int)
+    each i in 0..count
+        fixed pkt = WorkPacket { id: offset + i, weight: (i + 1) * 3 }
+        own pkt ->> ch
+    fi
+fi
+
+task verify_sort_properties(flex xs: [int]@r, r: region)
+    fixed n = xs.len
+    flex xor_before = 0
+    flex sum_before = 0
+    each x in xs
+        xor_before = xor_before ^^ x
+        sum_before += x
+    fi
+
+    collections.sort(xs)
+
+    flex xor_after = 0
+    flex sum_after = 0
+    each i, x in xs
+        xor_after = xor_after ^^ x
+        sum_after += x
+        when i + 1 < n
+            assert x <= xs[i + 1], "sort order violated at {i}" at r
+        fi
+    fi
+    assert xor_before == xor_after
+    assert sum_before == sum_after
+
+    when n > 0
+        fixed mid_val = xs[n / 2]
+        assert collections.contains(xs, mid_val)
+    fi
+
+    ; Check reverse involution via reversed()
+    fixed rev1 = collections.reversed(xs, r)
+    fixed rev2 = collections.reversed(rev1, r)
+    assert rev2.len == n
+    each i, v in xs
+        assert rev2[i] == v
+    fi
+fi
+
+task main()
+    region r default
+    flex rng = Rng.new(2026)
+
+    ; 1. Dynamic std/sync::channel<T> + rush concurrency verification
+    each trial in 1..=5
+        fixed cap = trial * 2
+        fixed ch = channel<own WorkPacket>(cap)
+        fixed count = trial * 4
+        fixed c1 = rush worker_send(ch, count, 100 * trial)
+        flex total_w = 0
+        each ri in 0..count
+            fixed pkt = <<- ch
+            total_w += pkt.weight + (ri * 0)
+        fi
+        <<- c1
+        ch.close()
+        fixed expected_w = (count * (count + 1) / 2) * 3
+        assert total_w == expected_w
+    fi
+
+    ; 2. Dynamic collections.sort across sizes spanning insertion (<16) and heapsort/quicksort cutoffs
+    fixed sizes = [0, 1, 2, 7, 15, 16, 17, 33, 64, 120]
+    each n in sizes
+        flex rand_xs = new [int]() at r
+        each ri in 0..n
+            rand_xs.add(rng.next_int(-200, 200) + (ri * 0))
+        fi
+        verify_sort_properties(rand_xs, r)
+
+        ; Also check already-sorted and reverse-sorted slices
+        flex rev_xs = new [int]() at r
+        each j in 0..n
+            rev_xs.add(n - j)
+        fi
+        verify_sort_properties(rev_xs, r)
+    fi
+
+    ; 3. Dynamic std/txt roundtrips & properties
+    fixed vocab = ["alpha", "beta", "gamma", "delta", "epsilon"]
+    each trial in 0..25
+        region inner default
+        flex chosen = new [text]() at inner
+        fixed word_count = rng.next_int(1, 6)
+        each wi in 0..word_count
+            chosen.add(vocab[rng.next_int(0, 4)] + (when wi < 0 "" else "" fi) at inner)
+        fi
+        fixed joined = txt.join(chosen, "::", inner)
+        fixed split_back = txt.split(joined, "::", inner)
+        assert split_back.len == chosen.len
+        each idx, w in chosen
+            assert split_back[idx] == w
+        fi
+
+        fixed padded = "  " + joined + "\t\n" at inner
+        fixed trimmed = txt.trim(padded)
+        assert trimmed == joined
+        assert txt.trim(trimmed) == trimmed
+
+        when txt.strip_prefix(trimmed, chosen[0]) is {rest}
+            assert txt.starts_with(trimmed, chosen[0])
+            assert (chosen[0] + rest at inner) == trimmed
+        else
+            assert false
+        fi
+
+        ; Inner -> outer replacement safety
+        fixed rep_out = txt.replace(joined, "alpha", "OMEGA", r)
+        !assert txt.contains(rep_out, "alpha")
+        assert trial >= 0
+    fi
+
+    ; 4. Dynamic std/int512 algebraic identities past 64-bit limbs
+    each i5 in 0..25
+        fixed lo_a = uint64(rng.next_int(1, 1000000000) + i5)
+        fixed hi_a = uint64(rng.next_int(1, 1000000000))
+        fixed lo_b = uint64(rng.next_int(1, 1000000000))
+        flex a5 = int512_from_uint64(hi_a).times(int512_from_uint64(uint64(1) << 62)).plus(int512_from_uint64(lo_a))
+        flex b5 = int512_from_uint64(lo_b).plus(int512(1))
+        when rng.next_bool()
+            a5 = -a5
+        fi
+        when rng.next_bool()
+            b5 = -b5
+        fi
+        fixed q5 = a5.div(b5)
+        fixed r5 = a5.rem(b5)
+        assert q5.times(b5).plus(r5).cmp(a5) == 0
+        assert a5.plus(b5).minus(b5).cmp(a5) == 0
+    fi
+
+    ; 5. Dynamic std/json build -> stringify -> parse roundtrip
+    each t in 0..15
+        fixed id_v = rng.next_int(-5000, 5000)
+        fixed fl_v = rng.next_bool()
+        flex obj_props = new [text: Json]() at r
+        obj_props["id"] = Json.Int(id_v)
+        obj_props["flag"] = Json.Bool(fl_v)
+        obj_props["tag"] = Json.Str("v_{t}\"q\\n" at r)
+        fixed tree: Json@r = Json.Object(obj_props)
+        fixed serialized = stringify(tree, r)
+        fixed parsed = parse(serialized, r) { Json.Null }
+        fixed got_id = parsed.get("id") { Json.Null }.as_int() { -99999 }
+        fixed got_flag = parsed.get("flag") { Json.Null }.as_bool() { !fl_v }
+        assert got_id == id_v
+        assert got_flag == fl_v
+    fi
+
+    ; 6. Dynamic ! / !> error chaining
+    each val in -5..=5
+        when chained_fallible(val) is {ok_v}
+            assert val >= 0 and ok_v == val * 2 + 11
+        else
+            assert val < 0
+        fi
+    fi
+
+    show("dynamic_stdlib_ok=true")
+fi
