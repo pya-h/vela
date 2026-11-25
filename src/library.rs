@@ -101,6 +101,7 @@ pub const NATIVES: &[(&str, &str)] = &[
     ("std/txt.native_text_trim_start", "vela__rt__text_trim_start"),
     ("std/txt.native_text_trim_end", "vela__rt__text_trim_end"),
     ("std/txt.native_text_replace", "vela__rt__text_replace"),
+    ("std/txt.native_text_repeat", "vela__rt__text_repeat"),
     ("std/txt.native_text_eq_ignore_case", "vela__rt__web_text_eq_ignore_case"),
     ("std/txt.native_text_bytes", "vela__rt__web_text_bytes"),
     ("std/time.native_now_ms", "vela__rt__time_now_ms"),

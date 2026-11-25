@@ -352,7 +352,7 @@ fn collect_test_files(root: &Path) -> Result<Vec<PathBuf>, String> {
                 }
             } else if path.extension().and_then(|e| e.to_str()) == Some("vela")
                 && let Ok(text) = fs::read_to_string(&path)
-                && text.contains("#test")
+                && text.lines().any(|line| line.trim() == "#test")
             {
                 out.push(path);
             }

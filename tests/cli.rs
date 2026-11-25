@@ -697,23 +697,25 @@ fn test_subcommand_isolates_assert_traps_and_failures() {
     let helper_file = dir.join("plain.vela");
     std::fs::write(
         &test_file,
-        "task main()\n    show(\"should not run\")\nfi\n\n#test\ntask pass_ok()\n    assert 1 + 1 == 2\nfi\n\n#test\ntask trap_fail()\n    assert 1 == 2, \"math broke\"\nfi\n\n#test\ntask err_fail() -> nothing ~ text\n    <- fail \"bad input\"\nfi\n",
+        "include std/collections\ninclude std/random\ninclude std/txt\n\nkind TestErr\n    Bad\nfi\n\ntask main()\n    show(\"should not run\")\nfi\n\n#test\ntask pass_ok()\n    assert 1 + 1 == 2\n    region r default\n    assert txt.repeat(\"ab\", 3, r) == \"ababab\"\n    flex first_rng = random.Rng.new(42)\n    fixed want = first_rng.next_int(1, 1000)\n    each k in 0..70\n        flex tmp = random.Rng.new(999 + k)\n        assert tmp.next_int(1, 10) >= 1\n    fi\n    flex dup = random.Rng.new(42)\n    assert dup.next_int(1, 1000) == want\n    assert first_rng.next_int(1, 1000) == dup.next_int(1, 1000)\n    flex big = new [int]() at r\n    each i in 0..64\n        big.add(64 - i)\n    fi\n    collections.sort(big)\n    each i in 0..64\n        assert big[i] == i + 1\n    fi\nfi\n\n#test\ntask trap_fail()\n    assert 1 == 2, \"math broke\"\nfi\n\n#test\ntask err_fail() -> nothing ~ text\n    <- fail \"bad input\"\nfi\n\n#test\ntask custom_err_fail() -> nothing ~ TestErr\n    <- fail TestErr.Bad\nfi\n",
     )
     .unwrap();
-    std::fs::write(&helper_file, "task helper()\nfi\n").unwrap();
+    std::fs::write(&helper_file, "; comment mentioning #test\ntask helper()\nfi\n").unwrap();
 
     let out = vela(&["test", test_file.to_str().unwrap()]);
     assert_eq!(out.status.code(), Some(1));
     let stdout = String::from_utf8_lossy(&out.stdout);
     let err = stderr(&out);
-    assert!(stdout.contains("running 3 tests"), "{}", stdout);
+    assert!(stdout.contains("running 4 tests"), "stdout={}\nstderr={}", stdout, err);
     assert!(stdout.contains("test pass_ok ... ok"), "{}", stdout);
     assert!(stdout.contains("test trap_fail ... FAILED"), "{}", stdout);
     assert!(stdout.contains("test err_fail ... FAILED"), "{}", stdout);
-    assert!(stdout.contains("test result: FAILED. 1 passed; 2 failed"), "{}", stdout);
+    assert!(stdout.contains("test custom_err_fail ... FAILED"), "{}", stdout);
+    assert!(stdout.contains("test result: FAILED. 1 passed; 3 failed"), "{}", stdout);
     assert!(!stdout.contains("should not run"), "{}", stdout);
     assert!(err.contains("math broke"), "{}", err);
     assert!(err.contains("bad input"), "{}", err);
+    assert!(err.contains("Bad"), "{}", err);
 
     let out = vela(&["test", dir.to_str().unwrap(), "--filter", "pass_ok"]);
     assert!(out.status.success(), "{}{}", String::from_utf8_lossy(&out.stdout), stderr(&out));
@@ -721,5 +723,254 @@ fn test_subcommand_isolates_assert_traps_and_failures() {
     assert!(stdout.contains("running 1 test"), "{}", stdout);
     assert!(stdout.contains("pass_ok ... ok"), "{}", stdout);
     assert!(stdout.contains("test result: ok. 1 passed; 0 failed"), "{}", stdout);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn sys_flag_parses_typed_flags_defaults_plan_b_and_similars() {
+    let dir = temp_dir("sys-flags");
+    let src = dir.join("flags.vela");
+    let exe = dir.join("flags");
+    std::fs::write(
+        &src,
+        "include std/sys\n\n\
+task run_scalars() -> int ~ sys.CliFlagParseError\n\
+    fixed age = sys.flag(\"age\", 18)!\n\
+    fixed req = sys.flag<int>(\"req\")!\n\
+    fixed opt = sys.flag(\"opt\") { 7 }\n\
+    fixed rounded = sys.flag(\"round\", 10, true) { 0 }\n\
+    fixed ratio = sys.flag<float>(\"ratio\", 1.5)\n\
+    fixed ratio_ok = match ratio\n\
+        case {v} = v\n\
+        case failure _ = -1.0\n\
+    fi\n\
+    fixed ratio_sim = sys.flag(\"ratio\", 0.0, true)!\n\
+    fixed enabled = sys.flag(\"enabled\", false, true)!\n\
+    show(\"age=\", age)\n\
+    show(\"req=\", req)\n\
+    show(\"opt=\", opt)\n\
+    show(\"rounded=\", rounded)\n\
+    show(\"ratio_strict=\", ratio_ok)\n\
+    show(\"ratio_sim=\", ratio_sim)\n\
+    show(\"enabled=\", enabled)\n\
+    <- age + req\n\
+fi\n\n\
+task run_text(r: region) -> nothing ~ sys.CliFlagParseError\n\
+    fixed label = sys.flag(\"--label\", \"none\", false, r)!\n\
+    fixed plain_label = sys.flag(\"label\", \"plain-none\")@r!\n\
+    show(\"--label=\", label)\n\
+    show(\"label=\", plain_label)\n\
+fi\n\n\
+task main()\n\
+    fixed sum = run_scalars() {\n\
+        failure err\n\
+            show(\"err=\", err)\n\
+            -1\n\
+    }\n\
+    show(\"sum=\", sum)\n\
+    region r default\n\
+    when sys.cwd() is {dir}\n\
+        show(\"cwd_ok=\", dir.len > 0)\n\
+    else\n\
+        show(\"cwd_ok=false\")\n\
+    fi\n\
+    run_text(r) {\n\
+        failure err\n\
+            show(\"text_err=\", err)\n\
+    }\n\
+fi\n",
+    )
+    .unwrap();
+
+    let out = vela(&[src.to_str().unwrap(), "-o", exe.to_str().unwrap()]);
+    assert!(out.status.success(), "{}", stderr(&out));
+
+    // Case 1: full valid values with exact --label vs label, repeated flag (last wins), spaces in value, similars enabled
+    let run1 = Command::new(&exe)
+        .args([
+            "req=5",
+            "req=12",
+            "round=3.6",
+            "ratio=4",
+            "enabled=YES",
+            "--label=hello world",
+            "label=other",
+        ])
+        .output()
+        .unwrap();
+    assert!(run1.status.success(), "{}", String::from_utf8_lossy(&run1.stderr));
+    assert_eq!(
+        String::from_utf8_lossy(&run1.stdout),
+        "age=18\nreq=12\nopt=7\nrounded=4\nratio_strict=-1\nratio_sim=4\nenabled=true\nsum=30\ncwd_ok=true\n--label=hello world\nlabel=other\n"
+    );
+
+    // Case 2: mandatory flag missing -> NotPassed, Plan B still works after failure
+    let run2 = Command::new(&exe).args(["age=20"]).output().unwrap();
+    assert!(run2.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&run2.stdout),
+        "err=flag was not passed\nsum=-1\ncwd_ok=true\n--label=none\nlabel=plain-none\n"
+    );
+
+    // Case 3: unparseable round falls back to Plan B (0), not default (10)
+    let run3 = Command::new(&exe)
+        .args(["req=1", "round=bad", "ratio=2.5"])
+        .output()
+        .unwrap();
+    assert!(run3.status.success());
+    let stdout3 = String::from_utf8_lossy(&run3.stdout);
+    assert!(stdout3.contains("rounded=0\n"), "{}", stdout3);
+    assert!(stdout3.contains("ratio_strict=2.5\n"), "{}", stdout3);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn sys_env_parsed_envs_and_os_envs_cover_dotenv_modes_and_priority() {
+    let dir = temp_dir("sys-envs");
+    let src = dir.join("envs.vela");
+    let exe = dir.join("envs");
+    let dotenv = dir.join("app.env");
+    let bad_env = dir.join("bad.env");
+
+    std::fs::write(
+        &dotenv,
+        "# config\nexport APP_HOST = \"127.0.0.1\" # local\nPORT=8080\nRATE=3.5\nVERBOSE=yes\nTAG=alpha\nOPT_SET=42\n",
+    )
+    .unwrap();
+    std::fs::write(&bad_env, "NOT_A_VALID_LINE\n").unwrap();
+
+    std::fs::write(
+        &src,
+        "include std/sys\n\n\
+shape AppEnv\n\
+    appHost: text\n\
+    port: int\n\
+    rate: float = 1.0\n\
+    verbose: bool\n\
+    missingWithDef: text = \"def_txt\"\n\
+    optInt: maybe int\n\
+    optSet: maybe int\n\
+    optDefText: maybe text = \"hi\"\n\
+    optNoneText: maybe text = none\n\
+fi\n\n\
+shape StrictEnv\n\
+    tag: text\n\
+    fromOs: text\n\
+fi\n\n\
+task load_dotenv(path: text@r, r: region default) -> nothing ~ sys.EnvsFailure\n\
+    fixed cfg: AppEnv@r = sys.envs(sys.EnvNameCastModes.CAMELCASE, path, false, true, true)!\n\
+    show(\"host=\", cfg.appHost, \" port=\", cfg.port, \" rate=\", cfg.rate, \" verbose=\", cfg.verbose, \" def=\", cfg.missingWithDef)\n\
+    when cfg.optInt is none\n\
+        show(\"optInt=none\")\n\
+    else\n\
+        show(\"optInt=some\")\n\
+    fi\n\
+    when cfg.optSet is {v}\n\
+        show(\"optSet=\", v)\n\
+    fi\n\
+    when cfg.optDefText is {v}\n\
+        show(\"optDefText=\", v)\n\
+    fi\n\
+    when cfg.optNoneText is none\n\
+        show(\"optNoneText=none\")\n\
+    fi\n\
+fi\n\n\
+task load_strict(path: text@r, use_os: bool, r: region default) -> text@r\n\
+    fixed res = sys.envs<StrictEnv@r>(sys.EnvNameCastModes.CAMELCASE, path, use_os)\n\
+    <- match res\n\
+    case {v} = \"ok:\" + v.tag + \":\" + v.fromOs at r\n\
+    case failure err = \"err:\" + err.str(r) at r\n\
+    fi\n\
+fi\n\n\
+task main()\n\
+    region r default\n\
+    fixed argv = sys.args()\n\
+    fixed p1 = argv[1]\n\
+    load_dotenv(p1, r) {\n\
+        failure err\n\
+            show(\"dotenv_err=\", err.str(r))\n\
+    }\n\
+    show(\"strict_no_os=\", load_strict(p1, false, r))\n\
+    show(\"strict_with_os=\", load_strict(p1, true, r))\n\
+    fixed os_only = sys.os_envs<StrictEnv>(sys.EnvNameCastModes.CAMELCASE) {\n\
+        failure _\n\
+            StrictEnv { tag: \"err\", fromOs: \"err\" }\n\
+    }\n\
+    show(\"os_only=\", os_only.tag, \":\", os_only.fromOs)\n\
+    fixed ep = sys.env_parsed<int>(\"PORT_ENV\", none, false, true) {\n\
+        failure _\n\
+            -1\n\
+    }\n\
+    show(\"env_parsed=\", ep)\n\
+    fixed raw = sys.os_env(\"TAG\")\n\
+    when raw is {v}\n\
+        show(\"os_raw=\", v)\n\
+    fi\n\
+    fixed bad_path = argv[2]\n\
+    show(\"bad_file=\", load_strict(bad_path, false, r))\n\
+    show(\"missing_file=\", load_strict(\"no_such_file.env\", false, r))\n\
+    show(\"missing_fallback=\", load_strict(\"no_such_file.env\", true, r))\n\
+fi\n",
+    )
+    .unwrap();
+
+    let out = vela(&[src.to_str().unwrap(), "-o", exe.to_str().unwrap()]);
+    assert!(out.status.success(), "{}", stderr(&out));
+
+    let run = Command::new(&exe)
+        .args([dotenv.to_str().unwrap(), bad_env.to_str().unwrap()])
+        .env("TAG", "from_os_tag")
+        .env("FROM_OS", "os_val")
+        .env("OPT_SET", "42")
+        .env("PORT_ENV", " 9090 ")
+        .output()
+        .unwrap();
+    assert!(run.status.success(), "{}", String::from_utf8_lossy(&run.stderr));
+    let stdout = String::from_utf8_lossy(&run.stdout);
+    assert!(
+        stdout.contains("host=127.0.0.1 port=8080 rate=3.5 verbose=true def=def_txt\n"),
+        "{}",
+        stdout
+    );
+    assert!(stdout.contains("optInt=none\n"), "{}", stdout);
+    assert!(stdout.contains("optSet=42\n"), "{}", stdout);
+    assert!(stdout.contains("optDefText=hi\n"), "{}", stdout);
+    assert!(stdout.contains("optNoneText=none\n"), "{}", stdout);
+    assert!(stdout.contains("strict_no_os=err:missing required environment field\n"), "{}", stdout);
+    // `.env` has TAG=alpha which must override OS TAG=from_os_tag; FROM_OS comes from OS.
+    assert!(stdout.contains("strict_with_os=ok:alpha:os_val\n"), "{}", stdout);
+    assert!(stdout.contains("os_only=from_os_tag:os_val\n"), "{}", stdout);
+    assert!(stdout.contains("env_parsed=9090\n"), "{}", stdout);
+    assert!(stdout.contains("os_raw=from_os_tag\n"), "{}", stdout);
+    assert!(stdout.contains("bad_file=err:invalid line in .env file\n"), "{}", stdout);
+    assert!(stdout.contains("missing_file=err:.env file not found\n"), "{}", stdout);
+    assert!(stdout.contains("missing_fallback=ok:from_os_tag:os_val\n"), "{}", stdout);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn sys_parse_rejects_invalid_generic_targets() {
+    let dir = temp_dir("sys-invalid");
+    let bad_flag = dir.join("bad_flag.vela");
+    let bad_shape = dir.join("bad_shape.vela");
+    std::fs::write(
+        &bad_flag,
+        "include std/sys\nshape S\n    x: int\nfi\ntask run() -> S ~ sys.CliFlagParseError\n    <- sys.flag<S>(\"x\")!\nfi\ntask main()\nfi\n",
+    )
+    .unwrap();
+    std::fs::write(
+        &bad_shape,
+        "include std/sys\nshape Bad\n    xs: [int]\nfi\ntask run(r: region) -> Bad@r ~ sys.EnvsFailure\n    <- sys.envs<Bad@r>()!\nfi\ntask main()\nfi\n",
+    )
+    .unwrap();
+    let out1 = vela(&[bad_flag.to_str().unwrap(), "--check"]);
+    assert!(!out1.status.success());
+    let err1 = stderr(&out1);
+    assert!(err1.contains("expects a number, 'bool', 'char', or 'text' as 'T'"), "{}", err1);
+
+    let out2 = vela(&[bad_shape.to_str().unwrap(), "--check"]);
+    assert!(!out2.status.success());
+    let err2 = stderr(&out2);
+    assert!(err2.contains("does not support"), "{}", err2);
     let _ = std::fs::remove_dir_all(&dir);
 }

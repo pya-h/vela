@@ -1,4 +1,60 @@
-; std/sys: command-line arguments, environment variables, working directory, and process exit.
+; std/sys: command-line arguments, flags, environment variables, .env files, working directory, and process exit.
+
+kind CliFlagParseError
+    NotPassed
+    InvalidFlagValue
+    WrongFlagType
+
+    str(r: region default) -> text@r
+        <- match .this
+        case NotPassed = "flag was not passed"
+        case InvalidFlagValue = "flag value could not be parsed"
+        case WrongFlagType = "flag value does not match requested type"
+        fi
+    fi
+fi
+
+kind EnvParseError
+    NotSet
+    InvalidEnvValue
+    WrongEnvType
+
+    str(r: region default) -> text@r
+        <- match .this
+        case NotSet = "environment variable is not set"
+        case InvalidEnvValue = "environment variable could not be parsed"
+        case WrongEnvType = "environment variable does not match requested type"
+        fi
+    fi
+fi
+
+kind EnvsFailure
+    FileNotFound
+    InvalidLine
+    MissingField
+    InvalidFieldValue
+    UnsupportedField
+
+    str(r: region default) -> text@r
+        <- match .this
+        case FileNotFound = ".env file not found"
+        case InvalidLine = "invalid line in .env file"
+        case MissingField = "missing required environment field"
+        case InvalidFieldValue = "environment value could not be parsed"
+        case UnsupportedField = "shape field type is not supported by env parser"
+        fi
+    fi
+fi
+
+kind EnvNameCastModes
+    NONE
+    UPPERCASE
+    LOWERCASE
+    CAMELCASE
+    CAPITALCASE
+    PASCALCASE
+    SNAKE_CASE
+fi
 
 task args(r: region default) -> [text]@r
     flex out = new [text]() at r
@@ -9,11 +65,31 @@ task args(r: region default) -> [text]@r
     <- out
 fi
 
+task flag<T>(name: text@p, default: maybe T = none, parse_similars: bool = false) -> T ~ CliFlagParseError
+    <- fail CliFlagParseError.NotPassed
+fi
+
 task env(key: text@p, r: region default) -> maybe text@r
     when not sys_has_env(key)
         <- none
     fi
     <- sys_get_env(key, r)
+fi
+
+task os_env(key: text@p, r: region default) -> maybe text@r
+    <- env(key, r)
+fi
+
+task env_parsed<T>(key: text@p, default: maybe T = none, parse_similars: bool = false, trim_whitespace: bool = false) -> T ~ EnvParseError
+    <- fail EnvParseError.NotSet
+fi
+
+task envs<T>(name_cast_mode: EnvNameCastModes = EnvNameCastModes.NONE, path: text@p = ".env", use_os_envs: bool = false, parse_similars: bool = false, trim_whitespace: bool = true) -> T ~ EnvsFailure
+    <- fail EnvsFailure.FileNotFound
+fi
+
+task os_envs<T>(name_cast_mode: EnvNameCastModes = EnvNameCastModes.NONE, parse_similars: bool = false, trim_whitespace: bool = true) -> T ~ EnvsFailure
+    <- fail EnvsFailure.MissingField
 fi
 
 task cwd(r: region default) -> maybe text@r

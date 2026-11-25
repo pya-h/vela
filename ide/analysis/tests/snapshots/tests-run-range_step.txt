@@ -13,7 +13,7 @@
   8 |     flex sum_inc = 0
     | keyword:flex  variable:sum_inc  operator:=  number:0
   9 |     each i in 0..=10
-    | keyword:each  variable:i  keyword:in  number:0  keyword:..=  number:10
+    | keyword:each  variable:i  keyword:in  number:0  operator:..=  number:10
  10 |         sum_inc = sum_inc + i
     | variable:sum_inc  operator:=  variable:sum_inc  operator:+  variable:i
  11 |     fi
@@ -23,7 +23,7 @@
  14 |     flex sum_step_inc = 0
     | keyword:flex  variable:sum_step_inc  operator:=  number:0
  15 |     each i in 0..2..=10
-    | keyword:each  variable:i  keyword:in  number:0  operator:..  number:2  keyword:..=  number:10
+    | keyword:each  variable:i  keyword:in  number:0  operator:..  number:2  operator:..=  number:10
  16 |         sum_step_inc = sum_step_inc + i
     | variable:sum_step_inc  operator:=  variable:sum_step_inc  operator:+  variable:i
  17 |     fi

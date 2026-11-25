@@ -21,7 +21,7 @@
  13 |     flex even_sum = 0
     | keyword:flex  variable:even_sum  operator:=  number:0
  14 |     each n in 0..2..=10
-    | keyword:each  variable:n  keyword:in  number:0  operator:..  number:2  keyword:..=  number:10
+    | keyword:each  variable:n  keyword:in  number:0  operator:..  number:2  operator:..=  number:10
  15 |         even_sum = even_sum + n
     | variable:even_sum  operator:=  variable:even_sum  operator:+  variable:n
  16 |     fi
@@ -49,12 +49,12 @@
  29 |     show("and: ", flags & mask)
     | builtin-fn:show  punctuation:(  string:"and: "  punctuation:,  variable:flags  operator:&  variable:mask  punctuation:)
  30 |     show("or:  ", flags | mask)
-    | builtin-fn:show  punctuation:(  string:"or:  "  punctuation:,  variable:flags  keyword:|  variable:mask  punctuation:)
+    | builtin-fn:show  punctuation:(  string:"or:  "  punctuation:,  variable:flags  operator:|  variable:mask  punctuation:)
  31 |     show("xor: ", flags ^^ mask)
     | builtin-fn:show  punctuation:(  string:"xor: "  punctuation:,  variable:flags  operator:^^  variable:mask  punctuation:)
  32 |     show("shl: ", flags << 2)
-    | builtin-fn:show  punctuation:(  string:"shl: "  punctuation:,  variable:flags  keyword:<<  number:2  punctuation:)
+    | builtin-fn:show  punctuation:(  string:"shl: "  punctuation:,  variable:flags  operator:<<  number:2  punctuation:)
  33 |     show("shr: ", flags >> 1)
-    | builtin-fn:show  punctuation:(  string:"shr: "  punctuation:,  variable:flags  keyword:>>  number:1  punctuation:)
+    | builtin-fn:show  punctuation:(  string:"shr: "  punctuation:,  variable:flags  operator:>>  number:1  punctuation:)
  34 | fi
     | keyword:fi

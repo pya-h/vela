@@ -1,0 +1,5 @@
+flags=8080,42,2
+os_env=none
+env_parsed=55
+camel=db.internal:5432:true:100
+snake=db.internal:5432

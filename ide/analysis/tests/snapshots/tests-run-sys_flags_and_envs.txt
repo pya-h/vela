@@ -1,0 +1,112 @@
+  1 | include std/files {File, FileMode}
+    | keyword:include  module:std  operator:/  module:files  punctuation:{  type:File  punctuation:,  type:FileMode  punctuation:}
+  2 | include std/sys
+    | keyword:include  module:std  operator:/  module:sys
+  4 | shape CamelEnv
+    | keyword:shape  type:CamelEnv
+  5 |     dbHost: text
+    | field:dbHost  punctuation::  type-builtin:text
+  6 |     dbPort: int
+    | field:dbPort  punctuation::  type-builtin:int
+  7 |     enableTls: bool = false
+    | field:enableTls  punctuation::  type-builtin:bool  operator:=  keyword:false
+  8 |     optLimit: maybe int
+    | field:optLimit  punctuation::  keyword:maybe  type-builtin:int
+  9 | fi
+    | keyword:fi
+ 11 | shape SnakeEnv
+    | keyword:shape  type:SnakeEnv
+ 12 |     db_host: text
+    | field:db_host  punctuation::  type-builtin:text
+ 13 |     db_port: int
+    | field:db_port  punctuation::  type-builtin:int
+ 14 | fi
+    | keyword:fi
+ 16 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 17 |     region r default
+    | keyword:region  region:r  keyword:default
+ 19 |     ; Scalars via sys.flag without region in signature
+    | comment:; Scalars via sys.flag without region in signature
+ 20 |     fixed port = sys.flag("port", 8080) { 0 }
+    | keyword:fixed  variable:port  operator:=  module:sys  punctuation:.  task:flag  punctuation:(  string:"port"  punctuation:,  number:8080  punctuation:)  punctuation:{  number:0  punctuation:}
+ 21 |     fixed req = sys.flag<int>("missing_req") { 42 }
+    | keyword:fixed  variable:req  operator:=  module:sys  punctuation:.  task:flag  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  string:"missing_req"  punctuation:)  punctuation:{  number:42  punctuation:}
+ 22 |     fixed flt = sys.flag("scale", 2.0, true) { 0.0 }
+    | keyword:fixed  variable:flt  operator:=  module:sys  punctuation:.  task:flag  punctuation:(  string:"scale"  punctuation:,  number:2.0  punctuation:,  keyword:true  punctuation:)  punctuation:{  number:0.0  punctuation:}
+ 23 |     show("flags=", port, ",", req, ",", flt)
+    | builtin-fn:show  punctuation:(  string:"flags="  punctuation:,  variable:port  punctuation:,  string:","  punctuation:,  variable:req  punctuation:,  string:","  punctuation:,  variable:flt  punctuation:)
+ 25 |     ; sys.os_env + sys.env_parsed
+    | comment:; sys.os_env + sys.env_parsed
+ 26 |     fixed unset_env = sys.os_env("VELA_TEST_NONEXISTENT_XYZ")
+    | keyword:fixed  variable:unset_env  operator:=  module:sys  punctuation:.  task:os_env  punctuation:(  string:"VELA_TEST_NONEXISTENT_XYZ"  punctuation:)
+ 27 |     when unset_env is none
+    | keyword:when  variable:unset_env  keyword:is  keyword:none
+ 28 |         show("os_env=none")
+    | builtin-fn:show  punctuation:(  string:"os_env=none"  punctuation:)
+ 29 |     else
+    | keyword:else
+ 30 |         show("os_env=some")
+    | builtin-fn:show  punctuation:(  string:"os_env=some"  punctuation:)
+ 31 |     fi
+    | keyword:fi
+ 32 |     fixed ep = sys.env_parsed<int>("VELA_TEST_NONEXISTENT_XYZ", 55) { 0 }
+    | keyword:fixed  variable:ep  operator:=  module:sys  punctuation:.  task:env_parsed  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  string:"VELA_TEST_NONEXISTENT_XYZ"  punctuation:,  number:55  punctuation:)  punctuation:{  number:0  punctuation:}
+ 33 |     show("env_parsed=", ep)
+    | builtin-fn:show  punctuation:(  string:"env_parsed="  punctuation:,  variable:ep  punctuation:)
+ 35 |     ; Write temp .env and test CAMELCASE & SNAKE_CASE + defaults + maybe fields
+    | comment:; Write temp .env and test CAMELCASE & SNAKE_CASE + defaults + maybe fields
+ 36 |     fixed p = ".vela_run_test_env.env"
+    | keyword:fixed  variable:p  operator:=  string:".vela_run_test_env.env"
+ 37 |     flex f = File { path: p }
+    | keyword:flex  variable:f  operator:=  type:File  punctuation:{  field:path  punctuation::  variable:p  punctuation:}
+ 38 |     f.open(FileMode.Write) at r { failure _
+    | variable:f  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Write  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  keyword:_
+ 39 |     }
+    | punctuation:}
+ 40 |     f.write("DB_HOST=db.internal\nDB_PORT=5432\nENABLE_TLS=on\nOPT_LIMIT=100\n") { failure _
+    | variable:f  punctuation:.  method:write  punctuation:(  string:"DB_HOST=db.internal  escape:\n  string:DB_PORT=5432  escape:\n  string:ENABLE_TLS=on  escape:\n  string:OPT_LIMIT=100  escape:\n  string:"  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 41 |     }
+    | punctuation:}
+ 42 |     f.close() { failure _
+    | variable:f  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 43 |     }
+    | punctuation:}
+ 45 |     match sys.envs<CamelEnv>(sys.EnvNameCastModes.CAMELCASE, p, false, true, true)
+    | keyword:match  module:sys  punctuation:.  task:envs  punctuation:<  type:CamelEnv  punctuation:>  punctuation:(  module:sys  punctuation:.  type:EnvNameCastModes  punctuation:.  variant:CAMELCASE  punctuation:,  variable:p  punctuation:,  keyword:false  punctuation:,  keyword:true  punctuation:,  keyword:true  punctuation:)
+ 46 |         case { camel }
+    | keyword:case  punctuation:{  variable:camel  punctuation:}
+ 47 |             fixed lim = match camel.optLimit
+    | keyword:fixed  variable:lim  operator:=  keyword:match  variable:camel  punctuation:.  field:optLimit
+ 48 |                 case {v} = v
+    | keyword:case  punctuation:{  variable:v  punctuation:}  operator:=  variable:v
+ 49 |                 case none = -1
+    | keyword:case  keyword:none  operator:=  operator:-  number:1
+ 50 |             fi
+    | keyword:fi
+ 51 |             show("camel=", camel.dbHost, ":", camel.dbPort, ":", camel.enableTls, ":", lim)
+    | builtin-fn:show  punctuation:(  string:"camel="  punctuation:,  variable:camel  punctuation:.  field:dbHost  punctuation:,  string:":"  punctuation:,  variable:camel  punctuation:.  field:dbPort  punctuation:,  string:":"  punctuation:,  variable:camel  punctuation:.  field:enableTls  punctuation:,  string:":"  punctuation:,  variable:lim  punctuation:)
+ 52 |         case failure err
+    | keyword:case  keyword:failure  variable:err
+ 53 |             show("camel_err=", err)
+    | builtin-fn:show  punctuation:(  string:"camel_err="  punctuation:,  variable:err  punctuation:)
+ 54 |     fi
+    | keyword:fi
+ 56 |     match sys.envs<SnakeEnv>(sys.EnvNameCastModes.SNAKE_CASE, p)
+    | keyword:match  module:sys  punctuation:.  task:envs  punctuation:<  type:SnakeEnv  punctuation:>  punctuation:(  module:sys  punctuation:.  type:EnvNameCastModes  punctuation:.  variant:SNAKE_CASE  punctuation:,  variable:p  punctuation:)
+ 57 |         case { snake }
+    | keyword:case  punctuation:{  variable:snake  punctuation:}
+ 58 |             show("snake=", snake.db_host, ":", snake.db_port)
+    | builtin-fn:show  punctuation:(  string:"snake="  punctuation:,  variable:snake  punctuation:.  field:db_host  punctuation:,  string:":"  punctuation:,  variable:snake  punctuation:.  field:db_port  punctuation:)
+ 59 |         case failure err
+    | keyword:case  keyword:failure  variable:err
+ 60 |             show("snake_err=", err)
+    | builtin-fn:show  punctuation:(  string:"snake_err="  punctuation:,  variable:err  punctuation:)
+ 61 |     fi
+    | keyword:fi
+ 63 |     f.delete() { failure _
+    | variable:f  punctuation:.  method:delete  punctuation:(  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 64 |     }
+    | punctuation:}
+ 65 | fi
+    | keyword:fi

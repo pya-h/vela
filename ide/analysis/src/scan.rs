@@ -113,7 +113,7 @@ fn imitated_names(tokens: &Tokens, p: usize) -> Vec<String> {
     if tokens.token(q) == Some(&Token::Lt) {
         while !matches!(
             tokens.token(q),
-            None | Some(Token::Gt | Token::Newline | Token::Eof)
+            None | Some(Token::Gt | Token::Shr | Token::Newline | Token::Eof)
         ) {
             q += 1;
         }
@@ -131,6 +131,7 @@ fn imitated_names(tokens: &Tokens, p: usize) -> Vec<String> {
             Token::Newline | Token::Eof => break,
             Token::Lt => depth += 1,
             Token::Gt => depth = depth.saturating_sub(1),
+            Token::Shr => depth = depth.saturating_sub(2),
             Token::Ident(word) if depth == 0 => name.push_str(word),
             Token::Dot if depth == 0 => name.push(MODULE_SEPARATOR),
             Token::Amp if depth == 0 => names.push(std::mem::take(&mut name)),
@@ -941,6 +942,7 @@ impl<'a> Tokens<'a> {
         for q in p + 1.. {
             match self.token(q) {
                 Some(Token::Gt) if grouped > 0 && depth == 0 => return false,
+                Some(Token::Shr) if grouped > 0 && depth <= 1 => return false,
                 Some(Token::LParen) => grouped += 1,
                 Some(Token::RParen) if grouped == 0 => return false,
                 Some(Token::RParen) => grouped -= 1,
@@ -952,8 +954,16 @@ impl<'a> Tokens<'a> {
                             && self.token(q + 1) == Some(&Token::Dot)
                             && self.ident(q + 2).is_some());
                 }
+                Some(Token::Shr) if depth <= 1 => {
+                    let touching = matches!((self.get(q), self.get(q + 1)), (Some(gt), Some(dot)) if gt.range.end == dot.range.start);
+                    return matches!(self.token(q + 1), Some(Token::LParen | Token::LBrace))
+                        || (touching
+                            && self.token(q + 1) == Some(&Token::Dot)
+                            && self.ident(q + 2).is_some());
+                }
                 Some(Token::Lt) => depth += 1,
                 Some(Token::Gt) => depth -= 1,
+                Some(Token::Shr) => depth -= 2,
                 Some(Token::Colon | Token::Amp) if header => {}
                 Some(token) if token.writes_type() => {}
                 _ => return false,
@@ -964,14 +974,15 @@ impl<'a> Tokens<'a> {
 
     fn literal_shape(&self, p: usize) -> Option<&'a str> {
         let mut before = p.checked_sub(1)?;
-        if self.token(before) == Some(&Token::Gt) {
-            let mut depth = 0usize;
+        if matches!(self.token(before), Some(Token::Gt | Token::Shr)) {
+            let mut depth = if self.token(before) == Some(&Token::Shr) { 1usize } else { 0usize };
             loop {
                 before = before.checked_sub(1)?;
                 match self.token(before) {
                     Some(Token::Lt) if depth == 0 => break,
                     Some(Token::Lt) => depth -= 1,
                     Some(Token::Gt) => depth += 1,
+                    Some(Token::Shr) => depth += 2,
                     Some(_) => {}
                     None => return None,
                 }
@@ -1436,6 +1447,8 @@ fn declarations(tokens: &Tokens) -> (Vec<Symbol>, HashMap<usize, usize>, Vec<Inc
             }
             Token::Hash
                 if tokens.ident(p + 1).is_some()
+                    && !(tokens.ident(p + 1) == Some("test")
+                        && matches!(tokens.token(p + 2), None | Some(Token::Newline | Token::Eof)))
                     && matches!(
                         tokens.token(p + 2),
                         None | Some(Token::Assign | Token::Colon | Token::Newline | Token::Eof)
@@ -2158,11 +2171,13 @@ impl<'a> Classifier<'a> {
                     in_type = true;
                 }
                 Token::Hash
-                    if self
-                        .declared_at
-                        .get(&(p + 1))
-                        .and_then(|&id| self.symbols.get(id))
-                        .is_some_and(|s| s.kind == SymbolKind::Macro) =>
+                    if (tokens.ident(p + 1) == Some("test")
+                        && matches!(tokens.token(p + 2), None | Some(Token::Newline | Token::Eof)))
+                        || self
+                            .declared_at
+                            .get(&(p + 1))
+                            .and_then(|&id| self.symbols.get(id))
+                            .is_some_and(|s| s.kind == SymbolKind::Macro) =>
                 {
                     self.push(range, TokenClass::Keyword, None);
                 }
@@ -2299,7 +2314,14 @@ impl<'a> Classifier<'a> {
                 | Token::Ge
                 | Token::Assign
                 | Token::ColonAssign
+                | Token::Bar
+                | Token::BitNand
+                | Token::BitNor
+                | Token::BitXnor
+                | Token::Shl
+                | Token::Shr
                 | Token::Range
+                | Token::RangeInclusive
                 | Token::ChanRecv
                 | Token::ChanSend => {
                     self.push(range, TokenClass::Operator, None);

@@ -101,7 +101,7 @@
  62 |     fixed b = Box<int> { value: 3 }
     | keyword:fixed  variable:b  operator:=  type:Box  punctuation:<  type-builtin:int  punctuation:>  punctuation:{  field:value  punctuation::  number:3  punctuation:}
  63 |     fixed nested = Box<Box<text>> { value: Box<text> { value: "x" } }
-    | keyword:fixed  variable:nested  operator:=  type:Box  operator:<  type:Box  operator:<  variable:text  keyword:>>  punctuation:{  variable:value  punctuation::  type:Box  punctuation:<  type-builtin:text  punctuation:>  punctuation:{  field:value  punctuation::  string:"x"  punctuation:}  punctuation:}
+    | keyword:fixed  variable:nested  operator:=  type:Box  punctuation:<  type:Box  punctuation:<  type-builtin:text  punctuation:>>  punctuation:{  field:value  punctuation::  type:Box  punctuation:<  type-builtin:text  punctuation:>  punctuation:{  field:value  punctuation::  string:"x"  punctuation:}  punctuation:}
  64 |     show(b.type, " ", nested.type, " ", nested.value.type)
     | builtin-fn:show  punctuation:(  variable:b  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:nested  punctuation:.  keyword:type  punctuation:,  string:" "  punctuation:,  variable:nested  punctuation:.  field:value  punctuation:.  keyword:type  punctuation:)
  65 |     ; A shape or kind of another file is its own name.

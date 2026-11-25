@@ -261,14 +261,14 @@ task sort<T: ordered>(flex xs: [T]@a)
     when xs.len <= 1
         <-
     fi
-    qsort_range(xs, 0, xs.len - 1)
+    introsort_range(xs, 0, xs.len - 1, depth_limit(xs.len))
 fi
 
 task sort_by<T>(flex xs: [T]@a, cmp: (T, T) -> int)
     when xs.len <= 1
         <-
     fi
-    qsort_by_range(xs, 0, xs.len - 1, cmp)
+    introsort_by_range(xs, 0, xs.len - 1, cmp, depth_limit(xs.len))
 fi
 
 task sorted<T: frozen>(xs: [T]@a, cmp: (T, T) -> int, r: region default) -> [T]@r
@@ -327,43 +327,95 @@ task contains<T: same>(xs: [T]@a, target: T) -> bool
 fi
 
 task index_of<T: same>(xs: [T]@a, target: T) -> maybe int
-    flex i = 0
-    each item in xs
+    each i, item in xs
         when item == target
             <- i
         fi
-        i++
     fi
     <- none
 fi
 
-priv task qsort_range<T: ordered>(flex xs: [T]@a, low: int, high: int)
+priv task depth_limit(n: int) -> int
+    flex limit = 0
+    flex m = n
+    loop m > 1
+        m = m / 2
+        limit += 2
+    fi
+    <- limit
+fi
+
+priv task introsort_range<T: ordered>(flex xs: [T]@a, low: int, high: int, depth: int)
     when low < high
         when high - low < 16
             insertion_sort(xs, low, high)
             <-
         fi
-        fixed pivot_idx = low + (high - low) / 2
-        fixed pivot = xs[pivot_idx]
-        xs[pivot_idx], xs[high] = xs[high], xs[pivot_idx]
+        when depth <= 0
+            heapsort_range(xs, low, high)
+            <-
+        fi
+        fixed mid = low + (high - low) / 2
+        when xs[mid] < xs[low]
+            xs[low], xs[mid] = xs[mid], xs[low]
+        fi
+        when xs[high] < xs[low]
+            xs[low], xs[high] = xs[high], xs[low]
+        fi
+        when xs[mid] < xs[high]
+            xs[mid], xs[high] = xs[high], xs[mid]
+        fi
+        fixed pivot = xs[high]
         flex i = low - 1
-        flex j = low
-        loop j < high
+        each j in low..high
             when xs[j] <= pivot
                 i++
                 xs[i], xs[j] = xs[j], xs[i]
             fi
-            j++
         fi
         xs[i + 1], xs[high] = xs[high], xs[i + 1]
         fixed pi = i + 1
-        qsort_range(xs, low, pi - 1)
-        qsort_range(xs, pi + 1, high)
+        introsort_range(xs, low, pi - 1, depth - 1)
+        introsort_range(xs, pi + 1, high, depth - 1)
+    fi
+fi
+
+priv task heapsort_range<T: ordered>(flex xs: [T]@a, low: int, high: int)
+    fixed count = high - low + 1
+    flex i = count / 2 - 1
+    loop i >= 0
+        sift_down(xs, low, count, i)
+        i--
+    fi
+    flex end = count - 1
+    loop end > 0
+        xs[low], xs[low + end] = xs[low + end], xs[low]
+        sift_down(xs, low, end, 0)
+        end--
+    fi
+fi
+
+priv task sift_down<T: ordered>(flex xs: [T]@a, low: int, count: int, start: int)
+    flex root = start
+    loop root * 2 + 1 < count
+        fixed child = root * 2 + 1
+        flex swap = root
+        when xs[low + swap] < xs[low + child]
+            swap = child
+        fi
+        when child + 1 < count and xs[low + swap] < xs[low + child + 1]
+            swap = child + 1
+        fi
+        when swap == root
+            <-
+        fi
+        xs[low + root], xs[low + swap] = xs[low + swap], xs[low + root]
+        root = swap
     fi
 fi
 
 priv task insertion_sort<T: ordered>(flex xs: [T]@a, low: int, high: int)
-    each i in (low + 1)..(high + 1)
+    each i in (low + 1)..=high
         flex j = i
         loop j > low and xs[j - 1] > xs[j]
             xs[j - 1], xs[j] = xs[j], xs[j - 1]
@@ -372,33 +424,77 @@ priv task insertion_sort<T: ordered>(flex xs: [T]@a, low: int, high: int)
     fi
 fi
 
-priv task qsort_by_range<T>(flex xs: [T]@a, low: int, high: int, cmp: (T, T) -> int)
+priv task introsort_by_range<T>(flex xs: [T]@a, low: int, high: int, cmp: (T, T) -> int, depth: int)
     when low < high
         when high - low < 16
             insertion_sort_by(xs, low, high, cmp)
             <-
         fi
-        fixed pivot_idx = low + (high - low) / 2
-        fixed pivot = xs[pivot_idx]
-        xs[pivot_idx], xs[high] = xs[high], xs[pivot_idx]
+        when depth <= 0
+            heapsort_by_range(xs, low, high, cmp)
+            <-
+        fi
+        fixed mid = low + (high - low) / 2
+        when cmp(xs[mid], xs[low]) < 0
+            xs[low], xs[mid] = xs[mid], xs[low]
+        fi
+        when cmp(xs[high], xs[low]) < 0
+            xs[low], xs[high] = xs[high], xs[low]
+        fi
+        when cmp(xs[mid], xs[high]) < 0
+            xs[mid], xs[high] = xs[high], xs[mid]
+        fi
+        fixed pivot = xs[high]
         flex i = low - 1
-        flex j = low
-        loop j < high
+        each j in low..high
             when cmp(xs[j], pivot) <= 0
                 i++
                 xs[i], xs[j] = xs[j], xs[i]
             fi
-            j++
         fi
         xs[i + 1], xs[high] = xs[high], xs[i + 1]
         fixed pi = i + 1
-        qsort_by_range(xs, low, pi - 1, cmp)
-        qsort_by_range(xs, pi + 1, high, cmp)
+        introsort_by_range(xs, low, pi - 1, cmp, depth - 1)
+        introsort_by_range(xs, pi + 1, high, cmp, depth - 1)
+    fi
+fi
+
+priv task heapsort_by_range<T>(flex xs: [T]@a, low: int, high: int, cmp: (T, T) -> int)
+    fixed count = high - low + 1
+    flex i = count / 2 - 1
+    loop i >= 0
+        sift_down_by(xs, low, count, i, cmp)
+        i--
+    fi
+    flex end = count - 1
+    loop end > 0
+        xs[low], xs[low + end] = xs[low + end], xs[low]
+        sift_down_by(xs, low, end, 0, cmp)
+        end--
+    fi
+fi
+
+priv task sift_down_by<T>(flex xs: [T]@a, low: int, count: int, start: int, cmp: (T, T) -> int)
+    flex root = start
+    loop root * 2 + 1 < count
+        fixed child = root * 2 + 1
+        flex swap = root
+        when cmp(xs[low + swap], xs[low + child]) < 0
+            swap = child
+        fi
+        when child + 1 < count and cmp(xs[low + swap], xs[low + child + 1]) < 0
+            swap = child + 1
+        fi
+        when swap == root
+            <-
+        fi
+        xs[low + root], xs[low + swap] = xs[low + swap], xs[low + root]
+        root = swap
     fi
 fi
 
 priv task insertion_sort_by<T>(flex xs: [T]@a, low: int, high: int, cmp: (T, T) -> int)
-    each i in (low + 1)..(high + 1)
+    each i in (low + 1)..=high
         flex j = i
         loop j > low and cmp(xs[j - 1], xs[j]) > 0
             xs[j - 1], xs[j] = xs[j], xs[j - 1]

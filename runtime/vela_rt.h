@@ -3551,6 +3551,21 @@ static inline vela__rt__text vela__rt__text_replace(vela__rt__text s, vela__rt__
     return (vela__rt__text){ buf, (int64_t)out };
 }
 
+static inline vela__rt__text vela__rt__text_repeat(vela__rt__text s, int64_t count, vela__rt__region* into) {
+    if (count <= 0 || s.len <= 0) {
+        return (vela__rt__text){ "", 0 };
+    }
+    if (s.len > INT64_MAX / count) {
+        vela__rt__int_trap("repeat: text length overflows", "std/txt.repeat");
+    }
+    int64_t total = s.len * count;
+    char* buf = vela__rt__region_alloc(into, (size_t)total, 1);
+    for (int64_t i = 0; i < count; i++) {
+        memcpy(buf + i * s.len, s.bytes, (size_t)s.len);
+    }
+    return (vela__rt__text){ buf, total };
+}
+
 static inline bool vela__rt__is_interactive(void) {
     if (getenv("VELA_TEST") != NULL) {
         return false;
@@ -3659,6 +3674,869 @@ static inline _Noreturn void vela__rt__sys_exit(int64_t code) {
     exit((int)code);
 }
 
+enum {
+    VELA__RT__SYS_PARSE_OK = 0,
+    VELA__RT__SYS_PARSE_INVALID = 1,
+    VELA__RT__SYS_PARSE_WRONG_TYPE = 2,
+};
+
+enum {
+    VELA__RT__SYS_ENVS_OK = 0,
+    VELA__RT__SYS_ENVS_FILE_NOT_FOUND = 1,
+    VELA__RT__SYS_ENVS_INVALID_LINE = 2,
+    VELA__RT__SYS_ENVS_MISSING_FIELD = 3,
+    VELA__RT__SYS_ENVS_INVALID_VALUE = 4,
+};
+
+enum {
+    VELA__RT__ENV_CAST_NONE = 0,
+    VELA__RT__ENV_CAST_UPPERCASE = 1,
+    VELA__RT__ENV_CAST_LOWERCASE = 2,
+    VELA__RT__ENV_CAST_CAMELCASE = 3,
+    VELA__RT__ENV_CAST_CAPITALCASE = 4,
+    VELA__RT__ENV_CAST_PASCALCASE = 5,
+    VELA__RT__ENV_CAST_SNAKE_CASE = 6,
+};
+
+static inline char vela__rt__ascii_lower(char c) {
+    return (c >= 'A' && c <= 'Z') ? (char)(c + ('a' - 'A')) : c;
+}
+
+static inline char vela__rt__ascii_upper(char c) {
+    return (c >= 'a' && c <= 'z') ? (char)(c - ('a' - 'A')) : c;
+}
+
+static inline bool vela__rt__ascii_is_upper(char c) {
+    return c >= 'A' && c <= 'Z';
+}
+
+static inline bool vela__rt__ascii_is_lower(char c) {
+    return c >= 'a' && c <= 'z';
+}
+
+static inline bool vela__rt__ascii_is_digit(char c) {
+    return c >= '0' && c <= '9';
+}
+
+static inline bool vela__rt__ascii_is_alnum(char c) {
+    return vela__rt__ascii_is_upper(c) || vela__rt__ascii_is_lower(c) || vela__rt__ascii_is_digit(c);
+}
+
+static inline bool vela__rt__ascii_ieq(const char* s, size_t len, const char* lit) {
+    size_t lit_len = strlen(lit);
+    if (len != lit_len) {
+        return false;
+    }
+    for (size_t i = 0; i < len; i++) {
+        if (vela__rt__ascii_lower(s[i]) != lit[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static inline void vela__rt__sys_trim(const char** ptr, size_t* len) {
+    const char* s = *ptr;
+    size_t n = *len;
+    while (n > 0 && (s[0] == ' ' || s[0] == '\t' || s[0] == '\r' || s[0] == '\n')) {
+        s++;
+        n--;
+    }
+    while (n > 0 && (s[n - 1] == ' ' || s[n - 1] == '\t' || s[n - 1] == '\r' || s[n - 1] == '\n')) {
+        n--;
+    }
+    *ptr = s;
+    *len = n;
+}
+
+static inline bool vela__rt__sys_flag_find(
+    vela__rt__text name,
+    const char** out_val,
+    size_t* out_len
+) {
+    vela__rt__sys_state* s = vela__rt__sys();
+    if (s->argv == NULL || s->argc <= 1) {
+        return false;
+    }
+    size_t nlen = name.len < 0 ? 0 : (size_t)name.len;
+    bool found = false;
+    for (int i = 1; i < s->argc; i++) {
+        const char* arg = s->argv[i];
+        if (arg == NULL) {
+            continue;
+        }
+        size_t alen = strlen(arg);
+        if (alen >= nlen + 1 && arg[nlen] == '=' && (nlen == 0 || memcmp(arg, name.bytes, nlen) == 0)) {
+            *out_val = arg + nlen + 1;
+            *out_len = alen - nlen - 1;
+            found = true;
+        }
+    }
+    return found;
+}
+
+static inline bool vela__rt__sys_parse_float_lit(const char* s, size_t len, double* out) {
+    if (len == 0) {
+        return false;
+    }
+    size_t i = 0;
+    if (s[i] == '+' || s[i] == '-') {
+        i++;
+    }
+    size_t whole = 0;
+    while (i < len && vela__rt__ascii_is_digit(s[i])) {
+        whole++;
+        i++;
+    }
+    bool has_dot = false;
+    size_t frac = 0;
+    if (i < len && s[i] == '.') {
+        has_dot = true;
+        i++;
+        while (i < len && vela__rt__ascii_is_digit(s[i])) {
+            frac++;
+            i++;
+        }
+    }
+    if (whole == 0 && frac == 0) {
+        return false;
+    }
+    if (has_dot && frac == 0 && whole == 0) {
+        return false;
+    }
+    bool has_exp = false;
+    if (i < len && (s[i] == 'e' || s[i] == 'E')) {
+        has_exp = true;
+        i++;
+        if (i < len && (s[i] == '+' || s[i] == '-')) {
+            i++;
+        }
+        size_t exp_digits = 0;
+        while (i < len && vela__rt__ascii_is_digit(s[i])) {
+            exp_digits++;
+            i++;
+        }
+        if (exp_digits == 0) {
+            return false;
+        }
+    }
+    if (i != len || (!has_dot && !has_exp)) {
+        return false;
+    }
+    char stack_buf[128];
+    char* tmp = len < sizeof stack_buf ? stack_buf : (char*)malloc(len + 1);
+    if (tmp == NULL) {
+        vela__rt__out_of_memory();
+    }
+    memcpy(tmp, s, len);
+    tmp[len] = '\0';
+    errno = 0;
+    char* end = NULL;
+    double val = strtod(tmp, &end);
+    bool ok = (end == tmp + len) && errno != ERANGE && isfinite(val);
+    if (tmp != stack_buf) {
+        free(tmp);
+    }
+    if (!ok) {
+        return false;
+    }
+    *out = val;
+    return true;
+}
+
+static inline int vela__rt__sys_parse_i64(
+    const char* s,
+    size_t len,
+    bool parse_similars,
+    bool trim_ws,
+    int64_t min_v,
+    int64_t max_v,
+    int64_t* out
+) {
+    if (trim_ws) {
+        vela__rt__sys_trim(&s, &len);
+    }
+    if (len == 0) {
+        return VELA__RT__SYS_PARSE_INVALID;
+    }
+    const char* isrc = s;
+    size_t ilen = len;
+    if (isrc[0] == '+' && ilen > 1 && isrc[1] != '-') {
+        isrc++;
+        ilen--;
+    }
+    int64_t parsed = 0;
+    int st = vela__rt__int_of_text((vela__rt__text){ isrc, (int64_t)ilen }, &parsed);
+    if (st == VELA__RT__READ_OK) {
+        if (parsed < min_v || parsed > max_v) {
+            return VELA__RT__SYS_PARSE_INVALID;
+        }
+        *out = parsed;
+        return VELA__RT__SYS_PARSE_OK;
+    }
+    if (st == VELA__RT__READ_TOO_LARGE) {
+        return VELA__RT__SYS_PARSE_INVALID;
+    }
+    double fval = 0.0;
+    if (vela__rt__sys_parse_float_lit(s, len, &fval)) {
+        if (!parse_similars) {
+            return VELA__RT__SYS_PARSE_WRONG_TYPE;
+        }
+        double r = round(fval);
+        if (!isfinite(r) || r < (double)min_v) {
+            return VELA__RT__SYS_PARSE_INVALID;
+        }
+        if (max_v == INT64_MAX) {
+            if (r >= -(double)INT64_MIN) {
+                return VELA__RT__SYS_PARSE_INVALID;
+            }
+        } else if (r > (double)max_v) {
+            return VELA__RT__SYS_PARSE_INVALID;
+        }
+        *out = (int64_t)r;
+        return VELA__RT__SYS_PARSE_OK;
+    }
+    return VELA__RT__SYS_PARSE_INVALID;
+}
+
+static inline int vela__rt__sys_parse_u64_digits(const char* s, size_t len, uint64_t max_v, uint64_t* out) {
+    size_t i = 0;
+    if (s[0] == '+' && len > 1) {
+        i = 1;
+    }
+    if (i >= len) {
+        return VELA__RT__READ_NOT_A_NUMBER;
+    }
+    uint64_t base = 10u;
+    if (len - i > 2 && s[i] == '0') {
+        switch (s[i + 1]) {
+        case 'x': base = 16u; break;
+        case 'o': base = 8u; break;
+        case 'b': base = 2u; break;
+        default: break;
+        }
+        if (base != 10u) {
+            i += 2;
+        }
+    }
+    uint64_t acc = 0;
+    for (; i < len; i++) {
+        unsigned char c = (unsigned char)s[i];
+        uint64_t digit = base;
+        if (c >= '0' && c <= '9') {
+            digit = (uint64_t)(c - '0');
+        } else if (c >= 'a' && c <= 'f') {
+            digit = (uint64_t)(c - 'a') + 10u;
+        } else if (c >= 'A' && c <= 'F') {
+            digit = (uint64_t)(c - 'A') + 10u;
+        }
+        if (digit >= base) {
+            return VELA__RT__READ_NOT_A_NUMBER;
+        }
+        if (acc > (max_v - digit) / base) {
+            return VELA__RT__READ_TOO_LARGE;
+        }
+        acc = acc * base + digit;
+    }
+    *out = acc;
+    return VELA__RT__READ_OK;
+}
+
+static inline int vela__rt__sys_parse_u64(
+    const char* s,
+    size_t len,
+    bool parse_similars,
+    bool trim_ws,
+    uint64_t max_v,
+    uint64_t* out
+) {
+    if (trim_ws) {
+        vela__rt__sys_trim(&s, &len);
+    }
+    if (len == 0) {
+        return VELA__RT__SYS_PARSE_INVALID;
+    }
+    uint64_t parsed = 0;
+    int st = vela__rt__sys_parse_u64_digits(s, len, max_v, &parsed);
+    if (st == VELA__RT__READ_OK) {
+        *out = parsed;
+        return VELA__RT__SYS_PARSE_OK;
+    }
+    if (st == VELA__RT__READ_TOO_LARGE) {
+        return VELA__RT__SYS_PARSE_INVALID;
+    }
+    double fval = 0.0;
+    if (vela__rt__sys_parse_float_lit(s, len, &fval)) {
+        if (!parse_similars) {
+            return VELA__RT__SYS_PARSE_WRONG_TYPE;
+        }
+        double r = round(fval);
+        if (!isfinite(r) || r < 0.0) {
+            return VELA__RT__SYS_PARSE_INVALID;
+        }
+        if (max_v == UINT64_MAX) {
+            if (r >= ldexp(1.0, 64)) {
+                return VELA__RT__SYS_PARSE_INVALID;
+            }
+        } else if (r > (double)max_v) {
+            return VELA__RT__SYS_PARSE_INVALID;
+        }
+        *out = (uint64_t)r;
+        return VELA__RT__SYS_PARSE_OK;
+    }
+    return VELA__RT__SYS_PARSE_INVALID;
+}
+
+static inline int vela__rt__sys_parse_f64(
+    const char* s,
+    size_t len,
+    bool parse_similars,
+    bool trim_ws,
+    bool is_f32,
+    double* out
+) {
+    if (trim_ws) {
+        vela__rt__sys_trim(&s, &len);
+    }
+    if (len == 0) {
+        return VELA__RT__SYS_PARSE_INVALID;
+    }
+    double fval = 0.0;
+    if (vela__rt__sys_parse_float_lit(s, len, &fval)) {
+        if (is_f32 && !isfinite((float)fval)) {
+            return VELA__RT__SYS_PARSE_INVALID;
+        }
+        *out = fval;
+        return VELA__RT__SYS_PARSE_OK;
+    }
+    const char* isrc = s;
+    size_t ilen = len;
+    if (isrc[0] == '+' && ilen > 1 && isrc[1] != '-') {
+        isrc++;
+        ilen--;
+    }
+    int64_t ival = 0;
+    if (vela__rt__int_of_text((vela__rt__text){ isrc, (int64_t)ilen }, &ival) == VELA__RT__READ_OK) {
+        if (!parse_similars) {
+            return VELA__RT__SYS_PARSE_WRONG_TYPE;
+        }
+        double d = (double)ival;
+        if (is_f32 && !isfinite((float)d)) {
+            return VELA__RT__SYS_PARSE_INVALID;
+        }
+        *out = d;
+        return VELA__RT__SYS_PARSE_OK;
+    }
+    uint64_t uval = 0;
+    if (vela__rt__sys_parse_u64_digits(s, len, UINT64_MAX, &uval) == VELA__RT__READ_OK) {
+        if (!parse_similars) {
+            return VELA__RT__SYS_PARSE_WRONG_TYPE;
+        }
+        double d = (double)uval;
+        if (is_f32 && !isfinite((float)d)) {
+            return VELA__RT__SYS_PARSE_INVALID;
+        }
+        *out = d;
+        return VELA__RT__SYS_PARSE_OK;
+    }
+    return VELA__RT__SYS_PARSE_INVALID;
+}
+
+static inline int vela__rt__sys_parse_bool(
+    const char* s,
+    size_t len,
+    bool parse_similars,
+    bool trim_ws,
+    bool* out
+) {
+    if (trim_ws) {
+        vela__rt__sys_trim(&s, &len);
+    }
+    if (len == 0) {
+        return VELA__RT__SYS_PARSE_INVALID;
+    }
+    if (len == 4 && memcmp(s, "true", 4) == 0) {
+        *out = true;
+        return VELA__RT__SYS_PARSE_OK;
+    }
+    if (len == 5 && memcmp(s, "false", 5) == 0) {
+        *out = false;
+        return VELA__RT__SYS_PARSE_OK;
+    }
+    if (vela__rt__ascii_ieq(s, len, "true") || vela__rt__ascii_ieq(s, len, "1")
+        || vela__rt__ascii_ieq(s, len, "yes") || vela__rt__ascii_ieq(s, len, "on"))
+    {
+        if (!parse_similars) {
+            return VELA__RT__SYS_PARSE_WRONG_TYPE;
+        }
+        *out = true;
+        return VELA__RT__SYS_PARSE_OK;
+    }
+    if (vela__rt__ascii_ieq(s, len, "false") || vela__rt__ascii_ieq(s, len, "0")
+        || vela__rt__ascii_ieq(s, len, "no") || vela__rt__ascii_ieq(s, len, "off"))
+    {
+        if (!parse_similars) {
+            return VELA__RT__SYS_PARSE_WRONG_TYPE;
+        }
+        *out = false;
+        return VELA__RT__SYS_PARSE_OK;
+    }
+    return VELA__RT__SYS_PARSE_INVALID;
+}
+
+static inline int vela__rt__sys_parse_char(
+    const char* s,
+    size_t len,
+    bool parse_similars,
+    bool trim_ws,
+    uint8_t* out
+) {
+    (void)parse_similars;
+    if (trim_ws) {
+        vela__rt__sys_trim(&s, &len);
+    }
+    if (len == 1) {
+        *out = (uint8_t)s[0];
+        return VELA__RT__SYS_PARSE_OK;
+    }
+    if (len == 0) {
+        return VELA__RT__SYS_PARSE_INVALID;
+    }
+    return VELA__RT__SYS_PARSE_WRONG_TYPE;
+}
+
+static inline vela__rt__text vela__rt__sys_parse_text(
+    const char* s,
+    size_t len,
+    bool trim_ws,
+    vela__rt__region* r
+) {
+    if (trim_ws) {
+        vela__rt__sys_trim(&s, &len);
+    }
+    return vela__rt__text_in(r, s, len);
+}
+
+static inline char* vela__rt__sys_cast_key(const char* key, size_t len, int mode) {
+    if (mode == VELA__RT__ENV_CAST_NONE) {
+        char* out = (char*)malloc(len + 1);
+        if (out == NULL) {
+            vela__rt__out_of_memory();
+        }
+        if (len > 0) {
+            memcpy(out, key, len);
+        }
+        out[len] = '\0';
+        return out;
+    }
+    if (mode == VELA__RT__ENV_CAST_UPPERCASE) {
+        char* out = (char*)malloc(len + 1);
+        if (out == NULL) {
+            vela__rt__out_of_memory();
+        }
+        for (size_t i = 0; i < len; i++) {
+            out[i] = vela__rt__ascii_upper(key[i]);
+        }
+        out[len] = '\0';
+        return out;
+    }
+    if (mode == VELA__RT__ENV_CAST_LOWERCASE) {
+        char* out = (char*)malloc(len + 1);
+        if (out == NULL) {
+            vela__rt__out_of_memory();
+        }
+        for (size_t i = 0; i < len; i++) {
+            out[i] = vela__rt__ascii_lower(key[i]);
+        }
+        out[len] = '\0';
+        return out;
+    }
+    if (mode == VELA__RT__ENV_CAST_CAPITALCASE) {
+        char* out = (char*)malloc(len + 1);
+        if (out == NULL) {
+            vela__rt__out_of_memory();
+        }
+        bool seen_first = false;
+        for (size_t i = 0; i < len; i++) {
+            char c = key[i];
+            if (!seen_first && (vela__rt__ascii_is_lower(c) || vela__rt__ascii_is_upper(c))) {
+                out[i] = vela__rt__ascii_upper(c);
+                seen_first = true;
+            } else {
+                out[i] = vela__rt__ascii_lower(c);
+            }
+        }
+        out[len] = '\0';
+        return out;
+    }
+    /* Word-based modes: CAMELCASE, PASCALCASE, SNAKE_CASE. Worst case inserts '_' before capitals. */
+    char* out = (char*)malloc(len * 2 + 1);
+    if (out == NULL) {
+        vela__rt__out_of_memory();
+    }
+    size_t pos = 0;
+    size_t word_index = 0;
+    size_t i = 0;
+    while (i < len) {
+        while (i < len && !vela__rt__ascii_is_alnum(key[i])) {
+            i++;
+        }
+        if (i >= len) {
+            break;
+        }
+        size_t wstart = i;
+        while (i < len && vela__rt__ascii_is_alnum(key[i])) {
+            size_t prev = i;
+            i++;
+            if (i < len && vela__rt__ascii_is_upper(key[i])) {
+                bool prev_lower_or_digit = vela__rt__ascii_is_lower(key[prev]) || vela__rt__ascii_is_digit(key[prev]);
+                bool acronym_end = vela__rt__ascii_is_upper(key[prev])
+                    && (i + 1 < len && vela__rt__ascii_is_lower(key[i + 1]));
+                if (prev_lower_or_digit || acronym_end) {
+                    break;
+                }
+            }
+        }
+        size_t wlen = i - wstart;
+        if (mode == VELA__RT__ENV_CAST_SNAKE_CASE) {
+            if (word_index > 0) {
+                out[pos++] = '_';
+            }
+            for (size_t j = 0; j < wlen; j++) {
+                out[pos++] = vela__rt__ascii_lower(key[wstart + j]);
+            }
+        } else {
+            bool cap_first = (mode == VELA__RT__ENV_CAST_PASCALCASE) || (word_index > 0);
+            for (size_t j = 0; j < wlen; j++) {
+                out[pos++] = (j == 0 && cap_first)
+                    ? vela__rt__ascii_upper(key[wstart + j])
+                    : vela__rt__ascii_lower(key[wstart + j]);
+            }
+        }
+        word_index++;
+    }
+    out[pos] = '\0';
+    return out;
+}
+
+typedef struct vela__rt__env_kv {
+    char* key;
+    char* val;
+    size_t val_len;
+} vela__rt__env_kv;
+
+typedef struct vela__rt__env_list {
+    vela__rt__env_kv* items;
+    size_t count;
+    size_t cap;
+} vela__rt__env_list;
+
+static inline void vela__rt__env_list_free(vela__rt__env_list* list) {
+    if (list == NULL || list->items == NULL) {
+        return;
+    }
+    for (size_t i = 0; i < list->count; i++) {
+        free(list->items[i].key);
+        free(list->items[i].val);
+    }
+    free(list->items);
+    list->items = NULL;
+    list->count = 0;
+    list->cap = 0;
+}
+
+static inline void vela__rt__env_list_push(
+    vela__rt__env_list* list,
+    char* key,
+    char* val,
+    size_t val_len
+) {
+    if (list->count == list->cap) {
+        size_t next = list->cap == 0 ? 16 : list->cap * 2;
+        vela__rt__env_kv* resized = (vela__rt__env_kv*)realloc(list->items, next * sizeof(vela__rt__env_kv));
+        if (resized == NULL) {
+            vela__rt__out_of_memory();
+        }
+        list->items = resized;
+        list->cap = next;
+    }
+    list->items[list->count].key = key;
+    list->items[list->count].val = val;
+    list->items[list->count].val_len = val_len;
+    list->count++;
+}
+
+static inline int vela__rt__sys_read_dotenv(vela__rt__text path, vela__rt__env_list* out) {
+    out->items = NULL;
+    out->count = 0;
+    out->cap = 0;
+    char* p = vela__rt__path_of(path);
+    if (p == NULL) {
+        return VELA__RT__SYS_ENVS_FILE_NOT_FOUND;
+    }
+    FILE* f = fopen(p, "rb");
+    free(p);
+    if (f == NULL) {
+        return VELA__RT__SYS_ENVS_FILE_NOT_FOUND;
+    }
+    size_t cap = 4096;
+    size_t len = 0;
+    char* buf = (char*)malloc(cap);
+    if (buf == NULL) {
+        fclose(f);
+        vela__rt__out_of_memory();
+    }
+    for (;;) {
+        if (len == cap) {
+            if (cap > SIZE_MAX / 2) {
+                free(buf);
+                fclose(f);
+                vela__rt__out_of_memory();
+            }
+            cap *= 2;
+            char* next = (char*)realloc(buf, cap);
+            if (next == NULL) {
+                free(buf);
+                fclose(f);
+                vela__rt__out_of_memory();
+            }
+            buf = next;
+        }
+        size_t got = fread(buf + len, 1, cap - len, f);
+        len += got;
+        if (got == 0) {
+            if (ferror(f)) {
+                free(buf);
+                fclose(f);
+                return VELA__RT__SYS_ENVS_FILE_NOT_FOUND;
+            }
+            break;
+        }
+    }
+    fclose(f);
+
+    size_t i = 0;
+    if (len >= 3 && (unsigned char)buf[0] == 0xEF && (unsigned char)buf[1] == 0xBB && (unsigned char)buf[2] == 0xBF) {
+        i = 3;
+    }
+    while (i < len) {
+        while (i < len && (buf[i] == ' ' || buf[i] == '\t' || buf[i] == '\r' || buf[i] == '\n')) {
+            i++;
+        }
+        if (i >= len) {
+            break;
+        }
+        if (buf[i] == '#') {
+            while (i < len && buf[i] != '\n') {
+                i++;
+            }
+            continue;
+        }
+        if (len - i > 6 && memcmp(buf + i, "export", 6) == 0 && (buf[i + 6] == ' ' || buf[i + 6] == '\t')) {
+            i += 6;
+            while (i < len && (buf[i] == ' ' || buf[i] == '\t')) {
+                i++;
+            }
+        }
+        size_t kstart = i;
+        while (i < len && buf[i] != '=' && buf[i] != '\n' && buf[i] != '\r') {
+            i++;
+        }
+        if (i >= len || buf[i] != '=') {
+            free(buf);
+            vela__rt__env_list_free(out);
+            return VELA__RT__SYS_ENVS_INVALID_LINE;
+        }
+        size_t kend = i;
+        while (kend > kstart && (buf[kend - 1] == ' ' || buf[kend - 1] == '\t')) {
+            kend--;
+        }
+        if (kend == kstart) {
+            free(buf);
+            vela__rt__env_list_free(out);
+            return VELA__RT__SYS_ENVS_INVALID_LINE;
+        }
+        i++; /* skip '=' */
+        while (i < len && (buf[i] == ' ' || buf[i] == '\t')) {
+            i++;
+        }
+        char* val_buf = NULL;
+        size_t vlen = 0;
+        if (i < len && (buf[i] == '"' || buf[i] == '\'')) {
+            char quote = buf[i++];
+            size_t vcap = 64;
+            val_buf = (char*)malloc(vcap);
+            if (val_buf == NULL) {
+                free(buf);
+                vela__rt__env_list_free(out);
+                vela__rt__out_of_memory();
+            }
+            bool closed = false;
+            while (i < len) {
+                char c = buf[i++];
+                if (c == quote) {
+                    closed = true;
+                    break;
+                }
+                if (quote == '"' && c == '\\' && i < len) {
+                    char esc = buf[i++];
+                    switch (esc) {
+                    case 'n': c = '\n'; break;
+                    case 'r': c = '\r'; break;
+                    case 't': c = '\t'; break;
+                    case '\\': c = '\\'; break;
+                    case '"': c = '"'; break;
+                    default: c = esc; break;
+                    }
+                }
+                if (vlen + 1 >= vcap) {
+                    vcap *= 2;
+                    char* nv = (char*)realloc(val_buf, vcap);
+                    if (nv == NULL) {
+                        free(val_buf);
+                        free(buf);
+                        vela__rt__env_list_free(out);
+                        vela__rt__out_of_memory();
+                    }
+                    val_buf = nv;
+                }
+                val_buf[vlen++] = c;
+            }
+            if (!closed) {
+                free(val_buf);
+                free(buf);
+                vela__rt__env_list_free(out);
+                return VELA__RT__SYS_ENVS_INVALID_LINE;
+            }
+            val_buf[vlen] = '\0';
+            while (i < len && (buf[i] == ' ' || buf[i] == '\t')) {
+                i++;
+            }
+            if (i < len && buf[i] == '#') {
+                while (i < len && buf[i] != '\n') {
+                    i++;
+                }
+            } else if (i < len && buf[i] != '\r' && buf[i] != '\n') {
+                free(val_buf);
+                free(buf);
+                vela__rt__env_list_free(out);
+                return VELA__RT__SYS_ENVS_INVALID_LINE;
+            }
+        } else {
+            size_t vstart = i;
+            size_t vend = i;
+            while (i < len && buf[i] != '\n' && buf[i] != '\r') {
+                if (buf[i] == '#' && (i == vstart || buf[i - 1] == ' ' || buf[i - 1] == '\t')) {
+                    while (i < len && buf[i] != '\n') {
+                        i++;
+                    }
+                    break;
+                }
+                i++;
+                vend = i;
+            }
+            while (vend > vstart && (buf[vend - 1] == ' ' || buf[vend - 1] == '\t')) {
+                vend--;
+            }
+            vlen = vend - vstart;
+            val_buf = (char*)malloc(vlen + 1);
+            if (val_buf == NULL) {
+                free(buf);
+                vela__rt__env_list_free(out);
+                vela__rt__out_of_memory();
+            }
+            if (vlen > 0) {
+                memcpy(val_buf, buf + vstart, vlen);
+            }
+            val_buf[vlen] = '\0';
+        }
+        size_t klen = kend - kstart;
+        char* key_buf = (char*)malloc(klen + 1);
+        if (key_buf == NULL) {
+            free(val_buf);
+            free(buf);
+            vela__rt__env_list_free(out);
+            vela__rt__out_of_memory();
+        }
+        memcpy(key_buf, buf + kstart, klen);
+        key_buf[klen] = '\0';
+        vela__rt__env_list_push(out, key_buf, val_buf, vlen);
+    }
+    free(buf);
+    return VELA__RT__SYS_ENVS_OK;
+}
+
+static inline bool vela__rt__sys_lookup_kv(
+    const vela__rt__env_list* list,
+    int mode,
+    const char* target,
+    const char** out_val,
+    size_t* out_len
+) {
+    for (size_t idx = list->count; idx > 0; idx--) {
+        const vela__rt__env_kv* kv = &list->items[idx - 1];
+        bool matched;
+        if (mode == VELA__RT__ENV_CAST_NONE) {
+            matched = strcmp(kv->key, target) == 0;
+        } else {
+            char* casted = vela__rt__sys_cast_key(kv->key, strlen(kv->key), mode);
+            matched = strcmp(casted, target) == 0;
+            free(casted);
+        }
+        if (matched) {
+            *out_val = kv->val;
+            *out_len = kv->val_len;
+            return true;
+        }
+    }
+    return false;
+}
+
+static inline bool vela__rt__sys_lookup_os_env(
+    int mode,
+    const char* target,
+    const char** out_val,
+    size_t* out_len
+) {
+    if (mode == VELA__RT__ENV_CAST_NONE) {
+        const char* val = getenv(target);
+        if (val == NULL) {
+            return false;
+        }
+        *out_val = val;
+        *out_len = strlen(val);
+        return true;
+    }
+#if defined(_WIN32)
+    (void)target;
+    (void)out_val;
+    (void)out_len;
+    return false;
+#else
+    extern char** environ;
+    if (environ == NULL) {
+        return false;
+    }
+    for (char** ep = environ; *ep != NULL; ep++) {
+        const char* entry = *ep;
+        const char* eq = strchr(entry, '=');
+        if (eq == NULL) {
+            continue;
+        }
+        size_t klen = (size_t)(eq - entry);
+        char* casted = vela__rt__sys_cast_key(entry, klen, mode);
+        bool matched = strcmp(casted, target) == 0;
+        free(casted);
+        if (matched) {
+            *out_val = eq + 1;
+            *out_len = strlen(eq + 1);
+            return true;
+        }
+    }
+    return false;
+#endif
+}
+
 static inline int64_t vela__rt__time_now_ms(void) {
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
@@ -3738,17 +4616,25 @@ static inline vela__rt__rng* vela__rt__get_global_rng(void) {
     return &global_rng;
 }
 
-static inline int64_t vela__rt__random_u64_range(uint64_t rand_val, int64_t min_v, int64_t max_v) {
-    if (min_v >= max_v) return min_v;
-    uint64_t range = (uint64_t)(max_v - min_v + 1);
-    return min_v + (int64_t)(rand_val % range);
-}
-
-static inline int64_t vela__rt__random_int(int64_t min_v, int64_t max_v) {
+static inline int64_t vela__rt__random_u64_range(vela__rt__rng* rng, int64_t min_v, int64_t max_v) {
     if (min_v > max_v) {
         vela__rt__int_trap("random_int: min is greater than max", "random_int");
     }
-    return vela__rt__random_u64_range(vela__rt__rng_next_u64(vela__rt__get_global_rng()), min_v, max_v);
+    uint64_t span = (uint64_t)max_v - (uint64_t)min_v;
+    if (span == UINT64_MAX) {
+        return (int64_t)vela__rt__rng_next_u64(rng);
+    }
+    uint64_t range = span + 1;
+    uint64_t threshold = (UINT64_MAX - range + 1) % range;
+    uint64_t r;
+    do {
+        r = vela__rt__rng_next_u64(rng);
+    } while (r < threshold);
+    return (int64_t)((uint64_t)min_v + (r % range));
+}
+
+static inline int64_t vela__rt__random_int(int64_t min_v, int64_t max_v) {
+    return vela__rt__random_u64_range(vela__rt__get_global_rng(), min_v, max_v);
 }
 
 static inline double vela__rt__random_float(void) {
@@ -3760,51 +4646,66 @@ static inline bool vela__rt__random_bool(void) {
     return (vela__rt__rng_next_u64(vela__rt__get_global_rng()) & 1) != 0;
 }
 
-typedef struct vela__rt__rng_slot {
-    vela__rt__rng rng;
-    bool active;
-} vela__rt__rng_slot;
+typedef struct vela__rt__rng_table {
+    vela__rt__rng** slots;
+    size_t len;
+    size_t cap;
+    pthread_mutex_t lock;
+} vela__rt__rng_table;
 
-static inline vela__rt__rng_slot* vela__rt__rng_slots(void) {
-    static vela__rt__rng_slot slots[64] = { { { { 0, 0 } }, false } };
-    return slots;
+static inline vela__rt__rng_table* vela__rt__rng_slots(void) {
+    static vela__rt__rng_table table = { NULL, 0, 0, PTHREAD_MUTEX_INITIALIZER };
+    return &table;
+}
+
+static inline vela__rt__rng* vela__rt__rng_at(int64_t handle) {
+    vela__rt__rng_table* table = vela__rt__rng_slots();
+    pthread_mutex_lock(&table->lock);
+    vela__rt__rng* rng = (handle >= 0 && (size_t)handle < table->len) ? table->slots[handle] : NULL;
+    pthread_mutex_unlock(&table->lock);
+    return rng;
 }
 
 static inline int64_t vela__rt__rng_new(int64_t seed) {
-    vela__rt__rng_slot* slots = vela__rt__rng_slots();
-    for (int i = 0; i < 64; i++) {
-        if (!slots[i].active) {
-            slots[i].active = true;
-            uint64_t s = seed == 0 ? vela__rt__hash_seed() : (uint64_t)seed;
-            vela__rt__rng_seed(&slots[i].rng, s);
-            return (int64_t)i;
-        }
-    }
+    vela__rt__rng_table* table = vela__rt__rng_slots();
     uint64_t s = seed == 0 ? vela__rt__hash_seed() : (uint64_t)seed;
-    vela__rt__rng_seed(&slots[0].rng, s);
-    return 0;
+    vela__rt__rng* rng = (vela__rt__rng*)malloc(sizeof(vela__rt__rng));
+    if (rng == NULL) {
+        vela__rt__out_of_memory();
+    }
+    vela__rt__rng_seed(rng, s);
+    pthread_mutex_lock(&table->lock);
+    if (table->len == table->cap) {
+        size_t next_cap = table->cap == 0 ? 64 : table->cap * 2;
+        vela__rt__rng** next = (vela__rt__rng**)realloc(table->slots, next_cap * sizeof(vela__rt__rng*));
+        if (next == NULL) {
+            pthread_mutex_unlock(&table->lock);
+            free(rng);
+            vela__rt__out_of_memory();
+        }
+        table->slots = next;
+        table->cap = next_cap;
+    }
+    size_t idx = table->len++;
+    table->slots[idx] = rng;
+    pthread_mutex_unlock(&table->lock);
+    return (int64_t)idx;
 }
 
 static inline int64_t vela__rt__rng_next_int(int64_t handle, int64_t min_v, int64_t max_v) {
-    if (min_v > max_v) {
-        vela__rt__int_trap("random_int: min is greater than max", "random_int");
-    }
-    vela__rt__rng_slot* slots = vela__rt__rng_slots();
-    int idx = (handle >= 0 && handle < 64 && slots[handle].active) ? (int)handle : 0;
-    return vela__rt__random_u64_range(vela__rt__rng_next_u64(&slots[idx].rng), min_v, max_v);
+    vela__rt__rng* rng = vela__rt__rng_at(handle);
+    return vela__rt__random_u64_range(rng != NULL ? rng : vela__rt__get_global_rng(), min_v, max_v);
 }
 
 static inline double vela__rt__rng_next_float(int64_t handle) {
-    vela__rt__rng_slot* slots = vela__rt__rng_slots();
-    int idx = (handle >= 0 && handle < 64 && slots[handle].active) ? (int)handle : 0;
-    uint64_t v = vela__rt__rng_next_u64(&slots[idx].rng);
+    vela__rt__rng* rng = vela__rt__rng_at(handle);
+    uint64_t v = vela__rt__rng_next_u64(rng != NULL ? rng : vela__rt__get_global_rng());
     return (double)(v >> 11) * (1.0 / 9007199254740992.0);
 }
 
 static inline bool vela__rt__rng_next_bool(int64_t handle) {
-    vela__rt__rng_slot* slots = vela__rt__rng_slots();
-    int idx = (handle >= 0 && handle < 64 && slots[handle].active) ? (int)handle : 0;
-    return (vela__rt__rng_next_u64(&slots[idx].rng) & 1) != 0;
+    vela__rt__rng* rng = vela__rt__rng_at(handle);
+    return (vela__rt__rng_next_u64(rng != NULL ? rng : vela__rt__get_global_rng()) & 1) != 0;
 }
 
 static inline bool vela__rt__gui_is_interactive(void) {

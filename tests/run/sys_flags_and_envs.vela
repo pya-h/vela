@@ -1,0 +1,65 @@
+include std/files {File, FileMode}
+include std/sys
+
+shape CamelEnv
+    dbHost: text
+    dbPort: int
+    enableTls: bool = false
+    optLimit: maybe int
+fi
+
+shape SnakeEnv
+    db_host: text
+    db_port: int
+fi
+
+task main()
+    region r default
+
+    ; Scalars via sys.flag without region in signature
+    fixed port = sys.flag("port", 8080) { 0 }
+    fixed req = sys.flag<int>("missing_req") { 42 }
+    fixed flt = sys.flag("scale", 2.0, true) { 0.0 }
+    show("flags=", port, ",", req, ",", flt)
+
+    ; sys.os_env + sys.env_parsed
+    fixed unset_env = sys.os_env("VELA_TEST_NONEXISTENT_XYZ")
+    when unset_env is none
+        show("os_env=none")
+    else
+        show("os_env=some")
+    fi
+    fixed ep = sys.env_parsed<int>("VELA_TEST_NONEXISTENT_XYZ", 55) { 0 }
+    show("env_parsed=", ep)
+
+    ; Write temp .env and test CAMELCASE & SNAKE_CASE + defaults + maybe fields
+    fixed p = ".vela_run_test_env.env"
+    flex f = File { path: p }
+    f.open(FileMode.Write) at r { failure _
+    }
+    f.write("DB_HOST=db.internal\nDB_PORT=5432\nENABLE_TLS=on\nOPT_LIMIT=100\n") { failure _
+    }
+    f.close() { failure _
+    }
+
+    match sys.envs<CamelEnv>(sys.EnvNameCastModes.CAMELCASE, p, false, true, true)
+        case { camel }
+            fixed lim = match camel.optLimit
+                case {v} = v
+                case none = -1
+            fi
+            show("camel=", camel.dbHost, ":", camel.dbPort, ":", camel.enableTls, ":", lim)
+        case failure err
+            show("camel_err=", err)
+    fi
+
+    match sys.envs<SnakeEnv>(sys.EnvNameCastModes.SNAKE_CASE, p)
+        case { snake }
+            show("snake=", snake.db_host, ":", snake.db_port)
+        case failure err
+            show("snake_err=", err)
+    fi
+
+    f.delete() { failure _
+    }
+fi

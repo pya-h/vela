@@ -553,7 +553,7 @@ impl Parser {
                 self.at_macro_after(0)
                     || (self.at_line_start() && (self.at_type_alias_after(0) || self.at_pattern_after(0)))
             }
-            _ => self.at_event_after(0) || self.at_macro_after(0) || (self.at_line_start() && (self.at_type_alias_after(0) || self.at_pattern_after(0))),
+            _ => self.at_test_marker() || self.at_event_after(0) || self.at_macro_after(0) || (self.at_line_start() && (self.at_type_alias_after(0) || self.at_pattern_after(0))),
         }
     }
 

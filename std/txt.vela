@@ -129,14 +129,7 @@ task join(parts: [text]@p, sep: text@q, r: region default) -> text@r
 fi
 
 task repeat(s: text@p, count: int, r: region default) -> text@r
-    when count <= 0 or s.len == 0
-        <- ""
-    fi
-    flex out: text@r = ""
-    each i in 0..count
-        out = "{out}{s}" at r
-    fi
-    <- out
+    <- native_text_repeat(s, count, r)
 fi
 
 task to_lower(s: text@p, r: region default) -> text@r
@@ -175,5 +168,6 @@ priv native task native_text_trim(s: text@p) -> text@p
 priv native task native_text_trim_start(s: text@p) -> text@p
 priv native task native_text_trim_end(s: text@p) -> text@p
 priv native task native_text_replace(s: text@p, old: text@q, replacement: text@t, into: region) -> text@into
+priv native task native_text_repeat(s: text@p, count: int, into: region) -> text@into
 priv native task native_text_eq_ignore_case(a: text@p, b: text@q) -> bool
 priv native task native_text_bytes(s: text@p, from: int, to: int) -> text@p

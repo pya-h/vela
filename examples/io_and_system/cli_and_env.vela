@@ -1,0 +1,83 @@
+; CLI flags, environment variables, .env shape loading, and #test helpers via std/sys.
+
+include std/files {File, FileMode}
+include std/sys
+
+shape AppConfig
+    appHost: text
+    appPort: int
+    debugMode: bool = false
+    maxWorkers: maybe int
+fi
+
+task load_sample_config(env_path: text@p, r: region default) -> AppConfig@r ~ sys.EnvsFailure
+    ; Maps UPPER_SNAKE .env keys (APP_HOST -> appHost) and fills defaults cleanly.
+    <- sys.envs<AppConfig@r>(sys.EnvNameCastModes.CAMELCASE, env_path, false, true, true)
+fi
+
+task read_flags_demo()
+    ; Typed CLI flags with defaults and Plan B fallbacks require no region for scalars.
+    fixed port = sys.flag("port", 8080) { 8080 }
+    fixed workers = sys.flag<int>("workers") { 4 }
+    fixed ratio = sys.flag("ratio", 1.5, true) { 1.0 }
+    show("flags: port=", port, ", workers=", workers, ", ratio=", ratio)
+fi
+
+task read_env_demo()
+    fixed missing_port = sys.env_parsed("VELA_DEMO_UNSET_PORT", 9000) { 9000 }
+    fixed mandatory_port = sys.env_parsed<int>("VELA_DEMO_UNSET_PORT") {
+        failure err
+            show("env_parsed_err=", err)
+            7000
+    }
+    show("env_parsed: default=", missing_port, ", plan_b=", mandatory_port)
+fi
+
+task main()
+    region r default
+
+    ; Default region allows omitting `(r)` on sys.args() and sys.cwd().
+    fixed argv = sys.args()
+    fixed has_cwd = match sys.cwd()
+        case { _ } = true
+        case none = false
+    fi
+    show("has_prog=", argv.len >= 1, ", has_cwd=", has_cwd)
+
+    read_flags_demo()
+    read_env_demo()
+
+    ; Write a temporary .env sample file, marshal it into AppConfig, and clean it up.
+    fixed env_path = ".vela_example.env"
+    flex env_file = File { path: env_path }
+    env_file.open(FileMode.Write) at r { failure _
+        show("failed to open temp .env")
+    }
+    env_file.write("# Sample .env\nexport APP_HOST = \"localhost\" # host\nAPP_PORT=8081\nDEBUG_MODE=yes\n") { failure _
+    }
+    env_file.close() { failure _
+    }
+
+    match load_sample_config(env_path, r)
+        case { cfg }
+            show("config: host=", cfg.appHost, ", port=", cfg.appPort, ", debug=", cfg.debugMode)
+            when cfg.maxWorkers is none
+                show("maxWorkers=none")
+            else
+                show("maxWorkers=some")
+            fi
+        case failure err
+            show("config_err=", err)
+    fi
+
+    env_file.delete() { failure _
+    }
+fi
+
+#test
+task cli_and_env_defaults_work()
+    fixed port = sys.flag("port", 3000) { 0 }
+    assert port == 3000
+    fixed ratio = sys.flag("ratio", 2.5, true) { 0.0 }
+    assert ratio == 2.5
+fi

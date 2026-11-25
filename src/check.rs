@@ -311,6 +311,7 @@ pub struct Checker {
     start_values: Vec<StartValue>,
     /// Non-empty when checking startup-evaluated values outside any task (`<-` is disallowed).
     at_start: Option<&'static str>,
+    sys_call_regions: HashMap<(usize, usize, usize), Option<(String, Span)>>,
 }
 
 struct StartValue {
@@ -13774,6 +13775,9 @@ impl Checker {
         types: &mut Vec<TypeArg>,
         args: &mut Vec<Expr>,
     ) -> Result<Type> {
+        if is_sys_parse_task(name) {
+            return self.check_sys_parse_call(span, on_a_value, name, types, args);
+        }
         let (info, group) = match self.task_call_setup(span, on_a_value, name, types, args)? {
             CallSetup::Checked(ty) => return Ok(ty),
 
@@ -13781,6 +13785,209 @@ impl Checker {
         };
         self.check_call_args(span, name, types, args, &info)
             .map_err(|error| group_hint(error, group.as_ref()))
+    }
+
+    fn check_sys_parse_call(
+        &mut self,
+        span: Span,
+        on_a_value: bool,
+        name: &str,
+        types: &mut Vec<TypeArg>,
+        args: &mut Vec<Expr>,
+    ) -> Result<Type> {
+        let info = self
+            .tasks
+            .get(name)
+            .filter(|_| self.sees(name))
+            .ok_or_else(|| self.unknown_task(name, types, span))?
+            .clone();
+        if on_a_value {
+            return err(span, format!("task '{}' cannot be called on a value", name));
+        }
+        let mut explicit_region: Option<(String, Span)> = None;
+        let pop_region = match args.last().map(|arg| &arg.kind) {
+            Some(ExprKind::RegionAfter(_)) => true,
+            Some(ExprKind::Var(r)) => {
+                self.lookup(r).is_some_and(|var| var.ty == Type::Region)
+            }
+            _ => false,
+        };
+        if pop_region && let Some(arg) = args.pop() {
+            let region = match arg.kind {
+                ExprKind::RegionAfter(r) | ExprKind::Var(r) => r,
+                _ => unreachable!(),
+            };
+            self.visible_region(&region, arg.span, true)?;
+            explicit_region = Some((region, arg.span));
+        }
+        if args.len() > info.params.len() {
+            return err(
+                span,
+                format!(
+                    "task '{}' expects {}, got {}",
+                    name,
+                    self.expected_args(name, info.params.len(), 0),
+                    args.len()
+                ),
+            );
+        }
+        self.fill_defaults(name, args);
+        if args.len() != info.params.len() {
+            return err(
+                span,
+                format!(
+                    "task '{}' expects {}, got {}",
+                    name,
+                    self.expected_args(name, info.params.len(), 0),
+                    args.len()
+                ),
+            );
+        }
+        let mut sent = self.check_call_args(span, name, types, args, &info)?;
+        if sent.unknown() {
+            return Ok(sent);
+        }
+        if !types.iter().all(|(ty, _)| ty.params().is_empty()) {
+            self.sys_call_regions.insert(span.place_key(), explicit_region);
+            return Ok(sent);
+        }
+        self.finish_sys_parse(span, name, types, &mut sent, explicit_region)?;
+        Ok(sent)
+    }
+
+    fn finish_sys_parse(
+        &mut self,
+        span: Span,
+        task: &str,
+        types: &mut [TypeArg],
+        sent: &mut Type,
+        explicit_region: Option<(String, Span)>,
+    ) -> Result<()> {
+        let Type::Or(ok_ty, err_ty) = sent else {
+            return Ok(());
+        };
+        let mut target_ty = (**ok_ty).clone();
+        if target_ty.unknown() {
+            return Ok(());
+        }
+        let short = unqualified(task);
+        if matches!(task, "std/sys.flag" | "std/sys.env_parsed") {
+            if !is_sys_scalar_or_text(&target_ty) {
+                return err(
+                    span,
+                    format!(
+                        "task '{}' expects a number, 'bool', 'char', or 'text' as 'T', got {}",
+                        short, target_ty
+                    ),
+                );
+            }
+        } else {
+            let Type::Named(shape_name, _) = &target_ty else {
+                return err(
+                    span,
+                    format!("task '{}' expects a shape as 'T', got {}", short, target_ty),
+                );
+            };
+            let Some(shape) = self.shapes.get(shape_name).cloned() else {
+                return err(
+                    span,
+                    format!("task '{}' expects a shape as 'T', got {}", short, target_ty),
+                );
+            };
+            if shape.fields.is_empty() {
+                return err(
+                    span,
+                    format!(
+                        "shape '{}' has no fields for '{}' to populate",
+                        unqualified(shape_name),
+                        short
+                    ),
+                );
+            }
+            for field in &shape.fields {
+                let inner = match &field.ty {
+                    Type::Maybe(inner) => inner.as_ref(),
+                    other => other,
+                };
+                if !is_sys_scalar_or_text(inner) {
+                    return err(
+                        span,
+                        format!(
+                            "shape '{}' has field '{}' of type {}, which '{}' does not support (use numbers, 'bool', 'char', 'text', or 'maybe' of those)",
+                            unqualified(shape_name),
+                            field.name,
+                            field.ty,
+                            short
+                        ),
+                    );
+                }
+                if field.private
+                    && module_of(shape_name) != self.current_module
+                    && field.default.is_none()
+                    && !matches!(field.ty, Type::Maybe(_))
+                {
+                    return err(
+                        span,
+                        format!(
+                            "shape '{}' has private field '{}' without a default value",
+                            unqualified(shape_name),
+                            field.name
+                        ),
+                    );
+                }
+            }
+        }
+        let needs_region =
+            holds_text(&target_ty, &self.takes_region) || holds_pointers(&target_ty, &self.regional);
+        if !needs_region {
+            if let Some((_, at)) = explicit_region {
+                return err(
+                    at,
+                    format!(
+                        "'{}' makes no text for '{}', so no region is named after its call",
+                        short, target_ty
+                    ),
+                );
+            }
+        } else {
+            let existing = match &target_ty {
+                Type::Text(r) | Type::Named(_, r) => {
+                    r.clone().filter(|reg| reg != ANY_REGION)
+                }
+                _ => None,
+            };
+            match (existing, explicit_region) {
+                (Some(prev), Some((reg, at))) if prev != reg => {
+                    return err(at, format!("expected region '{}', got '{}'", prev, reg));
+                }
+                (_, Some((reg, _))) => {
+                    target_ty = self.in_region(&target_ty, &reg);
+                }
+                (Some(reg), None) => {
+                    self.visible_region(&reg, span, true)?;
+                }
+                (None, None) => {
+                    if let Some(reg) = self.default_region() {
+                        self.visible_region(&reg, span, true)?;
+                        target_ty = self.in_region(&target_ty, &reg);
+                    } else {
+                        self.region_wanted = true;
+                        return err(
+                            span,
+                            format!(
+                                "task '{}' produces text in '{}', which goes in a region; name it after the call, as in '… at r', or declare 'region r default'",
+                                short, target_ty
+                            ),
+                        );
+                    }
+                }
+            }
+        }
+        if let Some((slot, _)) = types.first_mut() {
+            *slot = target_ty.clone();
+        }
+        *sent = Type::Or(Box::new(target_ty), err_ty.clone());
+        Ok(())
     }
 
     fn task_call_setup(
@@ -14046,8 +14253,18 @@ impl Checker {
         {
             self.check_spread_given(name, &callee, &info, args, spread)?;
         }
-        self.settle_call_region(span, &callee, args, &info.params)?;
+        let trailing_region = if info.params.last().is_some_and(|(_, ty)| *ty == Type::Region)
+            && matches!(args.last(), Some(arg) if matches!(arg.kind, ExprKind::RegionAfter(_)))
+        {
+            args.pop()
+        } else {
+            None
+        };
         self.fill_defaults(name, args);
+        if let Some(region) = trailing_region {
+            args.push(region);
+        }
+        self.settle_call_region(span, &callee, args, &info.params)?;
         if args.len() != info.params.len() {
             // Catch `f(a < b, c > (d))` misparsed as generic type args.
             if let Some((name, at)) = args.iter().find_map(|arg| match &arg.kind {
@@ -22966,7 +23183,10 @@ impl Checker {
     }
 
     fn note_instance(&mut self, at: Span, task: &str, given: &[TypeArg]) {
-        if given.is_empty() || given.iter().any(|(ty, _)| !ty.params().is_empty()) {
+        if is_sys_parse_task(task)
+            || given.is_empty()
+            || given.iter().any(|(ty, _)| !ty.params().is_empty())
+        {
             return;
         }
         let types: Vec<Type> = given.iter().map(|(ty, _)| ty.clone()).collect();
@@ -23261,6 +23481,13 @@ impl Checker {
     }
 
     fn settle_types(&mut self, expr: &mut Expr, expected: &Type) -> Result<()> {
+        if let ExprKind::Try(inner) = &mut expr.kind {
+            self.settle_types(inner, expected)?;
+            if let Some(Type::Or(ok, _)) = &inner.ty {
+                expr.ty = Some((**ok).clone());
+            }
+            return Ok(());
+        }
         let ExprKind::Call { name, types, .. } = &expr.kind else {
             return Ok(());
         };
@@ -23280,9 +23507,10 @@ impl Checker {
         for (ty, _) in types.iter_mut() {
             *ty = ty.map_params(&mut |param| given.get(param).cloned());
         }
-        let types = types.clone();
-        expr.ty = Some(sent.map_params(&mut |param| given.get(param).cloned()));
-        if let Some(untold) = types
+        let mut types_settled = types.clone();
+        let mut settled_expr_ty = sent.map_params(&mut |param| given.get(param).cloned());
+        expr.ty = Some(settled_expr_ty.clone());
+        if let Some(untold) = types_settled
             .iter()
             .find_map(|(ty, _)| ty.params().first().map(|param| param.to_string()))
         {
@@ -23303,15 +23531,38 @@ impl Checker {
         {
             self.unsettled_types.remove(at);
         }
-        if let Some(ty) = &mut expr.ty {
+        self.settle_applications(&mut settled_expr_ty, expr.span)?;
+        for (ty, _) in types_settled.iter_mut() {
             self.settle_applications(ty, expr.span)?;
         }
+        if is_sys_parse_task(&name) {
+            let explicit_region = self.sys_call_regions.remove(&expr.span.place_key()).flatten();
+            self.finish_sys_parse(
+                expr.span,
+                &name,
+                &mut types_settled,
+                &mut settled_expr_ty,
+                explicit_region,
+            )?;
+        }
+        if let ExprKind::Call { types, args, .. } = &mut expr.kind {
+            *types = types_settled.clone();
+            if is_sys_parse_task(&name)
+                && matches!(name.as_str(), "std/sys.flag" | "std/sys.env_parsed")
+                && let Some(def_arg) = args.get_mut(1)
+                && let Type::Or(ok_ty, _) = &settled_expr_ty
+                && def_arg.ty.as_ref().is_some_and(|ty| !ty.params().is_empty())
+            {
+                def_arg.ty = Some(Type::Maybe(Box::new((**ok_ty).clone())));
+            }
+        }
+        expr.ty = Some(settled_expr_ty);
         if let Some(info) = self.tasks.get(&name).cloned() {
-            for (param, (ty, at)) in info.types.iter().zip(&types) {
+            for (param, (ty, at)) in info.types.iter().zip(&types_settled) {
                 self.check_need("task", &name, param, ty, *at)?;
             }
         }
-        self.note_instance(expr.span, &name, &types);
+        self.note_instance(expr.span, &name, &types_settled);
         Ok(())
     }
 
@@ -25091,6 +25342,17 @@ fn region_after(args: &[Expr]) -> Option<Span> {
     args.last()
         .filter(|arg| matches!(arg.kind, ExprKind::RegionAfter(_)))
         .map(|arg| arg.span)
+}
+
+fn is_sys_parse_task(name: &str) -> bool {
+    matches!(
+        name,
+        "std/sys.flag" | "std/sys.env_parsed" | "std/sys.envs" | "std/sys.os_envs"
+    )
+}
+
+fn is_sys_scalar_or_text(ty: &Type) -> bool {
+    ty.is_numeric() || matches!(ty, Type::Bool | Type::Char | Type::Text(_))
 }
 
 /// Outlined (`#[inline(never)]`) so error formatting stays off recursive literal-checking stacks.

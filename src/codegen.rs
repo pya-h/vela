@@ -350,6 +350,7 @@ impl Generator {
         for ty in &used.scanned {
             self.gen_scan_number(ty);
         }
+        self.gen_sys_helpers(&used)?;
         self.gen_item_helpers(&used);
         self.gen_map_helpers(&used);
         self.gen_channel_helpers(&used);
@@ -547,9 +548,10 @@ impl Generator {
                     _ => None,
                 })
                 .collect();
-            let needs_sys = items.iter().any(
-                |i| matches!(i, Item::Task(t) if t.native && t.name.starts_with("std/sys.")),
-            );
+            let needs_sys = used.uses_sys
+                || items.iter().any(
+                    |i| matches!(i, Item::Task(t) if t.native && t.name.starts_with("std/sys.")),
+                );
             self.w.blank();
             self.w.open("int main(int argc, char** argv)");
             if needs_sys {
@@ -644,9 +646,10 @@ impl Generator {
             self.w.line("return 2;");
             self.w.close();
         } else if has_main {
-            let needs_sys = items.iter().any(
-                |i| matches!(i, Item::Task(t) if t.native && t.name.starts_with("std/sys.")),
-            );
+            let needs_sys = used.uses_sys
+                || items.iter().any(
+                    |i| matches!(i, Item::Task(t) if t.native && t.name.starts_with("std/sys.")),
+                );
             self.w.blank();
             // Output is C's usual: line by line to a terminal, in blocks to a
             // pipe or a file. `scan` flushes before it reads, and the runtime
@@ -3149,6 +3152,465 @@ impl Generator {
             mangle(PARSE_ERROR)
         ));
         self.w.close();
+    }
+
+    fn gen_sys_helpers(&mut self, used: &UsedTypes) -> Result<()> {
+        for ty in &used.sys_flags {
+            self.gen_sys_scalar_helper(ty, true);
+        }
+        for ty in &used.sys_env_parsed {
+            self.gen_sys_scalar_helper(ty, false);
+        }
+        for ty in &used.sys_envs {
+            self.gen_sys_shape_helper(ty, true)?;
+        }
+        for ty in &used.sys_os_envs {
+            self.gen_sys_shape_helper(ty, false)?;
+        }
+        Ok(())
+    }
+
+    fn gen_sys_scalar_helper(&mut self, ty: &Type, is_flag: bool) {
+        let word = type_word(ty);
+        let (
+            fn_name,
+            err_kind,
+            not_found_variant,
+            invalid_variant,
+            wrong_variant,
+            trim_param,
+            trim_expr,
+            r_param,
+        ) = if is_flag {
+            (
+                format!("vela__sys_flag__{}", word),
+                "std/sys.CliFlagParseError",
+                "NotPassed",
+                "InvalidFlagValue",
+                "WrongFlagType",
+                "",
+                "false",
+                if matches!(ty, Type::Text(_)) {
+                    ", vela__rt__region* r"
+                } else {
+                    ""
+                },
+            )
+        } else {
+            (
+                format!("vela__sys_env_parsed__{}", word),
+                "std/sys.EnvParseError",
+                "NotSet",
+                "InvalidEnvValue",
+                "WrongEnvType",
+                ", bool trim_whitespace",
+                "trim_whitespace",
+                if matches!(ty, Type::Text(_)) {
+                    ", vela__rt__region* r"
+                } else {
+                    ""
+                },
+            )
+        };
+        let maybe_ty = c_type(&Type::Maybe(Box::new(ty.without_regions())));
+        let or_ty = c_type(&Type::Or(
+            Box::new(ty.without_regions()),
+            Box::new(Type::Named(err_kind.to_string(), None)),
+        ));
+        let key_param = if is_flag { "name" } else { "key" };
+        self.w.open(&format!(
+            "static {} {}(vela__rt__text {}, {} def, bool parse_similars{}{})",
+            or_ty, fn_name, key_param, maybe_ty, trim_param, r_param
+        ));
+        self.w.line("const char* val_ptr = NULL;");
+        self.w.line("size_t val_len = 0;");
+        if is_flag {
+            self.w
+                .open("if (!vela__rt__sys_flag_find(name, &val_ptr, &val_len))");
+        } else {
+            self.w.line("char* env_name = vela__rt__path_of(key);");
+            self.w
+                .line("const char* found_env = env_name != NULL ? getenv(env_name) : NULL;");
+            self.w.line("free(env_name);");
+            self.w.open("if (found_env == NULL)");
+        }
+        self.w.open("if (def.has)");
+        self.w.line(&format!(
+            "return ({}){{ .ok = true, .value = def.value }};",
+            or_ty
+        ));
+        self.w.close();
+        self.w.line(&format!(
+            "return ({}){{ .ok = false, .error = {{ .tag = {} }} }};",
+            or_ty,
+            tag_value(err_kind, not_found_variant)
+        ));
+        self.w.close();
+        if !is_flag {
+            self.w.line("val_ptr = found_env;");
+            self.w.line("val_len = strlen(found_env);");
+        }
+        let val_ty = c_type(ty);
+        self.w
+            .line(&format!("{} parsed = {};", val_ty, sys_zero_init(ty)));
+        self.w.line("int st = VELA__RT__SYS_PARSE_OK;");
+        self.emit_sys_parse_value(ty, "parsed", "st", "r", trim_expr, "parse_similars");
+        self.w.open("if (st == VELA__RT__SYS_PARSE_OK)");
+        self.w.line(&format!(
+            "return ({}){{ .ok = true, .value = parsed }};",
+            or_ty
+        ));
+        self.w.close();
+        self.w.line(&format!(
+            "{} why = st == VELA__RT__SYS_PARSE_WRONG_TYPE ? {} : {};",
+            tag_type(err_kind),
+            tag_value(err_kind, wrong_variant),
+            tag_value(err_kind, invalid_variant)
+        ));
+        self.w.line(&format!(
+            "return ({}){{ .ok = false, .error = {{ .tag = why }} }};",
+            or_ty
+        ));
+        self.w.close();
+    }
+
+    fn gen_sys_shape_helper(&mut self, ty: &Type, from_file: bool) -> Result<()> {
+        let Type::Named(shape_name, _) = ty else {
+            return Ok(());
+        };
+        let Some(shape) = self.shapes.get(shape_name).cloned() else {
+            return Ok(());
+        };
+        let has_text = sys_shape_has_text(&shape);
+        let word = type_word(ty);
+        let fn_name = if from_file {
+            format!("vela__sys_envs__{}", word)
+        } else {
+            format!("vela__sys_os_envs__{}", word)
+        };
+        let err_kind = "std/sys.EnvsFailure";
+        let mode_ty = c_type(&Type::Named("std/sys.EnvNameCastModes".to_string(), None));
+        let or_ty = c_type(&Type::Or(
+            Box::new(ty.without_regions()),
+            Box::new(Type::Named(err_kind.to_string(), None)),
+        ));
+        let r_param = if has_text {
+            ", vela__rt__region* r"
+        } else {
+            ""
+        };
+        let sig = if from_file {
+            format!(
+                "static {} {}({} mode, vela__rt__text path, bool use_os_envs, bool parse_similars, bool trim_whitespace{})",
+                or_ty, fn_name, mode_ty, r_param
+            )
+        } else {
+            format!(
+                "static {} {}({} mode, bool parse_similars, bool trim_whitespace{})",
+                or_ty, fn_name, mode_ty, r_param
+            )
+        };
+        self.w.open(&sig);
+        let mode_expr = format!(
+            "(mode.tag == {0}) ? VELA__RT__ENV_CAST_NONE : \
+             (mode.tag == {1}) ? VELA__RT__ENV_CAST_UPPERCASE : \
+             (mode.tag == {2}) ? VELA__RT__ENV_CAST_LOWERCASE : \
+             (mode.tag == {3}) ? VELA__RT__ENV_CAST_CAMELCASE : \
+             (mode.tag == {4}) ? VELA__RT__ENV_CAST_CAPITALCASE : \
+             (mode.tag == {5}) ? VELA__RT__ENV_CAST_PASCALCASE : \
+             VELA__RT__ENV_CAST_SNAKE_CASE",
+            tag_value("std/sys.EnvNameCastModes", "NONE"),
+            tag_value("std/sys.EnvNameCastModes", "UPPERCASE"),
+            tag_value("std/sys.EnvNameCastModes", "LOWERCASE"),
+            tag_value("std/sys.EnvNameCastModes", "CAMELCASE"),
+            tag_value("std/sys.EnvNameCastModes", "CAPITALCASE"),
+            tag_value("std/sys.EnvNameCastModes", "PASCALCASE"),
+        );
+        self.w.line(&format!("int c_mode = {};", mode_expr));
+        if from_file {
+            self.w.line("vela__rt__env_list env_list;");
+            self.w
+                .line("int read_st = vela__rt__sys_read_dotenv(path, &env_list);");
+            self.w.open("if (read_st != VELA__RT__SYS_ENVS_OK)");
+            self.w.open("if (read_st == VELA__RT__SYS_ENVS_INVALID_LINE)");
+            self.w.line(&format!(
+                "return ({}){{ .ok = false, .error = {{ .tag = {} }} }};",
+                or_ty,
+                tag_value(err_kind, "InvalidLine")
+            ));
+            self.w.close();
+            self.w.open("if (!use_os_envs)");
+            self.w.line(&format!(
+                "return ({}){{ .ok = false, .error = {{ .tag = {} }} }};",
+                or_ty,
+                tag_value(err_kind, "FileNotFound")
+            ));
+            self.w.close();
+            self.w.close();
+        }
+        self.w
+            .line(&format!("{} out = {{ 0 }};", mangle(shape_name)));
+        for field in &shape.fields {
+            self.w.open("");
+            self.w.line("const char* val_ptr = NULL;");
+            self.w.line("size_t val_len = 0;");
+            let target_key = escape_c_string(&field.name);
+            if from_file {
+                self.w.line(&format!(
+                    "bool found = vela__rt__sys_lookup_kv(&env_list, c_mode, \"{}\", &val_ptr, &val_len);",
+                    target_key
+                ));
+                self.w.open("if (!found && use_os_envs)");
+                self.w.line(&format!(
+                    "found = vela__rt__sys_lookup_os_env(c_mode, \"{}\", &val_ptr, &val_len);",
+                    target_key
+                ));
+                self.w.close();
+            } else {
+                self.w.line(&format!(
+                    "bool found = vela__rt__sys_lookup_os_env(c_mode, \"{}\", &val_ptr, &val_len);",
+                    target_key
+                ));
+            }
+            let c_field = c_ident(&field.name);
+            self.w.open("if (!found)");
+            if let Some(def_expr) = &field.default {
+                let def_c = self.sys_field_default_c(def_expr, &field.ty)?;
+                self.w.line(&format!("out.{} = {};", c_field, def_c));
+            } else if matches!(field.ty, Type::Maybe(_)) {
+                self.w.line(&format!(
+                    "out.{} = ({}){{ .has = false }};",
+                    c_field,
+                    c_type(&field.ty)
+                ));
+            } else {
+                if from_file {
+                    self.w.line("vela__rt__env_list_free(&env_list);");
+                }
+                self.w.line(&format!(
+                    "return ({}){{ .ok = false, .error = {{ .tag = {} }} }};",
+                    or_ty,
+                    tag_value(err_kind, "MissingField")
+                ));
+            }
+            self.w.close();
+            self.w.open("else");
+            let inner_ty = match &field.ty {
+                Type::Maybe(inner) => inner.as_ref(),
+                other => other,
+            };
+            self.w.line(&format!(
+                "{} fval = {};",
+                c_type(inner_ty),
+                sys_zero_init(inner_ty)
+            ));
+            self.w.line("int st = VELA__RT__SYS_PARSE_OK;");
+            self.emit_sys_parse_value(
+                inner_ty,
+                "fval",
+                "st",
+                "r",
+                "trim_whitespace",
+                "parse_similars",
+            );
+            self.w.open("if (st != VELA__RT__SYS_PARSE_OK)");
+            if from_file {
+                self.w.line("vela__rt__env_list_free(&env_list);");
+            }
+            self.w.line(&format!(
+                "return ({}){{ .ok = false, .error = {{ .tag = {} }} }};",
+                or_ty,
+                tag_value(err_kind, "InvalidFieldValue")
+            ));
+            self.w.close();
+            if matches!(field.ty, Type::Maybe(_)) {
+                self.w.line(&format!(
+                    "out.{} = ({}){{ .has = true, .value = fval }};",
+                    c_field,
+                    c_type(&field.ty)
+                ));
+            } else {
+                self.w.line(&format!("out.{} = fval;", c_field));
+            }
+            self.w.close();
+            self.w.close();
+        }
+        if from_file {
+            self.w.line("vela__rt__env_list_free(&env_list);");
+        }
+        self.w.line(&format!(
+            "return ({}){{ .ok = true, .value = out }};",
+            or_ty
+        ));
+        self.w.close();
+        Ok(())
+    }
+
+    fn emit_sys_parse_value(
+        &mut self,
+        ty: &Type,
+        target: &str,
+        status: &str,
+        region: &str,
+        trim_expr: &str,
+        similars_expr: &str,
+    ) {
+        match ty {
+            Type::Text(_) => {
+                self.w.line(&format!(
+                    "{} = vela__rt__sys_parse_text(val_ptr, val_len, {}, {});",
+                    target, trim_expr, region
+                ));
+                self.w
+                    .line(&format!("{} = VELA__RT__SYS_PARSE_OK;", status));
+            }
+            Type::Bool => {
+                self.w.line(&format!(
+                    "{} = vela__rt__sys_parse_bool(val_ptr, val_len, {}, {}, &{});",
+                    status, similars_expr, trim_expr, target
+                ));
+            }
+            Type::Char => {
+                self.w.line(&format!(
+                    "{} = vela__rt__sys_parse_char(val_ptr, val_len, {}, {}, &{});",
+                    status, similars_expr, trim_expr, target
+                ));
+            }
+            Type::Float => {
+                self.w.line(&format!(
+                    "{} = vela__rt__sys_parse_f64(val_ptr, val_len, {}, {}, false, &{});",
+                    status, similars_expr, trim_expr, target
+                ));
+            }
+            Type::Float32 => {
+                self.w.line("double tmp_f = 0.0;");
+                self.w.line(&format!(
+                    "{} = vela__rt__sys_parse_f64(val_ptr, val_len, {}, {}, true, &tmp_f);",
+                    status, similars_expr, trim_expr
+                ));
+                self.w
+                    .open(&format!("if ({} == VELA__RT__SYS_PARSE_OK)", status));
+                self.w.line(&format!("{} = (float)tmp_f;", target));
+                self.w.close();
+            }
+            Type::Int | Type::Int8 | Type::Int16 | Type::Int32 => {
+                let (min_s, max_s) = match ty {
+                    Type::Int8 => ("INT8_MIN", "INT8_MAX"),
+                    Type::Int16 => ("INT16_MIN", "INT16_MAX"),
+                    Type::Int32 => ("INT32_MIN", "INT32_MAX"),
+                    _ => ("INT64_MIN", "INT64_MAX"),
+                };
+                self.w.line("int64_t tmp_i = 0;");
+                self.w.line(&format!(
+                    "{} = vela__rt__sys_parse_i64(val_ptr, val_len, {}, {}, {}, {}, &tmp_i);",
+                    status, similars_expr, trim_expr, min_s, max_s
+                ));
+                self.w
+                    .open(&format!("if ({} == VELA__RT__SYS_PARSE_OK)", status));
+                self.w.line(&format!("{} = ({})tmp_i;", target, c_type(ty)));
+                self.w.close();
+            }
+            Type::Unit | Type::Uint16 | Type::Uint32 | Type::Uint64 => {
+                let max_s = match ty {
+                    Type::Unit => "255ULL",
+                    Type::Uint16 => "UINT16_MAX",
+                    Type::Uint32 => "UINT32_MAX",
+                    _ => "UINT64_MAX",
+                };
+                self.w.line("uint64_t tmp_u = 0;");
+                self.w.line(&format!(
+                    "{} = vela__rt__sys_parse_u64(val_ptr, val_len, {}, {}, {}, &tmp_u);",
+                    status, similars_expr, trim_expr, max_s
+                ));
+                self.w
+                    .open(&format!("if ({} == VELA__RT__SYS_PARSE_OK)", status));
+                self.w.line(&format!("{} = ({})tmp_u;", target, c_type(ty)));
+                self.w.close();
+            }
+            _ => {
+                self.w
+                    .line(&format!("{} = VELA__RT__SYS_PARSE_INVALID;", status));
+            }
+        }
+    }
+
+    fn gen_sys_parse_call(
+        &mut self,
+        e: &Expr,
+        name: &str,
+        types: &[TypeArg],
+        args: &[Expr],
+    ) -> Result<String> {
+        let Some((target_ty, _)) = types.first() else {
+            return Err(Error::internal_at(
+                e.span,
+                format!(
+                    "sys helper '{}' reached codegen without type argument",
+                    name
+                ),
+            ));
+        };
+        let word = type_word(&target_ty.without_regions());
+        let fn_name = match name {
+            "std/sys.flag" => format!("vela__sys_flag__{}", word),
+            "std/sys.env_parsed" => format!("vela__sys_env_parsed__{}", word),
+            "std/sys.envs" => format!("vela__sys_envs__{}", word),
+            _ => format!("vela__sys_os_envs__{}", word),
+        };
+        let refs: Vec<&Expr> = args.iter().collect();
+        let mut c_args = self.gen_operands(&refs)?;
+        let region = match target_ty {
+            Type::Text(r) => r.clone(),
+            Type::Named(shape_name, r) => self
+                .shapes
+                .get(shape_name)
+                .filter(|shape| sys_shape_has_text(shape))
+                .and(r.clone()),
+            _ => None,
+        };
+        if let Some(reg) = region {
+            c_args.push(c_ident(&reg));
+        }
+        Ok(format!("{}({})", fn_name, c_args.join(", ")))
+    }
+
+    fn sys_field_default_c(&mut self, def_expr: &Expr, field_ty: &Type) -> Result<String> {
+        if matches!(def_expr.kind, ExprKind::NoneLit) {
+            return Ok(format!("(({}){{ .has = false }})", c_type(field_ty)));
+        }
+        let inner_ty = match field_ty {
+            Type::Maybe(inner) => inner.as_ref(),
+            other => other,
+        };
+        let inner_c = match &def_expr.kind {
+            ExprKind::IntLit(n) if inner_ty.is_float() => c_float_literal(*n as f64),
+            ExprKind::IntLit(n) if *inner_ty == Type::Uint64 => format!("UINT64_C({})", n),
+            ExprKind::IntLit(n) => format!("(({})INT64_C({}))", c_type(inner_ty), n),
+            ExprKind::FloatLit(x) if *inner_ty == Type::Float32 => {
+                format!("((float){})", c_float_literal(*x))
+            }
+            ExprKind::FloatLit(x) => c_float_literal(*x),
+            ExprKind::CharLit(c) => format!("((uint8_t){})", c),
+            ExprKind::BoolLit(b) => {
+                if *b {
+                    "true".to_string()
+                } else {
+                    "false".to_string()
+                }
+            }
+            ExprKind::TextLit(s) => format!("VELA__RT__TEXT(\"{}\")", escape_c_string(s)),
+            ExprKind::Macro { name, .. } => macro_name(name),
+            _ => self.gen_expr(def_expr)?,
+        };
+        if matches!(field_ty, Type::Maybe(_)) {
+            Ok(format!(
+                "(({}){{ .has = true, .value = {} }})",
+                c_type(field_ty),
+                inner_c
+            ))
+        } else {
+            Ok(inner_c)
+        }
     }
 
     fn gen_writers(&mut self, used: &UsedTypes) -> Result<()> {
@@ -7705,6 +8167,9 @@ impl Generator {
         if let Some(chan_call) = self.gen_channel_call(e, name, args)? {
             return Ok(chan_call);
         }
+        if is_sys_parse_task(name) {
+            return self.gen_sys_parse_call(e, name, types, args);
+        }
         let called = if types.is_empty() {
             name.to_string()
         } else {
@@ -9002,6 +9467,31 @@ fn is_pointer(ty: &Type) -> bool {
     matches!(ty, Type::Ptr(..))
 }
 
+fn is_sys_parse_task(name: &str) -> bool {
+    matches!(
+        name,
+        "std/sys.flag" | "std/sys.env_parsed" | "std/sys.envs" | "std/sys.os_envs"
+    )
+}
+
+fn sys_shape_has_text(shape: &ShapeDef) -> bool {
+    shape.fields.iter().any(|f| {
+        let inner = match &f.ty {
+            Type::Maybe(inner) => inner.as_ref(),
+            other => other,
+        };
+        matches!(inner, Type::Text(_))
+    })
+}
+
+fn sys_zero_init(ty: &Type) -> &'static str {
+    match ty {
+        Type::Text(_) => "{ \"\", 0 }",
+        Type::Bool => "false",
+        _ => "0",
+    }
+}
+
 fn given_types(wanted: usize, values: &[Expr], span: Span) -> Result<Vec<Type>> {
     if values.len() == wanted {
         return values.iter().map(|value| value.ty().cloned()).collect();
@@ -9505,6 +9995,11 @@ struct UsedTypes {
     commitments: TypeList,
     maybe_commitments: Vec<(Type, Type)>,
     current_err: Option<Type>,
+    uses_sys: bool,
+    sys_flags: TypeList,
+    sys_env_parsed: TypeList,
+    sys_envs: TypeList,
+    sys_os_envs: TypeList,
 }
 
 #[derive(Default)]
@@ -9639,6 +10134,11 @@ impl UsedTypes {
             commitments: TypeList::default(),
             maybe_commitments: Vec::new(),
             current_err: None,
+            uses_sys: false,
+            sys_flags: TypeList::default(),
+            sys_env_parsed: TypeList::default(),
+            sys_envs: TypeList::default(),
+            sys_os_envs: TypeList::default(),
         };
         let tasks: HashSet<&str> = items
             .iter()
@@ -9752,6 +10252,12 @@ impl UsedTypes {
                     };
                     used.block(&t.body);
                     used.current_err = None;
+                    if t.is_test
+                        && !t.name.contains(MODULE_SEPARATOR)
+                        && let Type::Or(_, error) = &t.ret
+                    {
+                        used.note_text(error);
+                    }
                     if is_startup(&t.name) {
                         for stmt in &t.body {
                             if let StmtKind::Expr(Expr {
@@ -10395,7 +10901,29 @@ impl UsedTypes {
                 self.expr(a);
                 self.expr(b);
             }
-            ExprKind::Call { name, args, .. } => {
+            ExprKind::Call {
+                name, types, args, ..
+            } => {
+                if name == "std/sys.flag" {
+                    self.uses_sys = true;
+                    if let Some((ty, _)) = types.first() {
+                        note(&mut self.sys_flags, ty);
+                        self.add(&Type::Maybe(Box::new(ty.without_regions())));
+                    }
+                } else if name == "std/sys.env_parsed" {
+                    if let Some((ty, _)) = types.first() {
+                        note(&mut self.sys_env_parsed, ty);
+                        self.add(&Type::Maybe(Box::new(ty.without_regions())));
+                    }
+                } else if name == "std/sys.envs"
+                    && let Some((ty, _)) = types.first()
+                {
+                    note(&mut self.sys_envs, ty);
+                } else if name == "std/sys.os_envs"
+                    && let Some((ty, _)) = types.first()
+                {
+                    note(&mut self.sys_os_envs, ty);
+                }
                 if let Some(into) = number_cast(name)
                     && args
                         .first()

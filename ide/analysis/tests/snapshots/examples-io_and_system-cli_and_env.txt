@@ -1,0 +1,142 @@
+  1 | ; CLI flags, environment variables, .env shape loading, and #test helpers via std/sys.
+    | comment:; CLI flags, environment variables, .env shape loading, and #test helpers via std/sys.
+  3 | include std/files {File, FileMode}
+    | keyword:include  module:std  operator:/  module:files  punctuation:{  type:File  punctuation:,  type:FileMode  punctuation:}
+  4 | include std/sys
+    | keyword:include  module:std  operator:/  module:sys
+  6 | shape AppConfig
+    | keyword:shape  type:AppConfig
+  7 |     appHost: text
+    | field:appHost  punctuation::  type-builtin:text
+  8 |     appPort: int
+    | field:appPort  punctuation::  type-builtin:int
+  9 |     debugMode: bool = false
+    | field:debugMode  punctuation::  type-builtin:bool  operator:=  keyword:false
+ 10 |     maxWorkers: maybe int
+    | field:maxWorkers  punctuation::  keyword:maybe  type-builtin:int
+ 11 | fi
+    | keyword:fi
+ 13 | task load_sample_config(env_path: text@p, r: region default) -> AppConfig@r ~ sys.EnvsFailure
+    | keyword:task  task:load_sample_config  punctuation:(  parameter:env_path  punctuation::  type-builtin:text  operator:@  region:p  punctuation:,  region:r  punctuation::  keyword:region  keyword:default  punctuation:)  operator:->  type:AppConfig  operator:@  region:r  operator:~  module:sys  punctuation:.  type:EnvsFailure
+ 14 |     ; Maps UPPER_SNAKE .env keys (APP_HOST -> appHost) and fills defaults cleanly.
+    | comment:; Maps UPPER_SNAKE .env keys (APP_HOST -> appHost) and fills defaults cleanly.
+ 15 |     <- sys.envs<AppConfig@r>(sys.EnvNameCastModes.CAMELCASE, env_path, false, true, true)
+    | keyword:<-  module:sys  punctuation:.  task:envs  punctuation:<  type:AppConfig  operator:@  region:r  punctuation:>  punctuation:(  module:sys  punctuation:.  type:EnvNameCastModes  punctuation:.  variant:CAMELCASE  punctuation:,  parameter:env_path  punctuation:,  keyword:false  punctuation:,  keyword:true  punctuation:,  keyword:true  punctuation:)
+ 16 | fi
+    | keyword:fi
+ 18 | task read_flags_demo()
+    | keyword:task  task:read_flags_demo  punctuation:(  punctuation:)
+ 19 |     ; Typed CLI flags with defaults and Plan B fallbacks require no region for scalars.
+    | comment:; Typed CLI flags with defaults and Plan B fallbacks require no region for scalars.
+ 20 |     fixed port = sys.flag("port", 8080) { 8080 }
+    | keyword:fixed  variable:port  operator:=  module:sys  punctuation:.  task:flag  punctuation:(  string:"port"  punctuation:,  number:8080  punctuation:)  punctuation:{  number:8080  punctuation:}
+ 21 |     fixed workers = sys.flag<int>("workers") { 4 }
+    | keyword:fixed  variable:workers  operator:=  module:sys  punctuation:.  task:flag  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  string:"workers"  punctuation:)  punctuation:{  number:4  punctuation:}
+ 22 |     fixed ratio = sys.flag("ratio", 1.5, true) { 1.0 }
+    | keyword:fixed  variable:ratio  operator:=  module:sys  punctuation:.  task:flag  punctuation:(  string:"ratio"  punctuation:,  number:1.5  punctuation:,  keyword:true  punctuation:)  punctuation:{  number:1.0  punctuation:}
+ 23 |     show("flags: port=", port, ", workers=", workers, ", ratio=", ratio)
+    | builtin-fn:show  punctuation:(  string:"flags: port="  punctuation:,  variable:port  punctuation:,  string:", workers="  punctuation:,  variable:workers  punctuation:,  string:", ratio="  punctuation:,  variable:ratio  punctuation:)
+ 24 | fi
+    | keyword:fi
+ 26 | task read_env_demo()
+    | keyword:task  task:read_env_demo  punctuation:(  punctuation:)
+ 27 |     fixed missing_port = sys.env_parsed("VELA_DEMO_UNSET_PORT", 9000) { 9000 }
+    | keyword:fixed  variable:missing_port  operator:=  module:sys  punctuation:.  task:env_parsed  punctuation:(  string:"VELA_DEMO_UNSET_PORT"  punctuation:,  number:9000  punctuation:)  punctuation:{  number:9000  punctuation:}
+ 28 |     fixed mandatory_port = sys.env_parsed<int>("VELA_DEMO_UNSET_PORT") {
+    | keyword:fixed  variable:mandatory_port  operator:=  module:sys  punctuation:.  task:env_parsed  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  string:"VELA_DEMO_UNSET_PORT"  punctuation:)  punctuation:{
+ 29 |         failure err
+    | keyword:failure  variable:err
+ 30 |             show("env_parsed_err=", err)
+    | builtin-fn:show  punctuation:(  string:"env_parsed_err="  punctuation:,  variable:err  punctuation:)
+ 31 |             7000
+    | number:7000
+ 32 |     }
+    | punctuation:}
+ 33 |     show("env_parsed: default=", missing_port, ", plan_b=", mandatory_port)
+    | builtin-fn:show  punctuation:(  string:"env_parsed: default="  punctuation:,  variable:missing_port  punctuation:,  string:", plan_b="  punctuation:,  variable:mandatory_port  punctuation:)
+ 34 | fi
+    | keyword:fi
+ 36 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 37 |     region r default
+    | keyword:region  region:r  keyword:default
+ 39 |     ; Default region allows omitting `(r)` on sys.args() and sys.cwd().
+    | comment:; Default region allows omitting `(r)` on sys.args() and sys.cwd().
+ 40 |     fixed argv = sys.args()
+    | keyword:fixed  variable:argv  operator:=  module:sys  punctuation:.  task:args  punctuation:(  punctuation:)
+ 41 |     fixed has_cwd = match sys.cwd()
+    | keyword:fixed  variable:has_cwd  operator:=  keyword:match  module:sys  punctuation:.  task:cwd  punctuation:(  punctuation:)
+ 42 |         case { _ } = true
+    | keyword:case  punctuation:{  keyword:_  punctuation:}  operator:=  keyword:true
+ 43 |         case none = false
+    | keyword:case  keyword:none  operator:=  keyword:false
+ 44 |     fi
+    | keyword:fi
+ 45 |     show("has_prog=", argv.len >= 1, ", has_cwd=", has_cwd)
+    | builtin-fn:show  punctuation:(  string:"has_prog="  punctuation:,  variable:argv  punctuation:.  field:len  operator:>=  number:1  punctuation:,  string:", has_cwd="  punctuation:,  variable:has_cwd  punctuation:)
+ 47 |     read_flags_demo()
+    | task:read_flags_demo  punctuation:(  punctuation:)
+ 48 |     read_env_demo()
+    | task:read_env_demo  punctuation:(  punctuation:)
+ 50 |     ; Write a temporary .env sample file, marshal it into AppConfig, and clean it up.
+    | comment:; Write a temporary .env sample file, marshal it into AppConfig, and clean it up.
+ 51 |     fixed env_path = ".vela_example.env"
+    | keyword:fixed  variable:env_path  operator:=  string:".vela_example.env"
+ 52 |     flex env_file = File { path: env_path }
+    | keyword:flex  variable:env_file  operator:=  type:File  punctuation:{  field:path  punctuation::  variable:env_path  punctuation:}
+ 53 |     env_file.open(FileMode.Write) at r { failure _
+    | variable:env_file  punctuation:.  method:open  punctuation:(  type:FileMode  punctuation:.  variant:Write  punctuation:)  keyword:at  region:r  punctuation:{  keyword:failure  keyword:_
+ 54 |         show("failed to open temp .env")
+    | builtin-fn:show  punctuation:(  string:"failed to open temp .env"  punctuation:)
+ 55 |     }
+    | punctuation:}
+ 56 |     env_file.write("# Sample .env\nexport APP_HOST = \"localhost\" # host\nAPP_PORT=8081\nDEBUG_MODE=yes\n") { failure _
+    | variable:env_file  punctuation:.  method:write  punctuation:(  string:"# Sample .env  escape:\n  string:export APP_HOST =   escape:\"  string:localhost  escape:\"  string: # host  escape:\n  string:APP_PORT=8081  escape:\n  string:DEBUG_MODE=yes  escape:\n  string:"  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 57 |     }
+    | punctuation:}
+ 58 |     env_file.close() { failure _
+    | variable:env_file  punctuation:.  method:close  punctuation:(  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 59 |     }
+    | punctuation:}
+ 61 |     match load_sample_config(env_path, r)
+    | keyword:match  task:load_sample_config  punctuation:(  variable:env_path  punctuation:,  region:r  punctuation:)
+ 62 |         case { cfg }
+    | keyword:case  punctuation:{  variable:cfg  punctuation:}
+ 63 |             show("config: host=", cfg.appHost, ", port=", cfg.appPort, ", debug=", cfg.debugMode)
+    | builtin-fn:show  punctuation:(  string:"config: host="  punctuation:,  variable:cfg  punctuation:.  field:appHost  punctuation:,  string:", port="  punctuation:,  variable:cfg  punctuation:.  field:appPort  punctuation:,  string:", debug="  punctuation:,  variable:cfg  punctuation:.  field:debugMode  punctuation:)
+ 64 |             when cfg.maxWorkers is none
+    | keyword:when  variable:cfg  punctuation:.  field:maxWorkers  keyword:is  keyword:none
+ 65 |                 show("maxWorkers=none")
+    | builtin-fn:show  punctuation:(  string:"maxWorkers=none"  punctuation:)
+ 66 |             else
+    | keyword:else
+ 67 |                 show("maxWorkers=some")
+    | builtin-fn:show  punctuation:(  string:"maxWorkers=some"  punctuation:)
+ 68 |             fi
+    | keyword:fi
+ 69 |         case failure err
+    | keyword:case  keyword:failure  variable:err
+ 70 |             show("config_err=", err)
+    | builtin-fn:show  punctuation:(  string:"config_err="  punctuation:,  variable:err  punctuation:)
+ 71 |     fi
+    | keyword:fi
+ 73 |     env_file.delete() { failure _
+    | variable:env_file  punctuation:.  method:delete  punctuation:(  punctuation:)  punctuation:{  keyword:failure  keyword:_
+ 74 |     }
+    | punctuation:}
+ 75 | fi
+    | keyword:fi
+ 77 | #test
+    | keyword:#  variable:test
+ 78 | task cli_and_env_defaults_work()
+    | keyword:task  task:cli_and_env_defaults_work  punctuation:(  punctuation:)
+ 79 |     fixed port = sys.flag("port", 3000) { 0 }
+    | keyword:fixed  variable:port  operator:=  module:sys  punctuation:.  task:flag  punctuation:(  string:"port"  punctuation:,  number:3000  punctuation:)  punctuation:{  number:0  punctuation:}
+ 80 |     assert port == 3000
+    | keyword:assert  variable:port  operator:==  number:3000
+ 81 |     fixed ratio = sys.flag("ratio", 2.5, true) { 0.0 }
+    | keyword:fixed  variable:ratio  operator:=  module:sys  punctuation:.  task:flag  punctuation:(  string:"ratio"  punctuation:,  number:2.5  punctuation:,  keyword:true  punctuation:)  punctuation:{  number:0.0  punctuation:}
+ 82 |     assert ratio == 2.5
+    | keyword:assert  variable:ratio  operator:==  number:2.5
+ 83 | fi
+    | keyword:fi
