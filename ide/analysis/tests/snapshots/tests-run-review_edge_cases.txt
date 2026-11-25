@@ -1,0 +1,186 @@
+  1 | include std/sys
+    | keyword:include  module:std  operator:/  module:sys
+  2 | include std/txt
+    | keyword:include  module:std  operator:/  module:txt
+  4 | task test_replace(r: region) -> text@r
+    | keyword:task  task:test_replace  punctuation:(  region:r  punctuation::  keyword:region  punctuation:)  operator:->  type-builtin:text  operator:@  region:r
+  5 |     region inner default
+    | keyword:region  region:inner  keyword:default
+  6 |     fixed src = txt.repeat("hi", 2, inner)
+    | keyword:fixed  variable:src  operator:=  module:txt  punctuation:.  task:repeat  punctuation:(  string:"hi"  punctuation:,  number:2  punctuation:,  region:inner  punctuation:)
+  7 |     <- txt.replace(src, "", "x", r)
+    | keyword:<-  module:txt  punctuation:.  task:replace  punctuation:(  variable:src  punctuation:,  string:""  punctuation:,  string:"x"  punctuation:,  region:r  punctuation:)
+  8 | fi
+    | keyword:fi
+ 10 | task panic_if_called() -> bool
+    | keyword:task  task:panic_if_called  punctuation:(  punctuation:)  operator:->  type-builtin:bool
+ 11 |     assert false, "short-circuit failed"
+    | keyword:assert  keyword:false  punctuation:,  string:"short-circuit failed"
+ 12 |     <- true
+    | keyword:<-  keyword:true
+ 13 | fi
+    | keyword:fi
+ 15 | task check_eq<T: same>(a: T, b: T, r: region)
+    | keyword:task  task:check_eq  punctuation:<  type:T  punctuation::  keyword:same  punctuation:>  punctuation:(  parameter:a  punctuation::  type:T  punctuation:,  parameter:b  punctuation::  type:T  punctuation:,  region:r  punctuation::  keyword:region  punctuation:)
+ 16 |     assert a == b, txt.repeat("mismatch", 1, r)
+    | keyword:assert  parameter:a  operator:==  parameter:b  punctuation:,  module:txt  punctuation:.  task:repeat  punctuation:(  string:"mismatch"  punctuation:,  number:1  punctuation:,  region:r  punctuation:)
+ 17 | fi
+    | keyword:fi
+ 19 | task read_opt_flag<T>(name: text, fallback: T) -> T ~ sys.CliFlagParseError
+    | keyword:task  task:read_opt_flag  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:name  punctuation::  type-builtin:text  punctuation:,  parameter:fallback  punctuation::  type:T  punctuation:)  operator:->  type:T  operator:~  module:sys  punctuation:.  type:CliFlagParseError
+ 20 |     <- sys.flag<T>(name, fallback)
+    | keyword:<-  module:sys  punctuation:.  task:flag  punctuation:<  type:T  punctuation:>  punctuation:(  parameter:name  punctuation:,  parameter:fallback  punctuation:)
+ 21 | fi
+    | keyword:fi
+ 23 | #MASK = (1 << 4) | 0b11
+    | keyword:#  variant:MASK  operator:=  punctuation:(  number:1  operator:<<  number:4  punctuation:)  operator:|  number:0b11
+ 24 | #L_XOR = (1 == 1) xor (1 == 2)
+    | keyword:#  variant:L_XOR  operator:=  punctuation:(  number:1  operator:==  number:1  punctuation:)  keyword:xor  punctuation:(  number:1  operator:==  number:2  punctuation:)
+ 25 | #L_NAND = true nand true
+    | keyword:#  variant:L_NAND  operator:=  keyword:true  keyword:nand  keyword:true
+ 26 | #L_NOR = false nor false
+    | keyword:#  variant:L_NOR  operator:=  keyword:false  keyword:nor  keyword:false
+ 27 | #U_NOT = ~unit(0)
+    | keyword:#  variant:U_NOT  operator:=  operator:~  type-builtin:unit  punctuation:(  number:0  punctuation:)
+ 28 | #U_NOR = unit(1) ~| unit(2)
+    | keyword:#  variant:U_NOR  operator:=  type-builtin:unit  punctuation:(  number:1  punctuation:)  operator:~|  type-builtin:unit  punctuation:(  number:2  punctuation:)
+ 30 | task main()
+    | keyword:task  task:main  punctuation:(  punctuation:)
+ 31 |     region r default
+    | keyword:region  region:r  keyword:default
+ 32 |     fixed replaced = test_replace(r)
+    | keyword:fixed  variable:replaced  operator:=  task:test_replace  punctuation:(  region:r  punctuation:)
+ 33 |     assert replaced == "hihi"
+    | keyword:assert  variable:replaced  operator:==  string:"hihi"
+ 35 |     fixed max_i = 9223372036854775807
+    | keyword:fixed  variable:max_i  operator:=  number:9223372036854775807
+ 36 |     fixed min_i = -9223372036854775807 - 1
+    | keyword:fixed  variable:min_i  operator:=  operator:-  number:9223372036854775807  operator:-  number:1
+ 38 |     flex hit_max = 0
+    | keyword:flex  variable:hit_max  operator:=  number:0
+ 39 |     each i in (max_i - 1)..=max_i
+    | keyword:each  variable:i  keyword:in  punctuation:(  variable:max_i  operator:-  number:1  punctuation:)  operator:..=  variable:max_i
+ 40 |         when i == max_i - 1
+    | keyword:when  variable:i  operator:==  variable:max_i  operator:-  number:1
+ 41 |             continue
+    | keyword:continue
+ 42 |         fi
+    | keyword:fi
+ 43 |         hit_max += 1
+    | variable:hit_max  operator:+=  number:1
+ 44 |     fi
+    | keyword:fi
+ 45 |     assert hit_max == 1
+    | keyword:assert  variable:hit_max  operator:==  number:1
+ 47 |     flex step_max = 0
+    | keyword:flex  variable:step_max  operator:=  number:0
+ 48 |     each i in (max_i - 4)..3..=max_i
+    | keyword:each  variable:i  keyword:in  punctuation:(  variable:max_i  operator:-  number:4  punctuation:)  operator:..  number:3  operator:..=  variable:max_i
+ 49 |         step_max += 1
+    | variable:step_max  operator:+=  number:1
+ 50 |     fi
+    | keyword:fi
+ 51 |     assert step_max == 2
+    | keyword:assert  variable:step_max  operator:==  number:2
+ 53 |     flex step_min = 0
+    | keyword:flex  variable:step_min  operator:=  number:0
+ 54 |     each i in (min_i + 4)..-3..=min_i
+    | keyword:each  variable:i  keyword:in  punctuation:(  variable:min_i  operator:+  number:4  punctuation:)  operator:..  operator:-  number:3  operator:..=  variable:min_i
+ 55 |         when i == min_i + 1
+    | keyword:when  variable:i  operator:==  variable:min_i  operator:+  number:1
+ 56 |             step_min += 1
+    | variable:step_min  operator:+=  number:1
+ 57 |             continue
+    | keyword:continue
+ 58 |         fi
+    | keyword:fi
+ 59 |         step_min += 10
+    | variable:step_min  operator:+=  number:10
+ 60 |     fi
+    | keyword:fi
+ 61 |     assert step_min == 11
+    | keyword:assert  variable:step_min  operator:==  number:11
+ 63 |     flex step_min_ex = 0
+    | keyword:flex  variable:step_min_ex  operator:=  number:0
+ 64 |     each i in (min_i + 4)..-4..min_i
+    | keyword:each  variable:i  keyword:in  punctuation:(  variable:min_i  operator:+  number:4  punctuation:)  operator:..  operator:-  number:4  operator:..  variable:min_i
+ 65 |         step_min_ex += 1
+    | variable:step_min_ex  operator:+=  number:1
+ 66 |     fi
+    | keyword:fi
+ 67 |     assert step_min_ex == 1
+    | keyword:assert  variable:step_min_ex  operator:==  number:1
+ 69 |     fixed inc_arr = each x in 0..=3
+    | keyword:fixed  variable:inc_arr  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..=  number:3
+ 70 |         x * 10
+    | variable:x  operator:*  number:10
+ 71 |     fi { [0, 0, 0, 0] }
+    | keyword:fi  punctuation:{  punctuation:[  number:0  punctuation:,  number:0  punctuation:,  number:0  punctuation:,  number:0  punctuation:]  punctuation:}
+ 72 |     fixed step_arr = each x in 0..2..=6
+    | keyword:fixed  variable:step_arr  operator:=  keyword:each  variable:x  keyword:in  number:0  operator:..  number:2  operator:..=  number:6
+ 73 |         x + 1
+    | variable:x  operator:+  number:1
+ 74 |     fi { [0, 0, 0, 0] }
+    | keyword:fi  punctuation:{  punctuation:[  number:0  punctuation:,  number:0  punctuation:,  number:0  punctuation:,  number:0  punctuation:]  punctuation:}
+ 75 |     assert inc_arr.len == 4
+    | keyword:assert  variable:inc_arr  punctuation:.  field:len  operator:==  number:4
+ 76 |     assert inc_arr[3] == 30
+    | keyword:assert  variable:inc_arr  punctuation:[  number:3  punctuation:]  operator:==  number:30
+ 77 |     assert step_arr.len == 4
+    | keyword:assert  variable:step_arr  punctuation:.  field:len  operator:==  number:4
+ 78 |     assert step_arr[3] == 7
+    | keyword:assert  variable:step_arr  punctuation:[  number:3  punctuation:]  operator:==  number:7
+ 80 |     fixed xs = new [int]([10, 20, 30, 40, 50]) at r
+    | keyword:fixed  variable:xs  operator:=  keyword:new  punctuation:[  type-builtin:int  punctuation:]  punctuation:(  punctuation:[  number:10  punctuation:,  number:20  punctuation:,  number:30  punctuation:,  number:40  punctuation:,  number:50  punctuation:]  punctuation:)  keyword:at  region:r
+ 81 |     fixed sl = xs[1..=3]
+    | keyword:fixed  variable:sl  operator:=  variable:xs  punctuation:[  number:1  operator:..=  number:3  punctuation:]
+ 82 |     assert sl.len == 3
+    | keyword:assert  variable:sl  punctuation:.  field:len  operator:==  number:3
+ 83 |     assert sl[0] == 20
+    | keyword:assert  variable:sl  punctuation:[  number:0  punctuation:]  operator:==  number:20
+ 84 |     assert sl[2] == 40
+    | keyword:assert  variable:sl  punctuation:[  number:2  punctuation:]  operator:==  number:40
+ 85 |     fixed s = "abcde"
+    | keyword:fixed  variable:s  operator:=  string:"abcde"
+ 86 |     assert s[1..=3] == "bcd"
+    | keyword:assert  variable:s  punctuation:[  number:1  operator:..=  number:3  punctuation:]  operator:==  string:"bcd"
+ 88 |     assert (1 << 40) == 1099511627776
+    | keyword:assert  punctuation:(  number:1  operator:<<  number:40  punctuation:)  operator:==  number:1099511627776
+ 89 |     fixed uz = unit(0)
+    | keyword:fixed  variable:uz  operator:=  type-builtin:unit  punctuation:(  number:0  punctuation:)
+ 90 |     assert (~uz) == unit(255)
+    | keyword:assert  punctuation:(  operator:~  variable:uz  punctuation:)  operator:==  type-builtin:unit  punctuation:(  number:255  punctuation:)
+ 91 |     assert (uz ~| uz) == unit(255)
+    | keyword:assert  punctuation:(  variable:uz  operator:~|  variable:uz  punctuation:)  operator:==  type-builtin:unit  punctuation:(  number:255  punctuation:)
+ 92 |     assert (uz ~^ uz) == unit(255)
+    | keyword:assert  punctuation:(  variable:uz  operator:~^  variable:uz  punctuation:)  operator:==  type-builtin:unit  punctuation:(  number:255  punctuation:)
+ 94 |     assert MASK == 19
+    | keyword:assert  variant:MASK  operator:==  number:19
+ 95 |     assert L_XOR
+    | keyword:assert  variant:L_XOR
+ 96 |     assert !L_NAND
+    | keyword:assert  operator:!  variant:L_NAND
+ 97 |     assert L_NOR
+    | keyword:assert  variant:L_NOR
+ 98 |     assert U_NOT == unit(255)
+    | keyword:assert  variant:U_NOT  operator:==  type-builtin:unit  punctuation:(  number:255  punctuation:)
+ 99 |     assert U_NOR == unit(252)
+    | keyword:assert  variant:U_NOR  operator:==  type-builtin:unit  punctuation:(  number:252  punctuation:)
+101 |     assert false nand panic_if_called()
+    | keyword:assert  keyword:false  keyword:nand  task:panic_if_called  punctuation:(  punctuation:)
+102 |     assert !(true nor panic_if_called())
+    | keyword:assert  operator:!  punctuation:(  keyword:true  keyword:nor  task:panic_if_called  punctuation:(  punctuation:)  punctuation:)
+104 |     check_eq(12, 12, r)
+    | task:check_eq  punctuation:(  number:12  punctuation:,  number:12  punctuation:,  region:r  punctuation:)
+106 |     fixed flag_i = read_opt_flag<int>("missing_int", 77) { 0 }
+    | keyword:fixed  variable:flag_i  operator:=  task:read_opt_flag  punctuation:<  type-builtin:int  punctuation:>  punctuation:(  string:"missing_int"  punctuation:,  number:77  punctuation:)  punctuation:{  number:0  punctuation:}
+107 |     fixed flag_f = read_opt_flag<float>("missing_float", 2.5) { 0.0 }
+    | keyword:fixed  variable:flag_f  operator:=  task:read_opt_flag  punctuation:<  type-builtin:float  punctuation:>  punctuation:(  string:"missing_float"  punctuation:,  number:2.5  punctuation:)  punctuation:{  number:0.0  punctuation:}
+108 |     assert flag_i == 77
+    | keyword:assert  variable:flag_i  operator:==  number:77
+109 |     assert flag_f == 2.5
+    | keyword:assert  variable:flag_f  operator:==  number:2.5
+111 |     show(replaced, " ", MASK, " ", sl[2], " ", s[1..=3], " ", flag_i, " ", flag_f)
+    | builtin-fn:show  punctuation:(  variable:replaced  punctuation:,  string:" "  punctuation:,  variant:MASK  punctuation:,  string:" "  punctuation:,  variable:sl  punctuation:[  number:2  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:s  punctuation:[  number:1  operator:..=  number:3  punctuation:]  punctuation:,  string:" "  punctuation:,  variable:flag_i  punctuation:,  string:" "  punctuation:,  variable:flag_f  punctuation:)
+112 | fi
+    | keyword:fi

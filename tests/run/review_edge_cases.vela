@@ -1,0 +1,112 @@
+include std/sys
+include std/txt
+
+task test_replace(r: region) -> text@r
+    region inner default
+    fixed src = txt.repeat("hi", 2, inner)
+    <- txt.replace(src, "", "x", r)
+fi
+
+task panic_if_called() -> bool
+    assert false, "short-circuit failed"
+    <- true
+fi
+
+task check_eq<T: same>(a: T, b: T, r: region)
+    assert a == b, txt.repeat("mismatch", 1, r)
+fi
+
+task read_opt_flag<T>(name: text, fallback: T) -> T ~ sys.CliFlagParseError
+    <- sys.flag<T>(name, fallback)
+fi
+
+#MASK = (1 << 4) | 0b11
+#L_XOR = (1 == 1) xor (1 == 2)
+#L_NAND = true nand true
+#L_NOR = false nor false
+#U_NOT = ~unit(0)
+#U_NOR = unit(1) ~| unit(2)
+
+task main()
+    region r default
+    fixed replaced = test_replace(r)
+    assert replaced == "hihi"
+
+    fixed max_i = 9223372036854775807
+    fixed min_i = -9223372036854775807 - 1
+
+    flex hit_max = 0
+    each i in (max_i - 1)..=max_i
+        when i == max_i - 1
+            continue
+        fi
+        hit_max += 1
+    fi
+    assert hit_max == 1
+
+    flex step_max = 0
+    each i in (max_i - 4)..3..=max_i
+        step_max += 1
+    fi
+    assert step_max == 2
+
+    flex step_min = 0
+    each i in (min_i + 4)..-3..=min_i
+        when i == min_i + 1
+            step_min += 1
+            continue
+        fi
+        step_min += 10
+    fi
+    assert step_min == 11
+
+    flex step_min_ex = 0
+    each i in (min_i + 4)..-4..min_i
+        step_min_ex += 1
+    fi
+    assert step_min_ex == 1
+
+    fixed inc_arr = each x in 0..=3
+        x * 10
+    fi { [0, 0, 0, 0] }
+    fixed step_arr = each x in 0..2..=6
+        x + 1
+    fi { [0, 0, 0, 0] }
+    assert inc_arr.len == 4
+    assert inc_arr[3] == 30
+    assert step_arr.len == 4
+    assert step_arr[3] == 7
+
+    fixed xs = new [int]([10, 20, 30, 40, 50]) at r
+    fixed sl = xs[1..=3]
+    assert sl.len == 3
+    assert sl[0] == 20
+    assert sl[2] == 40
+    fixed s = "abcde"
+    assert s[1..=3] == "bcd"
+
+    assert (1 << 40) == 1099511627776
+    fixed uz = unit(0)
+    assert (~uz) == unit(255)
+    assert (uz ~| uz) == unit(255)
+    assert (uz ~^ uz) == unit(255)
+
+    assert MASK == 19
+    assert L_XOR
+    assert !L_NAND
+    assert L_NOR
+    assert U_NOT == unit(255)
+    assert U_NOR == unit(252)
+
+    assert false nand panic_if_called()
+    assert !(true nor panic_if_called())
+
+    check_eq(12, 12, r)
+
+    fixed flag_i = read_opt_flag<int>("missing_int", 77) { 0 }
+    fixed flag_f = read_opt_flag<float>("missing_float", 2.5) { 0.0 }
+    assert flag_i == 77
+    assert flag_f == 2.5
+
+    show(replaced, " ", MASK, " ", sl[2], " ", s[1..=3], " ", flag_i, " ", flag_f)
+fi

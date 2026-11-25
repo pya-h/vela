@@ -5513,32 +5513,66 @@ impl Generator {
             StmtKind::Each(name, _, range, body, finally) => {
                 let named = self.take_loop();
                 let (a, b, step, inclusive) = self.gen_range(range)?;
-                let end = self.fresh_temp("end");
                 let name = c_ident(name);
-                self.enter_loop(named, finally.is_some());
                 if let Some(s) = step {
+                    let loc = self.location(range.span);
+                    let start_var = self.fresh_temp("start");
                     let step_var = self.fresh_temp("step");
-                    let cond = if inclusive {
-                        format!("({0} >= 0 ? {1} <= {2} : {1} >= {2})", step_var, name, end)
-                    } else {
-                        format!("({0} >= 0 ? {1} < {2} : {1} > {2})", step_var, name, end)
-                    };
-                    self.w.open(&format!(
-                        "for (int64_t {} = {}, {} = {}, {} = {}; {}; {} += {})",
-                        name, a, end, b, step_var, s, cond, name, step_var
+                    let end = self.fresh_temp("end");
+                    let more = self.fresh_temp("more");
+                    self.w.open("");
+                    self.w.line(&format!(
+                        "int64_t {} = {}, {} = {}, {} = {};",
+                        start_var, a, step_var, s, end, b
                     ));
+                    self.w.open(&format!("if ({} == 0)", step_var));
+                    self.w.line(&format!(
+                        "vela__rt__int_trap(\"range step cannot be zero\", {});",
+                        loc
+                    ));
+                    self.w.close();
+                    self.w.line(&format!("int64_t {} = {};", name, start_var));
+                    self.enter_loop(named, finally.is_some());
+                    self.w.open(&format!(
+                        "for (bool {0} = vela__rt__range_has({1}, {2}, {3}, {4}); {0}; {0} = vela__rt__range_step(&{1}, {2}, {3}, {4}))",
+                        more, name, end, step_var, inclusive
+                    ));
+                    self.gen_pass(body)?;
+                    self.end_pass();
+                    self.w.close();
+                    self.finish_loop(finally.as_deref())?;
+                    self.leave_loop();
+                    self.w.close();
+                } else if inclusive {
+                    let end = self.fresh_temp("end");
+                    let more = self.fresh_temp("more");
+                    self.w.open("");
+                    self.w
+                        .line(&format!("int64_t {} = {}, {} = {};", name, a, end, b));
+                    self.enter_loop(named, finally.is_some());
+                    self.w.open(&format!(
+                        "for (bool {0} = ({1} <= {2}); {0}; {0} = ({1} < {2}), {1} = {0} ? {1} + 1 : {1})",
+                        more, name, end
+                    ));
+                    self.gen_pass(body)?;
+                    self.end_pass();
+                    self.w.close();
+                    self.finish_loop(finally.as_deref())?;
+                    self.leave_loop();
+                    self.w.close();
                 } else {
-                    let op = if inclusive { "<=" } else { "<" };
+                    let end = self.fresh_temp("end");
+                    self.enter_loop(named, finally.is_some());
                     self.w.open(&format!(
-                        "for (int64_t {} = {}, {} = {}; {} {} {}; {}++)",
-                        name, a, end, b, name, op, end, name
+                        "for (int64_t {} = {}, {} = {}; {} < {}; {}++)",
+                        name, a, end, b, name, end, name
                     ));
+                    self.gen_pass(body)?;
+                    self.end_pass();
+                    self.w.close();
+                    self.finish_loop(finally.as_deref())?;
+                    self.leave_loop();
                 }
-                self.gen_pass(body)?;
-                self.end_pass();
-                self.w.close();
-                self.finish_loop(finally.as_deref())?;
-                self.leave_loop();
             }
             StmtKind::Match(expr, cases) => self.gen_match(expr, cases, None)?,
             StmtKind::Select(sel) => self.gen_select(sel, None)?,
@@ -8385,6 +8419,15 @@ impl Generator {
                 self.location(e.span)
             ));
         }
+        if op == UnaryOp::BitNot {
+            let cty = c_type(e.ty()?);
+            return Ok(format!(
+                "(({})(~(({}){})))",
+                cty,
+                cty,
+                parenthesized(&expr)
+            ));
+        }
         let op_s = match op {
             UnaryOp::Neg => "-",
             UnaryOp::Not => "!",
@@ -8555,8 +8598,8 @@ impl Generator {
         index: &Expr,
         place: Option<String>,
     ) -> Result<String> {
-        if let ExprKind::Range(from, to, ..) = &index.kind {
-            return self.gen_slice(e, base, from, to);
+        if let ExprKind::Range(from, to, _, inclusive) = &index.kind {
+            return self.gen_slice(e, base, from, to, *inclusive);
         }
         let at = self.location(e.span);
         match base.ty()? {
@@ -8607,12 +8650,24 @@ impl Generator {
         }
     }
 
-    fn gen_slice(&mut self, e: &Expr, base: &Expr, from: &Expr, to: &Expr) -> Result<String> {
+    fn gen_slice(
+        &mut self,
+        e: &Expr,
+        base: &Expr,
+        from: &Expr,
+        to: &Expr,
+        inclusive: bool,
+    ) -> Result<String> {
         let at = self.location(e.span);
         if matches!(base.ty()?, Type::Text(_)) {
             let [text, from, to] =
                 <[String; 3]>::try_from(self.gen_operands(&[base, from, to])?)
                     .map_err(|_| Error::internal_at(e.span, "a part of text without two bounds"))?;
+            let to = if inclusive {
+                format!("vela__rt__add({}, INT64_C(1), {})", to, at)
+            } else {
+                to
+            };
             return Ok(format!(
                 "vela__rt__text_part({}, {}, {}, {})",
                 text, from, to, at
@@ -8636,6 +8691,11 @@ impl Generator {
                 };
                 let [from, to] = <[String; 2]>::try_from(self.gen_operands(&[from, to])?)
                     .map_err(|_| Error::internal_at(e.span, "a slice without two bounds"))?;
+                let to = if inclusive {
+                    format!("vela__rt__add({}, INT64_C(1), {})", to, at)
+                } else {
+                    to
+                };
                 let view = format!(
                     "(({}){{ .items = {}, .len = INT64_C({}) }})",
                     c_type(slice),
@@ -8656,6 +8716,11 @@ impl Generator {
         let [source, from, to] =
             <[String; 3]>::try_from(self.gen_operands(&[source, from, to])?)
                 .map_err(|_| Error::internal_at(e.span, "a slice without two bounds"))?;
+        let to = if inclusive {
+            format!("vela__rt__add({}, INT64_C(1), {})", to, at)
+        } else {
+            to
+        };
         Ok(format!(
             "{}({}, {}, {}, {})",
             item_helper("part", slice),
@@ -9056,8 +9121,22 @@ impl Generator {
         // The code generator recurses through operands, so what each kind of
         // operation writes is in a function of its own, keeping little on the
         // stack here.
-        if matches!(op, BinaryOp::And | BinaryOp::Or) && has_prelude(r) {
-            return self.gen_short_circuit(op, l, r);
+        if matches!(
+            op,
+            BinaryOp::And | BinaryOp::Or | BinaryOp::Nand | BinaryOp::Nor
+        ) && has_prelude(r)
+        {
+            let base = if matches!(op, BinaryOp::And | BinaryOp::Nand) {
+                BinaryOp::And
+            } else {
+                BinaryOp::Or
+            };
+            let res = self.gen_short_circuit(base, l, r)?;
+            return Ok(if matches!(op, BinaryOp::Nand | BinaryOp::Nor) {
+                format!("(!{})", res)
+            } else {
+                res
+            });
         }
         let refs = [l, r]
             .into_iter()
@@ -9358,6 +9437,61 @@ impl Generator {
                 (left, right)
             }
         };
+        if matches!(op, BinaryOp::Shl | BinaryOp::Shr) {
+            let ty = e.ty()?;
+            let cty = c_type(ty);
+            let (bits, signed) = match ty {
+                Type::Int8 => (8, true),
+                Type::Int16 => (16, true),
+                Type::Int32 => (32, true),
+                Type::Int => (64, true),
+                Type::Unit => (8, false),
+                Type::Uint16 => (16, false),
+                Type::Uint32 => (32, false),
+                Type::Uint64 => (64, false),
+                _ => (64, true),
+            };
+            let dir = if op == BinaryOp::Shl { "shl" } else { "shr" };
+            let sign = if signed { "signed" } else { "unsigned" };
+            let r_u64 = *r.ty()? == Type::Uint64;
+            let suffix = if r_u64 { "_u" } else { "" };
+            let lcast = if signed { "int64_t" } else { "uint64_t" };
+            let rcast = if r_u64 { "uint64_t" } else { "int64_t" };
+            return Ok(format!(
+                "(({})vela__rt__{}_{}{}(({})({}), ({})({}), {}, {}))",
+                cty,
+                dir,
+                sign,
+                suffix,
+                lcast,
+                left,
+                rcast,
+                right,
+                bits,
+                self.location(e.span)
+            ));
+        }
+        if matches!(
+            op,
+            BinaryOp::BitAnd
+                | BinaryOp::BitOr
+                | BinaryOp::BitXor
+                | BinaryOp::BitNand
+                | BinaryOp::BitNor
+                | BinaryOp::BitXnor
+        ) {
+            let cty = c_type(e.ty()?);
+            let lval = format!("(({})({}))", cty, left);
+            let rval = format!("(({})({}))", cty, right);
+            return Ok(match op {
+                BinaryOp::BitAnd => format!("(({})({} & {}))", cty, lval, rval),
+                BinaryOp::BitOr => format!("(({})({} | {}))", cty, lval, rval),
+                BinaryOp::BitXor => format!("(({})({} ^ {}))", cty, lval, rval),
+                BinaryOp::BitNand => format!("(({})(~({} & {})))", cty, lval, rval),
+                BinaryOp::BitNor => format!("(({})(~({} | {})))", cty, lval, rval),
+                _ => format!("(({})(~({} ^ {})))", cty, lval, rval),
+            });
+        }
         let op_s = match op {
             BinaryOp::Add => "+",
             BinaryOp::Sub => "-",
@@ -9382,14 +9516,14 @@ impl Generator {
             BinaryOp::Xor => "!=",
             BinaryOp::Nand => return Ok(format!("!({} && {})", left, right)),
             BinaryOp::Nor => return Ok(format!("!({} || {})", left, right)),
-            BinaryOp::BitAnd => "&",
-            BinaryOp::BitOr => "|",
-            BinaryOp::BitXor => "^",
-            BinaryOp::BitNand => return Ok(format!("~({} & {})", left, right)),
-            BinaryOp::BitNor => return Ok(format!("~({} | {})", left, right)),
-            BinaryOp::BitXnor => return Ok(format!("~({} ^ {})", left, right)),
-            BinaryOp::Shl => "<<",
-            BinaryOp::Shr => ">>",
+            BinaryOp::BitAnd
+            | BinaryOp::BitOr
+            | BinaryOp::BitXor
+            | BinaryOp::BitNand
+            | BinaryOp::BitNor
+            | BinaryOp::BitXnor
+            | BinaryOp::Shl
+            | BinaryOp::Shr => unreachable!(),
         };
         let right = match op {
             BinaryOp::Eq
@@ -9424,14 +9558,15 @@ impl Generator {
 
     fn gen_range(&mut self, e: &Expr) -> Result<(String, String, Option<String>, bool)> {
         match &e.kind {
-            ExprKind::Range(a, b, step, inclusive) => {
+            ExprKind::Range(a, b, Some(s), inclusive) => {
+                let [av, sv, bv] = <[String; 3]>::try_from(self.gen_operands(&[a, s, b])?)
+                    .map_err(|_| Error::internal_at(e.span, "a range without three parts"))?;
+                Ok((av, bv, Some(sv), *inclusive))
+            }
+            ExprKind::Range(a, b, None, inclusive) => {
                 let [av, bv] = <[String; 2]>::try_from(self.gen_operands(&[a, b])?)
                     .map_err(|_| Error::internal_at(e.span, "a range without two ends"))?;
-                let step_v = match step {
-                    Some(s) => Some(self.gen_expr(s)?),
-                    None => None,
-                };
-                Ok((av, bv, step_v, *inclusive))
+                Ok((av, bv, None, *inclusive))
             }
             _ => Err(Error::internal_at(
                 e.span,

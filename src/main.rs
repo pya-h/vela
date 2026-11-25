@@ -352,7 +352,9 @@ fn collect_test_files(root: &Path) -> Result<Vec<PathBuf>, String> {
                 }
             } else if path.extension().and_then(|e| e.to_str()) == Some("vela")
                 && let Ok(text) = fs::read_to_string(&path)
-                && text.lines().any(|line| line.trim() == "#test")
+                && text
+                    .lines()
+                    .any(|line| line.split(';').next().is_some_and(|code| code.trim() == "#test"))
             {
                 out.push(path);
             }
@@ -371,7 +373,17 @@ fn run_tests(opts: &TestOptions) -> Result<bool, String> {
         return Ok(true);
     }
 
+    struct TempBins(Vec<PathBuf>);
+    impl Drop for TempBins {
+        fn drop(&mut self) {
+            for exe in &self.0 {
+                let _ = fs::remove_file(exe);
+            }
+        }
+    }
+
     let cc = cc_for(opts.quick);
+    let mut temp_bins = TempBins(Vec::new());
     let mut compiled: Vec<(PathBuf, String, PathBuf, Vec<String>)> = Vec::new();
     let mut total = 0usize;
 
@@ -380,22 +392,16 @@ fn run_tests(opts: &TestOptions) -> Result<bool, String> {
         let source = fs::read_to_string(&file)
             .map_err(|e| format!("error: cannot read '{}': {}", display, e))?;
         let exe = temp_exe("vela-test");
+        temp_bins.0.push(exe.clone());
         let warnings = driver::build_tests(&source, &file, &exe, &cc, !opts.no_notices)
-            .map_err(|e| {
-                let _ = fs::remove_file(&exe);
-                e.render(&display, &source)
-            })?;
+            .map_err(|e| e.render(&display, &source))?;
         warn(&warnings, &display, opts.repeat_warnings);
 
         let list_out = process::Command::new(&exe)
             .arg("--list")
             .output()
-            .map_err(|e| {
-                let _ = fs::remove_file(&exe);
-                format!("error: failed to list tests in '{}': {}", display, e)
-            })?;
+            .map_err(|e| format!("error: failed to list tests in '{}': {}", display, e))?;
         if !list_out.status.success() {
-            let _ = fs::remove_file(&exe);
             return Err(format!("error: failed to list tests in '{}'", display));
         }
         let names: Vec<String> = String::from_utf8_lossy(&list_out.stdout)
@@ -450,9 +456,7 @@ fn run_tests(opts: &TestOptions) -> Result<bool, String> {
         }
     }
 
-    for (_, _, exe, _) in compiled {
-        let _ = fs::remove_file(exe);
-    }
+    drop(temp_bins);
 
     let status = if failed == 0 { "ok" } else { "FAILED" };
     write_stdout(&format!(

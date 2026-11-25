@@ -43,12 +43,19 @@ impl<R: BufRead, W: Write> Transport<R, W> {
             }
         }
 
+        const MAX_MESSAGE_BYTES: usize = 64 * 1024 * 1024;
         let Some(len) = content_length else {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 "missing Content-Length header",
             ));
         };
+        if len > MAX_MESSAGE_BYTES {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Content-Length {} exceeds limit of {} bytes", len, MAX_MESSAGE_BYTES),
+            ));
+        }
 
         let mut buffer = vec![0u8; len];
         self.reader.read_exact(&mut buffer)?;

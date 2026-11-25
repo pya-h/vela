@@ -695,12 +695,15 @@ fn test_subcommand_isolates_assert_traps_and_failures() {
     let dir = temp_dir("test-subcmd");
     let test_file = dir.join("math_test.vela");
     let helper_file = dir.join("plain.vela");
+    let comment_file = dir.join("comment_test.vela");
     std::fs::write(
         &test_file,
         "include std/collections\ninclude std/random\ninclude std/txt\n\nkind TestErr\n    Bad\nfi\n\ntask main()\n    show(\"should not run\")\nfi\n\n#test\ntask pass_ok()\n    assert 1 + 1 == 2\n    region r default\n    assert txt.repeat(\"ab\", 3, r) == \"ababab\"\n    flex first_rng = random.Rng.new(42)\n    fixed want = first_rng.next_int(1, 1000)\n    each k in 0..70\n        flex tmp = random.Rng.new(999 + k)\n        assert tmp.next_int(1, 10) >= 1\n    fi\n    flex dup = random.Rng.new(42)\n    assert dup.next_int(1, 1000) == want\n    assert first_rng.next_int(1, 1000) == dup.next_int(1, 1000)\n    flex big = new [int]() at r\n    each i in 0..64\n        big.add(64 - i)\n    fi\n    collections.sort(big)\n    each i in 0..64\n        assert big[i] == i + 1\n    fi\nfi\n\n#test\ntask trap_fail()\n    assert 1 == 2, \"math broke\"\nfi\n\n#test\ntask err_fail() -> nothing ~ text\n    <- fail \"bad input\"\nfi\n\n#test\ntask custom_err_fail() -> nothing ~ TestErr\n    <- fail TestErr.Bad\nfi\n",
     )
     .unwrap();
     std::fs::write(&helper_file, "; comment mentioning #test\ntask helper()\nfi\n").unwrap();
+    std::fs::write(&comment_file, "#test ; inline comment\ntask comment_ok()\n    assert true\nfi\n")
+        .unwrap();
 
     let out = vela(&["test", test_file.to_str().unwrap()]);
     assert_eq!(out.status.code(), Some(1));
@@ -722,6 +725,13 @@ fn test_subcommand_isolates_assert_traps_and_failures() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(stdout.contains("running 1 test"), "{}", stdout);
     assert!(stdout.contains("pass_ok ... ok"), "{}", stdout);
+    assert!(stdout.contains("test result: ok. 1 passed; 0 failed"), "{}", stdout);
+
+    let out = vela(&["test", dir.to_str().unwrap(), "--filter", "comment_ok"]);
+    assert!(out.status.success(), "{}{}", String::from_utf8_lossy(&out.stdout), stderr(&out));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("running 1 test"), "{}", stdout);
+    assert!(stdout.contains("comment_ok ... ok"), "{}", stdout);
     assert!(stdout.contains("test result: ok. 1 passed; 0 failed"), "{}", stdout);
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -972,5 +982,28 @@ fn sys_parse_rejects_invalid_generic_targets() {
     assert!(!out2.status.success());
     let err2 = stderr(&out2);
     assert!(err2.contains("does not support"), "{}", err2);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn rejects_zero_step_and_stepped_slices() {
+    let dir = temp_dir("bad-ranges");
+    let zero_step = dir.join("zero_step.vela");
+    let stepped_slice = dir.join("stepped_slice.vela");
+    std::fs::write(
+        &zero_step,
+        "task main()\n    each i in 0..0..5\n        show(i)\n    fi\nfi\n",
+    )
+    .unwrap();
+    std::fs::write(
+        &stepped_slice,
+        "task main()\n    fixed xs = [1, 2, 3, 4, 5]\n    fixed ys = xs[0..2..4]\n    show(ys.len)\nfi\n",
+    )
+    .unwrap();
+
+    let out1 = vela(&[zero_step.to_str().unwrap(), "--check"]);
+    assert!(!out1.status.success());
+    let out2 = vela(&[stepped_slice.to_str().unwrap(), "--check"]);
+    assert!(!out2.status.success());
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -2676,6 +2676,7 @@ impl Checker {
                     (UnaryOp::Neg, Constant::Float(x)) => Ok(Constant::Float(-x)),
                     (UnaryOp::Not, Constant::Bool(b)) => Ok(Constant::Bool(!b)),
                     (UnaryOp::BitNot, Constant::Int(n)) => Ok(Constant::Int(!n)),
+                    (UnaryOp::BitNot, Constant::Unit(n)) => Ok(Constant::Unit(!n)),
                     (UnaryOp::Neg, other) => err(
                         span,
                         format!("'-' makes an int or a float negative, not a {}", other.ty()),
@@ -6025,25 +6026,46 @@ impl Checker {
         let count = match &value.stmt.kind {
             StmtKind::Each(_, _, range, _, _) => match (&range.ty, &range.kind) {
                 (Some(Type::Array(_, count)), _) => Some(*count),
-                (_, ExprKind::Range(start, end, ..)) => {
-                    match (constant_int(start), constant_int(end)) {
-                        (Some(a), Some(b)) => match b
-                            .checked_sub(a)
-                            .and_then(|n| u64::try_from(n).ok())
-                            .filter(|n| *n > 0)
-                        {
-                            Some(n) => Some(n),
-                            None => {
-                                return err(
-                                    range.span,
-                                    format!(
-                                        "the range {}..{} is empty, so this loop never runs and has no items to give",
-                                        a, b
-                                    ),
-                                );
+                (_, ExprKind::Range(start, end, step, inclusive)) => {
+                    if let Some(step_expr) = step {
+                        if constant_int(step_expr) == Some(0) {
+                            return err(step_expr.span, "a range's step cannot be 0");
+                        }
+                        match (constant_int(start), constant_int(end), constant_int(step_expr)) {
+                            (Some(a), Some(b), Some(s)) => {
+                                let passes = range_pass_count(a, b, s, *inclusive);
+                                if passes == 0 {
+                                    let dots = if *inclusive { "..=" } else { ".." };
+                                    return err(
+                                        range.span,
+                                        format!(
+                                            "the range {}..{}{}{} is empty, so this loop never runs and has no items to give",
+                                            a, s, dots, b
+                                        ),
+                                    );
+                                }
+                                u64::try_from(passes).ok()
                             }
-                        },
-                        _ => None,
+                            _ => None,
+                        }
+                    } else {
+                        match (constant_int(start), constant_int(end)) {
+                            (Some(a), Some(b)) => {
+                                let total = i128::from(b) - i128::from(a) + i128::from(*inclusive);
+                                if total <= 0 {
+                                    let dots = if *inclusive { "..=" } else { ".." };
+                                    return err(
+                                        range.span,
+                                        format!(
+                                            "the range {}{}{} is empty, so this loop never runs and has no items to give",
+                                            a, dots, b
+                                        ),
+                                    );
+                                }
+                                u64::try_from(total).ok()
+                            }
+                            _ => None,
+                        }
                     }
                 }
                 _ => None,
@@ -7715,7 +7737,9 @@ impl Checker {
                 self.expect_type(&ty, &Type::Bool, condition.span)?;
                 if let Some(msg) = message {
                     let mty = self.check_expr(msg)?;
-                    self.expect_type(&mty, &Type::Text(None), msg.span)?;
+                    if !matches!(mty, Type::Text(_)) && !mty.unknown() {
+                        self.expect_type(&mty, &Type::Text(None), msg.span)?;
+                    }
                 }
                 Ok(())
             }
@@ -16588,7 +16612,7 @@ impl Checker {
         index: &mut Expr,
         span: Span,
     ) -> Result<Type> {
-        let ExprKind::Range(from, to, ..) = &mut index.kind else {
+        let ExprKind::Range(from, to, step, inclusive) = &mut index.kind else {
             let ty = self.check_expr(index)?;
             self.expect_type(&ty, &Type::Int, index.span)?;
             if let Some(value) = constant_int(index).filter(|value| *value < 0) {
@@ -16600,6 +16624,12 @@ impl Checker {
             let _ = span;
             return Ok(Type::Char);
         };
+        if let Some(s) = step {
+            return err(
+                s.span,
+                "a part of text takes a start and an end, not a step; write 's[from..to]' or 's[from..=to]'",
+            );
+        }
         for bound in [&mut **from, &mut **to] {
             let ty = self.check_expr(bound)?;
             self.expect_type(&ty, &Type::Int, bound.span)?;
@@ -16613,12 +16643,16 @@ impl Checker {
                 );
             }
         }
+        if *inclusive && end == Some(i64::MAX) {
+            return err(to.span, format!("text bound {} is out of range", i64::MAX));
+        }
         if let (Some(start), Some(end)) = (start, end)
             && end < start
         {
+            let dots = if *inclusive { "..=" } else { ".." };
             return err(
                 index.span,
-                format!("text {}..{} ends before it starts", start, end),
+                format!("text {}{}{} ends before it starts", start, dots, end),
             );
         }
         index.ty = Some(Type::Range(Box::new(Type::Int)));
@@ -16729,6 +16763,9 @@ impl Checker {
             if let Some(s) = step {
                 let sty = self.check_expr(s)?;
                 self.expect_type(&sty, &Type::Int, s.span)?;
+                if constant_int(s) == Some(0) {
+                    return err(s.span, "a range's step cannot be 0");
+                }
             }
             range.ty = Some(Type::Range(Box::new(Type::Int)));
             return one(Type::Int);
@@ -16749,7 +16786,7 @@ impl Checker {
                 };
             }
             range.ty = Some(Type::Slice(Box::new(item.clone()), region));
-            return one(item);
+            return item_source(item);
         }
         if let ExprKind::Ref(place) = &mut range.kind {
             let ty = self.check_expr(place)?;
@@ -17133,7 +17170,7 @@ impl Checker {
                 ),
             }
         };
-        let ExprKind::Range(from, to, ..) = &mut index.kind else {
+        let ExprKind::Range(from, to, step, inclusive) = &mut index.kind else {
             let ty = self.check_expr(index)?;
             self.expect_type(&ty, &Type::Int, index.span)?;
             if let Some(value) = constant_int(index) {
@@ -17141,22 +17178,33 @@ impl Checker {
             }
             return Ok(items);
         };
+        if let Some(s) = step {
+            return err(
+                s.span,
+                "a slice takes a start and an end, not a step; write 'x[from..to]' or 'x[from..=to]'",
+            );
+        }
         for bound in [&mut **from, &mut **to] {
             let ty = self.check_expr(bound)?;
             self.expect_type(&ty, &Type::Int, bound.span)?;
         }
         let (start, end) = (constant_int(from), constant_int(to));
-        for (value, at) in [(start, from.span), (end, to.span)] {
-            if let Some(value) = value {
-                out_of_range(value, at, "slice bound")?;
+        if let Some(value) = start {
+            out_of_range(value, from.span, "slice bound")?;
+        }
+        if let Some(value) = end {
+            if *inclusive && value == i64::MAX {
+                return err(to.span, format!("index {} is out of range", i64::MAX));
             }
+            out_of_range(value, to.span, if *inclusive { "index" } else { "slice bound" })?;
         }
         if let (Some(start), Some(end)) = (start, end)
             && end < start
         {
+            let dots = if *inclusive { "..=" } else { ".." };
             return err(
                 index.span,
-                format!("slice {}..{} ends before it starts", start, end),
+                format!("slice {}{}{} ends before it starts", start, dots, end),
             );
         }
         index.ty = Some(Type::Range(Box::new(Type::Int)));
@@ -24241,7 +24289,14 @@ impl Checker {
                 .iter_mut()
                 .try_for_each(|value| self.substitute_expr(value, given, made)),
             StmtKind::Break(_, Some(value)) => self.substitute_expr(value, given, made),
-            StmtKind::Region { .. } | StmtKind::Break(..) | StmtKind::Continue(_) | StmtKind::Assert { .. } => Ok(()),
+            StmtKind::Assert { condition, message, .. } => {
+                self.substitute_expr(condition, given, made)?;
+                if let Some(msg) = message {
+                    self.substitute_expr(msg, given, made)?;
+                }
+                Ok(())
+            }
+            StmtKind::Region { .. } | StmtKind::Break(..) | StmtKind::Continue(_) => Ok(()),
             StmtKind::Named(_, inner) => self.substitute_stmt(inner, given, made),
             StmtKind::Turns(turns) => turns
                 .iter_mut()
@@ -24708,7 +24763,7 @@ impl Checker {
                     };
                     self.settle_applications(ty, at)?;
                 }
-                if !types.is_empty() {
+                if !types.is_empty() && !is_sys_parse_task(name) {
                     made.needed.push((
                         name.clone(),
                         types.iter().map(|(ty, _)| ty.clone()).collect(),
@@ -24717,6 +24772,26 @@ impl Checker {
                 }
                 args.iter_mut()
                     .try_for_each(|arg| self.substitute_expr(arg, given, made))?;
+                if is_sys_parse_task(name)
+                    && types.iter().all(|(ty, _)| ty.params().is_empty())
+                    && let Some(mut settled) = e.ty.take()
+                {
+                    let explicit_region = self
+                        .sys_call_regions
+                        .get(&at.place_key())
+                        .cloned()
+                        .flatten();
+                    self.finish_sys_parse(at, name, types, &mut settled, explicit_region)?;
+                    if matches!(name.as_str(), "std/sys.flag" | "std/sys.env_parsed")
+                        && let Some(def_arg) = args.get_mut(1)
+                        && let Type::Or(ok_ty, _) = &settled
+                        && (matches!(def_arg.kind, ExprKind::Wrap(_))
+                            || def_arg.ty.as_ref().is_some_and(|t| !t.params().is_empty()))
+                    {
+                        def_arg.ty = Some(Type::Maybe(Box::new((**ok_ty).clone())));
+                    }
+                    e.ty = Some(settled);
+                }
                 spread_values(args, given, name != "show");
                 if name == "show" {
                     for arg in args.iter() {
@@ -25349,6 +25424,32 @@ fn is_sys_parse_task(name: &str) -> bool {
         name,
         "std/sys.flag" | "std/sys.env_parsed" | "std/sys.envs" | "std/sys.os_envs"
     )
+}
+
+fn range_pass_count(start: i64, end: i64, step: i64, inclusive: bool) -> i128 {
+    let (a, b, s) = (i128::from(start), i128::from(end), i128::from(step));
+    if s > 0 {
+        if (inclusive && a > b) || (!inclusive && a >= b) {
+            return 0;
+        }
+        let span = b - a;
+        if inclusive {
+            span / s + 1
+        } else {
+            (span - 1) / s + 1
+        }
+    } else {
+        if (inclusive && a < b) || (!inclusive && a <= b) {
+            return 0;
+        }
+        let span = a - b;
+        let mag = -s;
+        if inclusive {
+            span / mag + 1
+        } else {
+            (span - 1) / mag + 1
+        }
+    }
 }
 
 fn is_sys_scalar_or_text(ty: &Type) -> bool {
@@ -26020,7 +26121,13 @@ fn stmt_effects(
         StmtKind::Named(..) | StmtKind::Loop(..) | StmtKind::Each(..) | StmtKind::Parted(_) => {
             nested_loop_effects(stmt, None, names, inner, own, effects)
         }
-        StmtKind::Region { .. } | StmtKind::Assert { .. } => {}
+        StmtKind::Assert { condition, message, .. } => {
+            expr_effects(condition, names, inner, own, effects);
+            if let Some(msg) = message {
+                expr_effects(msg, names, inner, own, effects);
+            }
+        }
+        StmtKind::Region { .. } => {}
     }
 }
 
@@ -26345,6 +26452,94 @@ fn fold_binary(op: BinaryOp, a: Constant, b: Constant, span: Span) -> Result<Con
     match (op, a, b) {
         (BinaryOp::And, Bool(x), Bool(y)) => Ok(Bool(x && y)),
         (BinaryOp::Or, Bool(x), Bool(y)) => Ok(Bool(x || y)),
+        (BinaryOp::Xor, Bool(x), Bool(y)) => Ok(Bool(x ^ y)),
+        (BinaryOp::Nand, Bool(x), Bool(y)) => Ok(Bool(!(x && y))),
+        (BinaryOp::Nor, Bool(x), Bool(y)) => Ok(Bool(!(x || y))),
+        (
+            BinaryOp::BitAnd
+            | BinaryOp::BitOr
+            | BinaryOp::BitXor
+            | BinaryOp::BitNand
+            | BinaryOp::BitNor
+            | BinaryOp::BitXnor,
+            Int(x),
+            Int(y),
+        ) => Ok(Int(match op {
+            BinaryOp::BitAnd => x & y,
+            BinaryOp::BitOr => x | y,
+            BinaryOp::BitXor => x ^ y,
+            BinaryOp::BitNand => !(x & y),
+            BinaryOp::BitNor => !(x | y),
+            _ => !(x ^ y),
+        })),
+        (
+            BinaryOp::BitAnd
+            | BinaryOp::BitOr
+            | BinaryOp::BitXor
+            | BinaryOp::BitNand
+            | BinaryOp::BitNor
+            | BinaryOp::BitXnor,
+            x @ (Unit(_) | Int(_)),
+            y @ (Unit(_) | Int(_)),
+        ) => {
+            let wide = |c: Constant| match c {
+                Unit(n) => Ok(n),
+                Int(n) => byte(n, "unit"),
+                _ => Ok(0),
+            };
+            let (x, y) = (wide(x)?, wide(y)?);
+            Ok(Unit(match op {
+                BinaryOp::BitAnd => x & y,
+                BinaryOp::BitOr => x | y,
+                BinaryOp::BitXor => x ^ y,
+                BinaryOp::BitNand => !(x & y),
+                BinaryOp::BitNor => !(x | y),
+                _ => !(x ^ y),
+            }))
+        }
+        (BinaryOp::Shl | BinaryOp::Shr, Int(x), Int(y)) => {
+            if !(0..64).contains(&y) {
+                return err(span, "shift count must be in 0..64");
+            }
+            let s = u32::try_from(y).unwrap_or(0);
+            Ok(Int(if op == BinaryOp::Shl {
+                (x as u64).wrapping_shl(s) as i64
+            } else {
+                x >> s
+            }))
+        }
+        (BinaryOp::Shl | BinaryOp::Shr, Int(x), Unit(y)) => {
+            let s = u32::from(y);
+            if s >= 64 {
+                return err(span, "shift count must be in 0..64");
+            }
+            Ok(Int(if op == BinaryOp::Shl {
+                (x as u64).wrapping_shl(s) as i64
+            } else {
+                x >> s
+            }))
+        }
+        (BinaryOp::Shl | BinaryOp::Shr, Unit(x), Int(y)) => {
+            if !(0..8).contains(&y) {
+                return err(span, "shift count must be in 0..8");
+            }
+            let s = u32::try_from(y).unwrap_or(0);
+            Ok(Unit(if op == BinaryOp::Shl {
+                x.wrapping_shl(s)
+            } else {
+                x >> s
+            }))
+        }
+        (BinaryOp::Shl | BinaryOp::Shr, Unit(x), Unit(y)) => {
+            if y >= 8 {
+                return err(span, "shift count must be in 0..8");
+            }
+            Ok(Unit(if op == BinaryOp::Shl {
+                x.wrapping_shl(u32::from(y))
+            } else {
+                x >> y
+            }))
+        }
         (
             BinaryOp::Eq | BinaryOp::Ne | BinaryOp::Lt | BinaryOp::Gt | BinaryOp::Le | BinaryOp::Ge,
             x @ (Unit(_) | Int(_)),
@@ -27685,7 +27880,13 @@ fn visit_stmt(stmt: &Stmt, f: &mut dyn FnMut(&Expr) -> bool) {
                 .for_each(|part| visit_expr(&part.value, f));
             visit_block(&e.body, f);
         }
-        StmtKind::Region { .. } | StmtKind::Break(..) | StmtKind::Continue(_) | StmtKind::Assert { .. } => {}
+        StmtKind::Assert { condition, message, .. } => {
+            visit_expr(condition, f);
+            if let Some(msg) = message {
+                visit_expr(msg, f);
+            }
+        }
+        StmtKind::Region { .. } | StmtKind::Break(..) | StmtKind::Continue(_) => {}
     }
 }
 

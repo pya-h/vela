@@ -177,6 +177,49 @@ static inline _Noreturn void vela__rt__assert_failed(
     abort();
 }
 
+static inline int64_t vela__rt__i64_from_u64(uint64_t u) {
+    if (u <= (uint64_t)INT64_MAX) {
+        return (int64_t)u;
+    }
+    uint64_t neg = (uint64_t)0 - u;
+    if (neg == (uint64_t)INT64_MAX + 1u) {
+        return INT64_MIN;
+    }
+    return -(int64_t)neg;
+}
+
+static inline bool vela__rt__range_has(int64_t cur, int64_t end, int64_t step, bool inclusive) {
+    if (step > 0) {
+        return inclusive ? (cur <= end) : (cur < end);
+    }
+    return inclusive ? (cur >= end) : (cur > end);
+}
+
+static inline bool vela__rt__range_step(int64_t* cur, int64_t end, int64_t step, bool inclusive) {
+    if (step > 0) {
+        if (inclusive ? (*cur > end) : (*cur >= end)) {
+            return false;
+        }
+        uint64_t rem = (uint64_t)end - (uint64_t)(*cur);
+        uint64_t mag = (uint64_t)step;
+        if (inclusive ? (rem < mag) : (rem <= mag)) {
+            return false;
+        }
+        *cur = vela__rt__i64_from_u64((uint64_t)(*cur) + mag);
+        return true;
+    }
+    if (inclusive ? (*cur < end) : (*cur <= end)) {
+        return false;
+    }
+    uint64_t rem = (uint64_t)(*cur) - (uint64_t)end;
+    uint64_t mag = (uint64_t)0 - (uint64_t)step;
+    if (inclusive ? (rem < mag) : (rem <= mag)) {
+        return false;
+    }
+    *cur = vela__rt__i64_from_u64((uint64_t)(*cur) - mag);
+    return true;
+}
+
 #if defined(__GNUC__) && !defined(VELA__RT__PORTABLE_ARITHMETIC)
 #define VELA__RT__OVERFLOW_BUILTINS 1
 #else
@@ -467,6 +510,80 @@ static inline uint64_t vela__rt__uint_pow(uint64_t a, uint64_t b, const char* at
 
 static inline double vela__rt__fmod(double a, double b) {
     return fmod(a, b);
+}
+
+static inline int64_t vela__rt__shl_signed_u(int64_t x, uint64_t amt, int bits, const char* at) {
+    if (amt >= (uint64_t)bits) {
+        vela__rt__int_trap("shift count out of range", at);
+    }
+    uint64_t u = (uint64_t)x << (unsigned)amt;
+    if (bits == 64) {
+        return vela__rt__i64_from_u64(u);
+    }
+    uint64_t m = (UINT64_C(1) << bits) - 1u;
+    u &= m;
+    uint64_t sign = UINT64_C(1) << (bits - 1);
+    return (u & sign) ? vela__rt__i64_from_u64(u | ~m) : (int64_t)u;
+}
+
+static inline int64_t vela__rt__shl_signed(int64_t x, int64_t amt, int bits, const char* at) {
+    if (amt < 0 || amt >= (int64_t)bits) {
+        vela__rt__int_trap("shift count out of range", at);
+    }
+    return vela__rt__shl_signed_u(x, (uint64_t)amt, bits, at);
+}
+
+static inline int64_t vela__rt__shr_signed_u(int64_t x, uint64_t amt, int bits, const char* at) {
+    if (amt >= (uint64_t)bits) {
+        vela__rt__int_trap("shift count out of range", at);
+    }
+    if (x < 0) {
+        uint64_t inv = (~(uint64_t)x) >> (unsigned)amt;
+        return vela__rt__i64_from_u64(~inv);
+    }
+    return (int64_t)((uint64_t)x >> (unsigned)amt);
+}
+
+static inline int64_t vela__rt__shr_signed(int64_t x, int64_t amt, int bits, const char* at) {
+    if (amt < 0 || amt >= (int64_t)bits) {
+        vela__rt__int_trap("shift count out of range", at);
+    }
+    return vela__rt__shr_signed_u(x, (uint64_t)amt, bits, at);
+}
+
+static inline uint64_t vela__rt__shl_unsigned_u(uint64_t x, uint64_t amt, int bits, const char* at) {
+    if (amt >= (uint64_t)bits) {
+        vela__rt__int_trap("shift count out of range", at);
+    }
+    uint64_t u = x << (unsigned)amt;
+    if (bits < 64) {
+        u &= (UINT64_C(1) << bits) - 1u;
+    }
+    return u;
+}
+
+static inline uint64_t vela__rt__shl_unsigned(uint64_t x, int64_t amt, int bits, const char* at) {
+    if (amt < 0 || amt >= (int64_t)bits) {
+        vela__rt__int_trap("shift count out of range", at);
+    }
+    return vela__rt__shl_unsigned_u(x, (uint64_t)amt, bits, at);
+}
+
+static inline uint64_t vela__rt__shr_unsigned_u(uint64_t x, uint64_t amt, int bits, const char* at) {
+    if (amt >= (uint64_t)bits) {
+        vela__rt__int_trap("shift count out of range", at);
+    }
+    if (bits < 64) {
+        x &= (UINT64_C(1) << bits) - 1u;
+    }
+    return x >> (unsigned)amt;
+}
+
+static inline uint64_t vela__rt__shr_unsigned(uint64_t x, int64_t amt, int bits, const char* at) {
+    if (amt < 0 || amt >= (int64_t)bits) {
+        vela__rt__int_trap("shift count out of range", at);
+    }
+    return vela__rt__shr_unsigned_u(x, (uint64_t)amt, bits, at);
 }
 
 /* (double)INT64_MIN == -2^63 is exact in IEEE 754; +2^63 is the first out-of-range double, and NaN fails both bounds. */
@@ -3514,8 +3631,11 @@ static inline vela__rt__text vela__rt__text_trim_end(vela__rt__text s) {
 }
 
 static inline vela__rt__text vela__rt__text_replace(vela__rt__text s, vela__rt__text old_t, vela__rt__text new_t, vela__rt__region* into) {
-    if (s.len <= 0 || old_t.len <= 0) {
-        return s;
+    if (s.len <= 0) {
+        return (vela__rt__text){ "", 0 };
+    }
+    if (old_t.len <= 0) {
+        return vela__rt__text_in(into, s.bytes, (size_t)s.len);
     }
     int64_t count = 0;
     int64_t pos = 0;
@@ -3528,7 +3648,13 @@ static inline vela__rt__text vela__rt__text_replace(vela__rt__text s, vela__rt__
         }
     }
     if (count == 0) {
-        return s;
+        return vela__rt__text_in(into, s.bytes, (size_t)s.len);
+    }
+    if (new_t.len > old_t.len) {
+        int64_t grow = new_t.len - old_t.len;
+        if (count > (INT64_MAX - s.len) / grow) {
+            vela__rt__int_trap("replace: text length overflows", "std/txt.replace");
+        }
     }
     int64_t new_len = s.len + count * (new_t.len - old_t.len);
     if (new_len <= 0) {
@@ -3759,6 +3885,9 @@ static inline bool vela__rt__sys_flag_find(
         return false;
     }
     size_t nlen = name.len < 0 ? 0 : (size_t)name.len;
+    if (nlen == 0) {
+        return false;
+    }
     bool found = false;
     for (int i = 1; i < s->argc; i++) {
         const char* arg = s->argv[i];
@@ -3766,7 +3895,7 @@ static inline bool vela__rt__sys_flag_find(
             continue;
         }
         size_t alen = strlen(arg);
-        if (alen >= nlen + 1 && arg[nlen] == '=' && (nlen == 0 || memcmp(arg, name.bytes, nlen) == 0)) {
+        if (alen >= nlen + 1 && arg[nlen] == '=' && memcmp(arg, name.bytes, nlen) == 0) {
             *out_val = arg + nlen + 1;
             *out_len = alen - nlen - 1;
             found = true;
