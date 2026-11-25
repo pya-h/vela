@@ -1379,7 +1379,8 @@ double* vela__place__23 = &amp;(*vela__at__slice__float(
       <h2><span class="sec-num">6</span>Architectural Innovations &amp; Strategic Route</h2>
       <div class="callout green">
         <strong>Vela's Core Principle: Keep Safety Zero-Cost at Compile Time</strong><br>
-        Never chase benchmark numbers by disabling bounds/overflow traps globally or introducing tracing GC. As <code>02_binary_trees</code> proves, lexical regions already defeat Go GC and un-arenad C/Rust by wide margins. The right path combines <strong>compile-time proof hoisting</strong> with a <strong>modern user-space fiber &amp; epoll runtime</strong> under the unchanged Vela surface language.
+        Never chase benchmark numbers by disabling bounds/overflow traps globally or introducing tracing GC. As <code>02_binary_trees</code> proves, lexical regions already defeat Go GC and un-arenad C/Rust by wide margins. The right path combines <strong>compile-time proof hoisting</strong> with a <strong>modern user-space fiber &amp; epoll runtime</strong> under the unchanged Vela surface language.<br><br>
+        <strong>Shipped Compiler Foundations:</strong> First-class bitwise operations (<code>&amp;</code>, <code>|</code>, <code>^^</code>, <code>~&amp;</code>, <code>~|</code>, <code>~^</code>, <code>&lt;&lt;</code>, <code>&gt;&gt;</code>, <code>~</code>) with checked C11 helpers, zero-cost inlined <code>assert</code>/<code>!assert</code> statements, UB-free stepped integer ranges (<code>start..step..end</code>), and in-place adaptive introsort (<code>collections.sort</code>) have now landed in the compiler and standard library.
       </div>
 
       <div class="innov-grid">

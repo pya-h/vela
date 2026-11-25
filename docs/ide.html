@@ -862,9 +862,18 @@ npm --prefix ide/web run e2e           <span class="comment"># Chromium against 
       </p>
       <pre>ln -s "$(pwd)/editors/vscode" ~/.vscode/extensions/vela</pre>
       <p>
-        The extension includes TextMate syntax highlighting, smart block indentation, real-time error squiggles,
-        contextual autocompletions, type hovers, cross-file go-to-definition, and symbol outlines.
+        The extension includes TextMate syntax highlighting (updated with <code>#test</code> decorators,
+        <code>assert</code> statements, condition operators <code>xor</code>/<code>nand</code>/<code>nor</code>,
+        bitwise operators <code>^^</code>, <code>~&amp;</code>, <code>~|</code>, <code>~^</code>, <code>!&gt;</code> error handlers, and <code>..=</code>),
+        smart block indentation, real-time error squiggles, contextual autocompletions, type hovers, cross-file go-to-definition, and symbol outlines.
+        The LSP daemon includes 64 MiB framed payload protection for stability under large file workspaces.
       </p>
+      <p>
+        Run project tests from the integrated terminal using the CLI test runner:
+      </p>
+      <pre>vela test                    <span class="comment"># discovers and runs all #test tasks</span>
+vela test tests/ --filter math  <span class="comment"># filters tests by name</span>
+vela run main.vela           <span class="comment"># compiles and executes directly</span></pre>
     </section>
   </main>
 

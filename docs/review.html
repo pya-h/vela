@@ -568,99 +568,68 @@ vela__rt__add(a, <span class="number">2</span>, <span class="number">17</span>) 
       </div>
 
       <div class="entry">
-        <h3>A bigger library, written the way the library is written <span class="badge b-idea">idea</span> <span class="badge b-small">small</span></h3>
+        <h3>A bigger library, written the way the library is written <span class="badge b-handled">Handled</span> <span class="badge b-small">small</span></h3>
         <p>
           Today a program can't read its own command line or environment (we checked: nothing in the language or
           <code>std/</code> names them), the examples hand-write a sort, and the guide's own Current Limits list
           text search, trimming, and case changes as missing. All of it is Vela-shaped work:
         </p>
         <pre><span class="keyword">include</span> std/sys {args}
-<span class="keyword">include</span> std/slices {sort}
+<span class="keyword">include</span> std/collections {sort}
 
 <span class="keyword">task</span> main()
-    <span class="keyword">each</span> a <span class="keyword">in</span> args
+    <span class="keyword">each</span> a <span class="keyword">in</span> args()
         show(a)
     <span class="keyword">fi</span>
 <span class="keyword">fi</span></pre>
         <ul>
-          <li><strong><code>std/sys</code></strong>: <code>args</code> (the command line as a slice of text),
-            <code>env(name) at r</code>, <code>exit(n)</code>. Small native tasks, like the files'.</li>
-          <li><strong><code>std/slices</code></strong>: <code>sort</code>, <code>find</code>, <code>sum</code>,
-            <code>min</code>, <code>max</code>, over <code>&lt;T: ordered&gt;</code> and <code>&lt;T: same&gt;</code> &mdash;
-            the generic words already say all of it.</li>
-          <li><strong><code>std/text</code></strong>: <code>find</code>, <code>split</code>, <code>trim</code>,
-            <code>upper</code>, <code>lower</code>, each returning text of the region it's given, as the guide's
-            own limits page sketches.</li>
-          <li><strong><code>std/random</code></strong>: a seeded generator with <code>next(r) -&gt; int</code> and
-            <code>below(n)</code>, so tests can be made repeatable.</li>
+          <li><strong><code>std/sys</code></strong>: <code>args</code> (command line slice), typed flags (<code>sys.flag&lt;T&gt;</code>),
+            <code>env</code>/<code>env_parsed</code>, <code>envs&lt;T&gt;</code> shape marshaling, and <code>exit(n)</code>.</li>
+          <li><strong><code>std/collections</code></strong>: in-place <code>sort</code>, <code>sort_by</code>, <code>sorted</code>, and <code>reverse</code> over <code>&lt;T: ordered&gt;</code>.</li>
+          <li><strong><code>std/txt</code></strong>: <code>replace</code>, <code>split</code>, <code>lines</code>, <code>join</code>, <code>trim</code>, <code>starts_with</code>, <code>ends_with</code>, <code>to_upper</code>, <code>to_lower</code>, and ASCII classifiers.</li>
+          <li><strong><code>std/random</code></strong>: seeded <code>Rng</code> generator, <code>next_int</code>, <code>next_float</code>, <code>shuffle</code>, and <code>choice</code>.</li>
+          <li><strong><code>std/time</code></strong>: monotonic and wall-clock timestamps, sleep delays, and <code>Duration</code>.</li>
         </ul>
         <dl>
           <dt>What it adds</dt>
-          <dd>The parts every program outside the examples actually reaches for, without one new language rule.
-            And since the library is held by the compiler, every tool gets it at once.</dd>
+          <dd>The core standard utilities every practical program needs, shipped right inside the compiler.</dd>
           <dt>What it costs</dt>
-          <dd>Pages in the docs and tests in the suite, and a decision the project has already learned to make
-            (see <a href="std.html">how <code>std/files</code> was cut</a>): which parts belong in Vela and which
-            are natives.</dd>
+          <dd>Standardized documentation and tests in the suite.</dd>
         </dl>
       </div>
 
       <div class="entry">
-        <h3>Bitwise work as methods <span class="badge b-on-table">on the table</span> <span class="badge b-small">small</span></h3>
+        <h3>Bitwise operators &amp; shifts <span class="badge b-handled">Handled</span> <span class="badge b-small">small</span></h3>
         <p>
-          A systems language with no way to and, or, xor, or shift a bit (we looked; there is none) leaves a gap
-          between what it means to be &mdash; bytes, units, chars &mdash; and what it lets a program say. New
-          symbols would fight the ones already earning their place (<code>&amp;</code> marks a place,
-          <code>~</code> is the error side, <code>^</code> points). <a href="future.html#bitwise">Future
-          Directions</a> has already chosen C's symbols, <code>&amp;</code>, <code>|</code>, <code>&lt;&lt;</code> and
-          <code>&gt;&gt;</code> (2026-09-23), for reading as C does, and lists what they must settle (the
-          <code>&gt;&gt;</code> that closes nested types, the <code>|</code> error message); this is the case for the
-          other way. Methods fit the language's own rule, that a
-          member of a value is written after a dot:
+          First-class bitwise manipulation has now landed with dedicated operators: <code>&amp;</code>, <code>|</code>,
+          <code>^^</code> (XOR), <code>~&amp;</code> (NAND), <code>~|</code> (NOR), <code>~^</code> (XNOR), <code>~</code> (one's complement),
+          and checked shifts <code>&lt;&lt;</code> / <code>&gt;&gt;</code>.
         </p>
-        <pre><span class="keyword">fixed</span> flags = <span class="number">0b1010</span>
-flags = flags.bor(<span class="number">0b0110</span>)          <span class="comment">; 0b1110</span>
-show(flags.band(<span class="number">0b0010</span>), flags.shl(<span class="number">2</span>))
-flex c: unit = <span class="number">0xff</span>
-show(c.shr(<span class="number">4</span>), c.bnot())            <span class="comment">; 15 0</span></pre>
+        <pre><span class="keyword">fixed</span> mask = (<span class="number">1</span> &lt;&lt; <span class="number">4</span>) | <span class="number">0b11</span>       <span class="comment">; 19</span>
+<span class="keyword">fixed</span> flags = <span class="number">0b1010</span> ^^ <span class="number">0b1100</span>     <span class="comment">; 0b0110 (6)</span>
+<span class="keyword">flex</span> c: unit = <span class="number">0xff</span>
+show(~c, <span class="string">" "</span>, c &gt;&gt; <span class="number">4</span>)               <span class="comment">; 0 15</span></pre>
         <dl>
           <dt>What it adds</dt>
-          <dd>Flags, hashes, packings, and masks, on <code>int</code>, <code>unit</code>, and <code>char</code>
-            alike. A shift past the value's bits stops the program with a message, as arithmetic does; a result
-            that can't fit (an <code>int</code> shifted left past 63) stops it too.</dd>
+          <dd>Direct bit masking and shift capabilities on <code>int</code>, <code>unit</code>, and sized integers, with UB-free runtime shift checks.</dd>
           <dt>What it costs</dt>
-          <dd>Six methods on three types, in the builtin list the compiler already keeps, and the choice of a
-            result type per operation &mdash; the same choice <code>+</code> already makes between
-            <code>int</code> and <code>float</code>. No grammar changes at all.</dd>
+          <dd>Minimal compiler and runtime additions, eliminating any need for verbose method calls or arithmetic workarounds.</dd>
         </dl>
       </div>
 
       <div class="entry">
-        <h3>An index beside the item: <code>each i, v in xs</code> <span class="badge b-idea">idea</span> <span class="badge b-small">small</span></h3>
+        <h3>An index beside the item: <code>each i, v in xs</code> <span class="badge b-handled">Handled</span> <span class="badge b-small">small</span></h3>
         <p>
-          A map's loop gives a key and its value together; a slice's gives one item and points at the refuse a
-          program gets today (<em>'each i, x' names a key and its value, which only a map gives</em>). The
-          examples pay the tax everywhere, walking <code>0..len</code> just to count:
+          Indexed iteration has now landed directly in the language:
         </p>
-        <pre><span class="comment">; today</span>
-each i in 0..xs.len
-    when xs[i] &gt; <span class="number">0</span>
-        seen++
-    fi
-fi
-<span class="comment">; the idea</span>
-each i, x in xs
-    when x &gt; <span class="number">0</span>
-        seen++
-    fi
-fi</pre>
+        <pre><span class="keyword">each</span> i, x <span class="keyword">in</span> xs
+    show(i, <span class="string">": "</span>, x)
+<span class="keyword">fi</span></pre>
         <dl>
           <dt>What it adds</dt>
-          <dd>The index beside the item, checked once at the loop's start, the way a map's loop already works.
-            The error message the compiler gives today is practically asking for it.</dd>
+          <dd>Direct zero-based index enumeration alongside array, slice, or iterator items without manual counting or <code>0..xs.len</code> loops.</dd>
           <dt>What it costs</dt>
-          <dd>One more form of <code>each</code>, and the rule that <code>each v in &amp;xs</code> (as it is at
-            each pass) gives the index too, which it would.</dd>
+          <dd>Clean codegen generating standard C loop induction variables.</dd>
         </dl>
       </div>
 
@@ -735,15 +704,11 @@ fi</pre>
       </div>
 
       <div class="entry">
-        <h3>Testing in the language: <code>vela test</code> <span class="badge b-on-table">on the table</span> <span class="badge b-medium">medium</span></h3>
+        <h3>Testing in the language: <code>vela test</code> <span class="badge b-handled">Handled</span> <span class="badge b-medium">medium</span></h3>
         <p>
-          <a href="future.html">Future Directions</a> already lists built-in testing as an idea, and the shape of
-          it is sitting in this repository: <code>tests/run/</code> programs are named, they print their output,
-          and the harness compares it. The language half is small from there &mdash; a task whose name starts
-          <code>test</code>, run by <code>vela test</code> beside <code>main</code>, with a failure rendered the
-          way every other stop is (file, line, caret, and what was expected). My addition to the existing idea is
-          only this: the runner should reuse the whole existing harness, because it already knows how to run
-          programs, feed them input, and diff their output, and a test runner is mostly that.
+          First-class testing is now built into the compiler CLI via <code>vela test [path] [--filter pattern]</code>.
+          Tasks annotated with <code>#test</code> are discovered across project files, compiled into dedicated test
+          binaries, and executed in isolated sub-processes with assertion failure, runtime trap, and failure value reporting.
         </p>
       </div>
 

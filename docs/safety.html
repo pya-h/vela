@@ -410,6 +410,24 @@
                 <a href="vela.html#tasks">Tasks</a>, <a href="vela.html#field-defaults">field defaults</a>, and
                 <a href="vela.html#named-results">Named Results</a>.</td>
             </tr>
+            <tr id="asserts">
+              <td><code>assert cond, msg</code> and <code>!assert cond, msg</code> statements verify invariants and contract
+                conditions in place, compiling to zero-allocation C checks that trap immediately on failure with location and message.</td>
+              <td class="when"><span class="badge b-trapped">trapped</span></td>
+              <td>Silent execution continuation on violated state invariants or pre/post-conditions. See <a href="vela.html#assert">Assertions</a>.</td>
+            </tr>
+            <tr>
+              <td>Bitwise shifts (<code>&lt;&lt;</code>, <code>&gt;&gt;</code>) verify that the shift count is non-negative and
+                strictly less than the bit width of the integer type (e.g. <code>0..64</code> for <code>int</code>, <code>0..8</code> for <code>unit</code>).</td>
+              <td class="when"><span class="badge b-trapped">trapped</span></td>
+              <td>C undefined behavior and platform-dependent instruction results on oversized or negative bit shifts. See <a href="vela.html#bitwise">Bitwise operators</a>.</td>
+            </tr>
+            <tr>
+              <td>Range steps (<code>start..step..end</code>) verify step &ne; 0 (constant 0 rejected at compile time). Stepping loops compute
+                induction increments using unsigned modular arithmetic. Stepped ranges on slices (<code>xs[a..s..b]</code>) are rejected.</td>
+              <td class="when"><span class="badge b-checked">checked</span> <span class="badge b-trapped">trapped</span></td>
+              <td>Infinite loops on zero step, non-contiguous slice stride errors, and signed integer overflow UB at 64-bit bounds. See <a href="vela.html#range-step">Ranges and stepping</a>.</td>
+            </tr>
             <tr>
               <td>A <code>maybe</code> is opened before its value is used, and <code>==</code> compares it only
                 with <code>none</code>.</td>

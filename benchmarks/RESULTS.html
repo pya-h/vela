@@ -87,7 +87,9 @@
         <h1>Vela Performance Dashboard <span class="badge">Vela vs C, Rust, Go, Zig</span></h1>
         <div class="subtitle">Cross-language runtime, memory, concurrency, compilation, and HTTP throughput metrics (5 timed runs, 2 warmups across 9 benchmarks).</div>
       </div>
-      <div>
+      <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+        <a href="../docs/benchmarks.html" class="btn active" style="text-decoration: none; display: inline-flex; align-items: center; gap: 0.35rem;">🔍 Forensics &amp; Simulator</a>
+        <a href="../docs/future.html" class="btn" style="text-decoration: none; display: inline-flex; align-items: center; gap: 0.35rem;">🚀 Roadmap</a>
         <span class="badge" style="background: rgba(59, 130, 246, 0.15); color: #60a5fa; border-color: #3b82f6;">Automated Output Parity Checked</span>
       </div>
     </header>
@@ -122,7 +124,10 @@
     <div id="benchmarks-container"></div>
 
     <footer>
-      Generated dynamically by <code>benchmarks/run.py</code>. Direct execution timing via monotonic clock; Peak RSS via GNU Time / Linux <code>/proc/pid/status</code> VmHWM.
+      Generated dynamically by <code>benchmarks/run.py</code>. Direct execution timing via monotonic clock; Peak RSS via GNU Time / Linux <code>/proc/pid/status</code> VmHWM.<br>
+      Explore the full forensic analysis &amp; interactive optimization simulator in <a href="../docs/benchmarks.html" style="color: var(--accent); font-weight: 600;">docs/benchmarks.html</a> &bull;
+      Architecture roadmap in <a href="../docs/future.html" style="color: var(--accent); font-weight: 600;">docs/future.html</a> &bull;
+      Language guide in <a href="../docs/vela.html" style="color: var(--accent); font-weight: 600;">docs/vela.html</a>.
     </footer>
   </div>
 

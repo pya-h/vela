@@ -311,6 +311,10 @@
         <tr><td><code>find(xs, test) -&gt; maybe T</code></td><td>the first item <code>test</code> holds for, or <code>none</code></td></tr>
         <tr><td><code>all(xs, test) -&gt; bool</code></td><td>whether <code>test</code> holds for every item; true for none</td></tr>
         <tr><td><code>any(xs, test) -&gt; bool</code></td><td>whether <code>test</code> holds for some item; false for none</td></tr>
+        <tr><td><code>sort(flex xs: [T]@a)</code></td><td>sorts a flexible slice of ordered items (<code>T: ordered</code>) in place using adaptive introsort (quicksort + heapsort + insertion sort)</td></tr>
+        <tr><td><code>sort_by(flex xs: [T]@a, cmp)</code></td><td>sorts a flexible slice in place with a custom comparator <code>(T, T) -&gt; int</code></td></tr>
+        <tr><td><code>sorted(xs, cmp, r) -&gt; [T]@r</code></td><td>copies <code>frozen</code> items into a new slice in region <code>r</code> and returns it sorted by <code>cmp</code></td></tr>
+        <tr><td><code>reverse(flex xs: [T]@a)</code></td><td>reverses the items of a flexible slice in place without heap allocations</td></tr>
       </table>
       <ul>
         <li><strong>Eager.</strong> Each task goes through all the items when it is called, and <code>map</code>,
@@ -696,6 +700,139 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
       <table>
         <tr><th>Name</th><th>Role</th></tr>
         <tr><td><code>channel&lt;T&gt;(capacity: int) -&gt; Chan[T]</code></td><td>Creates a thread-safe bounded FIFO channel backed by <code>chan_new&lt;T&gt;(capacity)</code></td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2 id="random">std/random</h2>
+      <p>
+        Pseudo-random number generator, range selection, and Fisher-Yates slice shuffling. Brought in with
+        <code>include std/random {Rng, random_int, random_float, random_bool, shuffle, choice}</code>.
+      </p>
+      <pre><span class="keyword">include</span> std/random {Rng, shuffle, choice}
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">flex</span> rng = Rng.new(<span class="number">42</span>)
+    <span class="keyword">fixed</span> roll = rng.next_int(<span class="number">1</span>, <span class="number">6</span>)       <span class="comment">; random int in 1..6 inclusive</span>
+    <span class="keyword">fixed</span> chance = rng.next_float()        <span class="comment">; random float in [0.0, 1.0)</span>
+
+    <span class="keyword">flex</span> items = <span class="keyword">new</span> [<span class="type">int</span>]([<span class="number">10</span>, <span class="number">20</span>, <span class="number">30</span>, <span class="number">40</span>, <span class="number">50</span>]) <span class="keyword">at</span> r
+    shuffle(items)                          <span class="comment">; in-place Fisher-Yates shuffle</span>
+    <span class="keyword">fixed</span> picked = choice(items)            <span class="comment">; maybe int (none if empty)</span>
+    show(roll, <span class="string">" "</span>, picked { <span class="number">0</span> })
+<span class="keyword">fi</span></pre>
+      <table>
+        <tr><th>Name</th><th>Role</th></tr>
+        <tr><td><code>Rng.new(seed = 0) -&gt; Rng</code></td><td>Creates a stateful pseudo-random generator with a custom seed (or uses system seed when 0)</td></tr>
+        <tr><td><code>rng.next_int(min, max) -&gt; int</code></td><td>Generates an integer uniformly in the range <code>min..max</code> inclusive</td></tr>
+        <tr><td><code>rng.next_float() -&gt; float</code></td><td>Generates a double-precision floating-point number in <code>[0.0, 1.0)</code></td></tr>
+        <tr><td><code>rng.next_bool() -&gt; bool</code></td><td>Generates a random boolean with 50/50 probability</td></tr>
+        <tr><td><code>random_int(min, max)</code>, <code>random_float()</code>, <code>random_bool()</code></td><td>Global stateless random number generation using the process-wide default generator</td></tr>
+        <tr><td><code>shuffle(flex xs: [T]@a)</code></td><td>Performs an in-place Fisher-Yates shuffle on any flexible slice without heap allocations</td></tr>
+        <tr><td><code>choice(xs: [T]@a) -&gt; maybe T</code></td><td>Uniformly selects a random item from a slice, returning <code>none</code> if the slice is empty</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2 id="sys">std/sys</h2>
+      <p>
+        Command-line arguments, typed flag parsing (Go-style <code>name=value</code>), environment variable lookups,
+        strict <code>.env</code> file shape deserialization with name-casting modes, working directory, and process exit.
+        Brought in with <code>include std/sys</code> or <code>include std/sys {flag, env, envs, args}</code>.
+      </p>
+      <pre><span class="keyword">include</span> std/sys
+
+<span class="keyword">shape</span> AppConfig
+    host: text
+    port: int
+    debug: bool
+    rate_limit: maybe float
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main() -&gt; nothing ~ sys.EnvsFailure
+    <span class="keyword">region</span> r
+    <span class="comment">; 1. Typed CLI flag parsing from argv (name=value)</span>
+    <span class="keyword">fixed</span> port = sys.flag&lt;<span class="type">int</span>&gt;(<span class="string">"port"</span>, <span class="number">8080</span>)!
+    <span class="keyword">fixed</span> verbose = sys.flag(<span class="string">"verbose"</span>, <span class="keyword">false</span>, <span class="keyword">true</span>)!  <span class="comment">; parse_similars=true</span>
+    <span class="keyword">fixed</span> token = sys.flag&lt;text&gt;(<span class="string">"token"</span>) { <span class="string">"anonymous"</span> } <span class="comment">; Plan B on missing</span>
+
+    <span class="comment">; 2. Deserialize .env file directly into AppConfig shape with SNAKE_CASE casting</span>
+    <span class="keyword">fixed</span> conf: AppConfig@r = sys.envs(sys.EnvNameCastModes.SNAKE_CASE, <span class="string">".env"</span>)!
+    show(<span class="string">"Server running at "</span>, conf.host, <span class="string">":"</span>, conf.port)
+<span class="keyword">fi</span></pre>
+      <table>
+        <tr><th>Task / Shape</th><th>Role</th></tr>
+        <tr><td><code>args(r) -&gt; [text]@r</code></td><td>Returns all process command-line arguments as a slice of text allocated in region <code>r</code></td></tr>
+        <tr><td><code>flag&lt;T&gt;(name, default = none, parse_similars = false) -&gt; T ~ CliFlagParseError</code></td><td>Scans arguments for <code>name=value</code> or <code>name="value"</code>, parsing into type <code>T</code> (<code>int</code>, <code>float</code>, <code>bool</code>, <code>char</code>, or <code>text</code>). If missing, returns <code>default</code> or fails with <code>NotPassed</code>. When <code>parse_similars=true</code>, auto-coerces compatible numeric/boolean formats.</td></tr>
+        <tr><td><code>env(key, r) -&gt; maybe text@r</code>, <code>os_env(key, r)</code></td><td>Reads an environment variable into region <code>r</code>, giving <code>none</code> if unset</td></tr>
+        <tr><td><code>env_parsed&lt;T&gt;(key, default = none, parse_similars = false) -&gt; T ~ EnvParseError</code></td><td>Reads and parses an environment variable into type <code>T</code>, returning <code>default</code> or failing with <code>NotSet</code> / <code>WrongEnvType</code></td></tr>
+        <tr><td><code>envs&lt;T&gt;(name_cast_mode, path = ".env", use_os_envs = false, parse_similars = false) -&gt; T ~ EnvsFailure</code></td><td>Parses a <code>.env</code> file directly into shape <code>T</code>. Automatically maps field names according to <code>EnvNameCastModes</code> (e.g. converting <code>PORT</code> or <code>SERVER_PORT</code> to match shape fields).</td></tr>
+        <tr><td><code>os_envs&lt;T&gt;(name_cast_mode, parse_similars = false) -&gt; T ~ EnvsFailure</code></td><td>Populates shape <code>T</code> directly from OS process environment variables</td></tr>
+        <tr><td><code>EnvNameCastModes</code></td><td>Cast mode kind: <code>NONE</code>, <code>UPPERCASE</code>, <code>LOWERCASE</code>, <code>CAMELCASE</code>, <code>CAPITALCASE</code>, <code>PASCALCASE</code>, <code>SNAKE_CASE</code></td></tr>
+        <tr><td><code>cwd(r) -&gt; maybe text@r</code></td><td>Returns the current process working directory in region <code>r</code></td></tr>
+        <tr><td><code>exit(code = 0)</code></td><td>Terminates the process immediately with the given status code</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2 id="time">std/time</h2>
+      <p>
+        High-resolution monotonic clocks, wall-clock timestamps, sleep delays, and duration helpers.
+        Brought in with <code>include std/time {now_ms, now_unix, monotonic_ns, monotonic_ms, sleep, Duration}</code>.
+      </p>
+      <pre><span class="keyword">include</span> std/time {now_ms, monotonic_ns, sleep, Duration}
+
+<span class="keyword">task</span> main()
+    <span class="keyword">fixed</span> start = monotonic_ns()
+    sleep(<span class="number">50</span>)                               <span class="comment">; sleep 50 milliseconds</span>
+    <span class="keyword">fixed</span> elapsed_ns = monotonic_ns() - start
+    <span class="keyword">fixed</span> dur = Duration { ms: elapsed_ns / <span class="number">1000000</span> }
+    show(<span class="string">"Elapsed: "</span>, dur.seconds(), <span class="string">"s ("</span>, dur.str(), <span class="string">")"</span>)
+<span class="keyword">fi</span></pre>
+      <table>
+        <tr><th>Name</th><th>Role</th></tr>
+        <tr><td><code>monotonic_ns() -&gt; int</code></td><td>High-precision monotonic clock in nanoseconds, suitable for microbenchmarks and latency metrics</td></tr>
+        <tr><td><code>monotonic_ms() -&gt; int</code></td><td>Monotonic clock in milliseconds</td></tr>
+        <tr><td><code>now_ms() -&gt; int</code></td><td>Current UNIX epoch time in milliseconds</td></tr>
+        <tr><td><code>now_unix() -&gt; int</code></td><td>Current UNIX epoch time in seconds</td></tr>
+        <tr><td><code>sleep(ms: int)</code></td><td>Suspends execution of the current thread for <code>ms</code> milliseconds</td></tr>
+        <tr><td><code>Duration</code></td><td>Time duration shape: <code>.ms</code>, <code>.seconds() -&gt; float</code>, <code>.nanos() -&gt; int</code>, <code>.sleep()</code>, and <code>.str(r) -&gt; text@r</code></td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2 id="txt">std/txt</h2>
+      <p>
+        String search, case conversions, trimming, splitting, joining, and ASCII character classification.
+        Brought in with <code>include std/txt</code> or <code>include std/txt {replace, split, join, trim, starts_with}</code>.
+      </p>
+      <pre><span class="keyword">include</span> std/txt
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">fixed</span> raw = <span class="string">"  apple, banana, orange  "</span>
+    <span class="keyword">fixed</span> clean = txt.trim(raw)
+    <span class="keyword">fixed</span> parts = txt.split(clean, <span class="string">", "</span>, r)   <span class="comment">; ["apple", "banana", "orange"]</span>
+    <span class="keyword">fixed</span> joined = txt.join(parts, <span class="string">" | "</span>, r)   <span class="comment">; "apple | banana | orange"</span>
+    <span class="keyword">fixed</span> rep = txt.replace(joined, <span class="string">"banana"</span>, <span class="string">"mango"</span>, r)
+    show(rep)                                 <span class="comment">; "apple | mango | orange"</span>
+<span class="keyword">fi</span></pre>
+      <table>
+        <tr><th>Task</th><th>Role</th></tr>
+        <tr><td><code>replace(s, old, replacement, r) -&gt; text@r</code></td><td>Replaces occurrences of <code>old</code> with <code>replacement</code> in region <code>r</code> (memory-safe and bounds-checked)</td></tr>
+        <tr><td><code>repeat(s, count, r) -&gt; text@r</code></td><td>Repeats string <code>s</code> <code>count</code> times into region <code>r</code></td></tr>
+        <tr><td><code>split(s, sep, r) -&gt; [text]@r</code></td><td>Splits <code>s</code> by separator <code>sep</code> into a slice of text allocated in region <code>r</code></td></tr>
+        <tr><td><code>lines(s, r) -&gt; [text]@r</code></td><td>Splits multiline text by <code>\n</code> / <code>\r\n</code> line endings into a slice in region <code>r</code></td></tr>
+        <tr><td><code>join(parts, sep, r) -&gt; text@r</code></td><td>Joins a slice of strings with separator <code>sep</code> into region <code>r</code></td></tr>
+        <tr><td><code>trim(s) -&gt; text@p</code>, <code>trim_start(s)</code>, <code>trim_end(s)</code></td><td>Returns a zero-allocation sliced view of <code>s</code> with leading/trailing whitespace removed</td></tr>
+        <tr><td><code>starts_with(s, prefix) -&gt; bool</code>, <code>ends_with(s, suffix) -&gt; bool</code></td><td>Checks if string begins with <code>prefix</code> or ends with <code>suffix</code></td></tr>
+        <tr><td><code>strip_prefix(s, prefix)</code>, <code>strip_suffix(s, suffix)</code></td><td>Removes <code>prefix</code> or <code>suffix</code>, returning <code>maybe text</code> (or <code>none</code> if unmatched)</td></tr>
+        <tr><td><code>contains(s, sub) -&gt; bool</code></td><td>Returns true if <code>sub</code> is a substring of <code>s</code></td></tr>
+        <tr><td><code>find(s, sub, from = 0) -&gt; maybe int</code>, <code>rfind(s, sub)</code></td><td>Finds first or last byte index of <code>sub</code>, returning <code>none</code> if not found</td></tr>
+        <tr><td><code>to_lower(s, r) -&gt; text@r</code>, <code>to_upper(s, r) -&gt; text@r</code></td><td>Converts ASCII characters to lowercase or uppercase in region <code>r</code></td></tr>
+        <tr><td><code>eq_ignore_case(a, b) -&gt; bool</code></td><td>Compares two strings case-insensitively without creating copies</td></tr>
+        <tr><td><code>is_digit(c)</code>, <code>is_alpha(c)</code>, <code>is_alnum(c)</code>, <code>is_space(c)</code></td><td>ASCII character classification helpers returning <code>bool</code></td></tr>
       </table>
     </section>
 
