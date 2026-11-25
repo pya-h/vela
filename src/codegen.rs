@@ -54,6 +54,7 @@ const ELSE_IF_ARMS: usize = 64;
 /// Generates ISO C11 from the checked AST; multi-statement expressions emit preludes prior to their host statement.
 pub struct Generator {
     quiet: bool,
+    test_harness: bool,
     w: CWriter,
     temp_counter: u64,
     /// An expression written as other C than its own while a value is made:
@@ -148,6 +149,7 @@ impl Default for Generator {
     fn default() -> Self {
         Generator {
             quiet: false,
+            test_harness: false,
             w: CWriter::default(),
             temp_counter: 0,
             kinds: HashMap::new(),
@@ -196,6 +198,11 @@ impl Generator {
 
     pub fn with_notices(mut self, notices: bool) -> Self {
         self.quiet = !notices;
+        self
+    }
+
+    pub fn with_test_harness(mut self, test_harness: bool) -> Self {
+        self.test_harness = test_harness;
         self
     }
 
@@ -532,7 +539,111 @@ impl Generator {
             self.doing_helpers.clear();
         }
 
-        if has_main {
+        if self.test_harness {
+            let tests: Vec<&TaskDef> = items
+                .iter()
+                .filter_map(|i| match i {
+                    Item::Task(t) if t.is_test && !t.name.contains(MODULE_SEPARATOR) => Some(t),
+                    _ => None,
+                })
+                .collect();
+            let needs_sys = items.iter().any(
+                |i| matches!(i, Item::Task(t) if t.native && t.name.starts_with("std/sys.")),
+            );
+            self.w.blank();
+            self.w.open("int main(int argc, char** argv)");
+            if needs_sys {
+                self.w.line("vela__rt__sys_init(argc, argv);");
+            }
+            if let Some(Item::GlobalRegion(g)) = items.iter().find(|i| matches!(i, Item::GlobalRegion(_))) {
+                for stmt in &g.stmts {
+                    if let StmtKind::Binding { names, init, .. } = &stmt.kind {
+                        let values = self.gen_value_list(names.len(), init, stmt.span)?;
+                        for (bound, value) in names.iter().zip(values) {
+                            self.w.line(&format!("{} = {};", c_ident(&bound.name), value));
+                        }
+                    }
+                }
+            }
+            for (name, member) in &shared {
+                let Some(value) = &member.field.default else {
+                    return Err(Error::internal_at(
+                        member.field.span,
+                        "a shared field without its first value",
+                    ));
+                };
+                self.place = member.start.clone();
+                let value = self.gen_expr(value)?;
+                self.place = None;
+                self.w.line(&format!("{} = {};", name, value));
+            }
+            for item in items {
+                if let Item::Task(t) = item
+                    && is_startup(&t.name)
+                {
+                    self.w.line(&format!("{}();", mangle(&t.name)));
+                }
+            }
+            self.w.open("if (argc >= 2 && strcmp(argv[1], \"--list\") == 0)");
+            for t in &tests {
+                self.w.line(&format!("puts(\"{}\");", escape_c_string(&t.name)));
+            }
+            self.w.line("vela__rt__sched_stop();");
+            self.w.line("return 0;");
+            self.w.close();
+            self.w.open("if (argc >= 2 && strncmp(argv[1], \"--run=\", 6) == 0)");
+            self.w.line("long idx = strtol(argv[1] + 6, NULL, 10);");
+            self.w.line("int test_status = 0;");
+            for ev in self.sorted_events() {
+                if ev.trigger == EventTrigger::Lifecycle(LifecycleKind::Start) {
+                    self.w.line(&format!("{}();", Self::event_fn_name(&ev)));
+                }
+            }
+            self.w.open("switch (idx)");
+            for (idx, t) in tests.iter().enumerate() {
+                self.w.open(&format!("case {}:", idx));
+                match &t.ret {
+                    Type::Or(_, error) => {
+                        let ty = c_type(&t.ret);
+                        self.w.line(&format!("{} res = {}();", ty, mangle(&t.name)));
+                        self.w.open("if (!res.ok)");
+                        self.w.line("vela__rt__region r[1] = { VELA__RT__REGION_EMPTY };");
+                        self.w.line(&format!(
+                            "vela__rt__text why = {}(r, res.error);",
+                            text_function(error)
+                        ));
+                        self.w.line("fprintf(stderr, \"test failed: %.*s\\n\", (int)why.len, why.bytes);");
+                        self.w.line("vela__rt__region_free(r);");
+                        self.w.line("test_status = 1;");
+                        self.w.close();
+                    }
+                    Type::Nothing => {
+                        self.w.line(&format!("{}();", mangle(&t.name)));
+                    }
+                    _ => {
+                        self.w.line(&format!("(void){}();", mangle(&t.name)));
+                    }
+                }
+                self.w.line("break;");
+                self.w.close();
+            }
+            self.w.open("default:");
+            self.w.line("test_status = 2;");
+            self.w.line("break;");
+            self.w.close();
+            self.w.close();
+            for ev in self.sorted_events() {
+                if ev.trigger == EventTrigger::Lifecycle(LifecycleKind::End) {
+                    self.w.line(&format!("{}();", Self::event_fn_name(&ev)));
+                }
+            }
+            self.w.line("vela__rt__sched_stop();");
+            self.w.line("return test_status;");
+            self.w.close();
+            self.w.line("vela__rt__sched_stop();");
+            self.w.line("return 2;");
+            self.w.close();
+        } else if has_main {
             let needs_sys = items.iter().any(
                 |i| matches!(i, Item::Task(t) if t.native && t.name.starts_with("std/sys.")),
             );

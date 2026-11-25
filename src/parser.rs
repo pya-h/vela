@@ -615,8 +615,15 @@ impl Parser {
         let line_start = starts(hash) || (hash > 0 && self.tokens.get(hash - 1) == Some(&Token::Priv) && starts(hash - 1));
         line_start
             && at(0) == Some(&Token::Hash)
-            && matches!(at(1), Some(Token::Ident(_)))
+            && matches!(at(1), Some(Token::Ident(name)) if name != "test" || !matches!(at(2), Some(Token::Newline | Token::Eof) | None))
             && matches!(at(2), Some(Token::Assign | Token::Colon | Token::Newline | Token::Eof) | None)
+    }
+
+    fn at_test_marker(&self) -> bool {
+        self.at_line_start()
+            && self.check(Token::Hash)
+            && matches!(self.tokens.get(self.pos + 1), Some(Token::Ident(w)) if w == "test")
+            && matches!(self.tokens.get(self.pos + 2), Some(Token::Newline | Token::Eof) | None)
     }
 
     fn at_macro_word(&self) -> bool {
@@ -670,6 +677,25 @@ impl Parser {
 
     fn parse_item(&mut self) -> Result<Item> {
         self.skip_newlines();
+        if self.at_test_marker() {
+            let marker_span = self.peek_span();
+            self.advance();
+            self.advance();
+            self.skip_newlines();
+            let mut item = self.parse_item()?;
+            match &mut item {
+                Item::Task(t) if !t.native => {
+                    t.is_test = true;
+                    return Ok(item);
+                }
+                _ => {
+                    return Err(Error::at(
+                        marker_span,
+                        "'#test' marks a task as a test and must be followed by a 'task'",
+                    ));
+                }
+            }
+        }
         if self.check(Token::Dollar) {
             return self.parse_decorated();
         }
@@ -941,7 +967,7 @@ impl Parser {
         } else {
             Type::Nothing
         };
-        Ok(TaskDef { name, types, given: Vec::new(), params, ret, results, body: Vec::new(), span, private: false, native: false, owner: None, decorators: Vec::new(), passes: Vec::new(), wrappers: Vec::new(), kept: None, shortcut: false })
+        Ok(TaskDef { name, types, given: Vec::new(), params, ret, results, body: Vec::new(), span, private: false, native: false, owner: None, decorators: Vec::new(), passes: Vec::new(), wrappers: Vec::new(), kept: None, shortcut: false, is_test: false })
     }
 
     fn at_native(&self) -> bool {
@@ -1387,6 +1413,7 @@ impl Parser {
             wrappers: Vec::new(),
             kept: None,
             shortcut: false,
+            is_test: false,
         })
     }
 
@@ -1922,6 +1949,7 @@ impl Parser {
             wrappers: Vec::new(),
             kept: None,
             shortcut: false,
+            is_test: false,
         })
     }
 
@@ -4995,6 +5023,7 @@ impl Parser {
             wrappers: Vec::new(),
             kept,
             shortcut,
+            is_test: false,
         }));
         Expr::new(ExprKind::Var(name), span)
     }

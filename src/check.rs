@@ -5291,6 +5291,14 @@ impl Checker {
                 self.define_result(name, known(ty), *at)?;
             }
         }
+        if task.is_test {
+            if !task.params.is_empty() {
+                self.record(Error::at(task.span, "a '#test' task takes no parameters"));
+            }
+            if !task.types.is_empty() {
+                self.record(Error::at(task.span, "a '#test' task takes no type parameters"));
+            }
+        }
         if task.native {
             self.natives.insert(task.name.clone());
             self.scopes.clear();
@@ -27579,6 +27587,7 @@ fn add_startups(items: &mut Vec<Item>) {
                 wrappers: Vec::new(),
                 kept: None,
                 shortcut: false,
+                is_test: false,
             }),
         }
     }

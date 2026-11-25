@@ -95,6 +95,11 @@ fn failure(error: &BuildError, path: &str, source: &str) -> Failure {
             "program has no 'main' task".to_string(),
             None,
         ),
+        BuildError::NoTests => (
+            FailureKind::NoMain,
+            "program has no '#test' tasks".to_string(),
+            None,
+        ),
         BuildError::CompilerNotStarted { cc, error } => (
             FailureKind::CompilerMissing,
             format!("failed to invoke C compiler '{}': {}", cc, error),

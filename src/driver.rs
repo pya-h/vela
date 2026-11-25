@@ -8,7 +8,7 @@ use std::sync::LazyLock;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::ast::Item;
+use crate::ast::{Item, MODULE_SEPARATOR};
 use crate::check::Checker;
 use crate::codegen::Generator;
 use crate::error::{Error, Result};
@@ -298,6 +298,7 @@ fn overwrites_source(
 pub enum BuildError {
     Vela(ProgramError),
     NoMain,
+    NoTests,
     OutputIsInput(PathBuf),
     OutputIsModule(PathBuf),
     Io {
@@ -323,6 +324,7 @@ impl BuildError {
             ),
             BuildError::Vela(error) => error.render(path),
             BuildError::NoMain => format!("{}: error: program has no 'main' task", path),
+            BuildError::NoTests => format!("{}: error: program has no '#test' tasks", path),
             BuildError::OutputIsInput(output) => {
                 format!(
                     "error: output '{}' would overwrite the input file",
@@ -374,6 +376,35 @@ pub fn has_main(items: &[Item]) -> bool {
     items
         .iter()
         .any(|item| matches!(item, Item::Task(t) if t.name == "main"))
+}
+
+pub fn has_tests(items: &[Item]) -> bool {
+    items
+        .iter()
+        .any(|item| matches!(item, Item::Task(t) if t.is_test && !t.name.contains(MODULE_SEPARATOR)))
+}
+
+pub fn build_tests(
+    source: &str,
+    input: &Path,
+    output: &Path,
+    cc: &str,
+    notices: bool,
+) -> std::result::Result<Warnings, BuildError> {
+    let partial = front_end_program(input, source, &mut read_from_disk);
+    let modules = module_paths(&partial);
+    let (items, warnings) = checked(partial)?;
+    if !has_tests(&items) {
+        return Err(BuildError::NoTests);
+    }
+    let c_code = Generator::new()
+        .with_notices(notices)
+        .with_test_harness(true)
+        .generate(&items)?;
+    overwrites_source(input, &modules, output)?;
+    check_output(output)?;
+    compile_c(&c_code, input, output, cc)?;
+    Ok(warnings)
 }
 
 pub fn build(

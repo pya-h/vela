@@ -2397,6 +2397,7 @@ pub struct TaskDef {
     pub wrappers: Vec<Expr>,
     pub kept: Option<Kept>,
     pub shortcut: bool,
+    pub is_test: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]

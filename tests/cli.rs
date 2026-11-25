@@ -669,3 +669,57 @@ fn sys_module_forwards_args_reads_env_and_exits() {
     );
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn run_subcommand_executes_and_forwards_args_and_exit_code() {
+    let dir = temp_dir("run-subcmd");
+    let src = dir.join("prog.vela");
+    std::fs::write(
+        &src,
+        "include std/sys\n\ntask main()\n    region r default\n    fixed a = sys.args(r)\n    each i in 1..a.len\n        show(a[i])\n    fi\n    when a.len > 1 and a[1] == \"--fail\"\n        sys.exit(7)\n    fi\nfi\n",
+    )
+    .unwrap();
+
+    let out = vela(&["run", src.to_str().unwrap(), "--port", "8080", "--quick"]);
+    assert!(out.status.success(), "{}", stderr(&out));
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "--port\n8080\n--quick\n");
+
+    let out = vela(&["run", "--release", src.to_str().unwrap(), "--", "--fail"]);
+    assert_eq!(out.status.code(), Some(7));
+    assert_eq!(String::from_utf8_lossy(&out.stdout), "--fail\n");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn test_subcommand_isolates_assert_traps_and_failures() {
+    let dir = temp_dir("test-subcmd");
+    let test_file = dir.join("math_test.vela");
+    let helper_file = dir.join("plain.vela");
+    std::fs::write(
+        &test_file,
+        "task main()\n    show(\"should not run\")\nfi\n\n#test\ntask pass_ok()\n    assert 1 + 1 == 2\nfi\n\n#test\ntask trap_fail()\n    assert 1 == 2, \"math broke\"\nfi\n\n#test\ntask err_fail() -> nothing ~ text\n    <- fail \"bad input\"\nfi\n",
+    )
+    .unwrap();
+    std::fs::write(&helper_file, "task helper()\nfi\n").unwrap();
+
+    let out = vela(&["test", test_file.to_str().unwrap()]);
+    assert_eq!(out.status.code(), Some(1));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let err = stderr(&out);
+    assert!(stdout.contains("running 3 tests"), "{}", stdout);
+    assert!(stdout.contains("test pass_ok ... ok"), "{}", stdout);
+    assert!(stdout.contains("test trap_fail ... FAILED"), "{}", stdout);
+    assert!(stdout.contains("test err_fail ... FAILED"), "{}", stdout);
+    assert!(stdout.contains("test result: FAILED. 1 passed; 2 failed"), "{}", stdout);
+    assert!(!stdout.contains("should not run"), "{}", stdout);
+    assert!(err.contains("math broke"), "{}", err);
+    assert!(err.contains("bad input"), "{}", err);
+
+    let out = vela(&["test", dir.to_str().unwrap(), "--filter", "pass_ok"]);
+    assert!(out.status.success(), "{}{}", String::from_utf8_lossy(&out.stdout), stderr(&out));
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("running 1 test"), "{}", stdout);
+    assert!(stdout.contains("pass_ok ... ok"), "{}", stdout);
+    assert!(stdout.contains("test result: ok. 1 passed; 0 failed"), "{}", stdout);
+    let _ = std::fs::remove_dir_all(&dir);
+}
