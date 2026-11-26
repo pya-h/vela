@@ -132,32 +132,81 @@
       color: var(--muted);
       border-top: 1px solid var(--border);
     }
-  
-    /* Unified pill navigation polish */
+    /* === Vela Docs Unified Polish & Motion === */
+    html { scroll-behavior: smooth; }
     nav.top-nav, .doc-nav {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-      gap: 0.45rem 0.9rem;
-      max-width: 1040px;
-      margin: 0 auto 1.5rem;
+      gap: 0.4rem 0.7rem;
+      max-width: 1120px;
+      margin: 0 auto 1.65rem;
+      padding: 0.55rem 0.85rem;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(51, 65, 85, 0.75);
+      border-radius: 999px;
+      backdrop-filter: blur(10px);
     }
     nav.top-nav a, .doc-nav a {
       color: var(--muted, #94a3b8);
       text-decoration: none;
-      font-size: 0.9rem;
+      font-size: 0.86rem;
       font-weight: 500;
-      padding: 0.25rem 0.65rem;
+      padding: 0.28rem 0.68rem;
       border-radius: 999px;
-      transition: color 0.15s ease, background 0.15s ease;
+      transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
     }
     nav.top-nav a:hover,
     nav.top-nav a.active,
     .doc-nav a:hover,
     .doc-nav a[aria-current="page"] {
       color: var(--accent, #38bdf8);
-      background: rgba(56, 189, 248, 0.12);
+      background: rgba(56, 189, 248, 0.14);
+      transform: translateY(-1px);
     }
+    .card, .mini-card, .entry, .option, .hazard-card, .idea {
+      transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+    .card:hover, .mini-card:hover, .entry:hover, .option:hover, .hazard-card:hover, .idea:hover {
+      transform: translateY(-2px);
+      border-color: rgba(56, 189, 248, 0.42);
+      box-shadow: 0 10px 26px rgba(2, 6, 23, 0.32);
+    }
+    .table-wrap {
+      border-radius: 10px;
+      overflow-x: auto;
+    }
+    tr { transition: background 0.12s ease; }
+    @keyframes velaFadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    main section { animation: velaFadeUp 0.4s ease both; }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      main section, .card, .mini-card, .entry, .option, .hazard-card, .idea, nav.top-nav a {
+        animation: none !important;
+        transition: none !important;
+        transform: none !important;
+      }
+    }
+    #vela-scroll-bar {
+      position: fixed; top: 0; left: 0; height: 3px; width: 0%;
+      background: linear-gradient(90deg, var(--accent-3, #34d399), var(--accent, #38bdf8));
+      z-index: 9999; pointer-events: none; transition: width 0.08s linear;
+    }
+    #vela-back-top {
+      position: fixed; bottom: 1.25rem; right: 1.25rem; z-index: 9998;
+      padding: 0.45rem 0.85rem; border-radius: 999px;
+      border: 1px solid var(--border, #334155);
+      background: rgba(17, 24, 39, 0.88);
+      color: var(--fg, #f8fafc); font-size: 0.82rem; font-weight: 600;
+      cursor: pointer; opacity: 0; pointer-events: none;
+      backdrop-filter: blur(8px); transition: opacity 0.2s ease, transform 0.15s ease, border-color 0.15s ease;
+    }
+    #vela-back-top.visible { opacity: 1; pointer-events: auto; }
+    #vela-back-top:hover { transform: translateY(-2px); border-color: var(--accent, #38bdf8); color: var(--accent, #38bdf8); }
+
   </style>
 </head>
 <body>
@@ -169,6 +218,7 @@
       <a href="regions.html">Regions</a>
       <a href="safety.html">Safety</a>
       <a href="channels.html">Channels</a>
+      <a href="channel-lifecycle.html">Lifecycle</a>
       <a href="actors.html">Actors</a>
       <a href="events.html">Events</a>
       <a href="concurrency.html">Concurrency</a>
@@ -178,6 +228,7 @@
       <a href="gui.html">GUI</a>
       <a href="ide.html">Studio</a>
       <a href="comparison.html">Comparison</a>
+      <a href="benchmarks.html">Benchmarks</a>
       <a href="future.html">Future</a>
       <a href="tricks.html">Tricks</a>
       <a href="maywaste.html">May Waste</a>
@@ -312,7 +363,8 @@
       </p>
       <p>
         A statement is a binding, an assignment, a block, a send (<code>&lt;-</code>), a result update
-        (<code>total &lt;- value</code>, see <a href="#named-results">Named Results</a>), a <code>region</code>, or a task
+        (<code>total &lt;- value</code>, see <a href="#named-results">Named Results</a>), an <code>assert</code> statement
+        (<code>assert cond, msg</code> and <code>!assert cond, msg</code>, see <a href="#assert">Assertions</a>), a <code>region</code>, or a task
         call, which may have a plan B (see <a href="#maybe">Maybe and Errors</a>). Any other expression on its own line would do nothing, so it is an error: <code>x == 1</code> alone
         reports <code>the result of '==' is unused; use '=' to assign</code>. A <code>when</code> and a
         <code>match</code> are blocks, and so statements, but they are also values where one is expected (see
@@ -325,7 +377,8 @@
 in   at    match case new   region and  or      not
 true false none  fi   maybe is     fail failure include priv
 block shared type break continue endless fixed flex
-finally</pre>
+finally otherwise own actor spawn rush event assert
+xor  nand  nor</pre>
       <p>
         A variable is declared with one of four words: <code>fixed</code> (immutable binding),
         <code>flex</code> (mutable place and contents), <code>bind</code> (place cannot be reassigned, contents may change),
@@ -432,7 +485,12 @@ finally</pre>
         <tr><td><code>x.type</code></td><td>the type of <code>x</code>, as text (see <a href="#type-of">The type of a value</a>)</td></tr>
         <tr><td><code>name =&gt; other</code></td><td>on an <code>include</code> line: the name a module or a name brought in is written with in this file; before a loop's word, the loop's name (see <a href="#break-continue">Stopping a loop</a>)</td></tr>
         <tr><td><code>Name { x: 1 }</code></td><td>a shape literal</td></tr>
-        <tr><td><code>0..5</code></td><td>a range, in <code>each</code> and in a slice (<code>xs[1..3]</code>)</td></tr>
+        <tr><td><code>0..5</code>, <code>0..=5</code>, <code>0..2..10</code>, <code>0..2..=10</code></td><td>ranges: exclusive <code>..</code>, inclusive <code>..=</code>, and optional step; in <code>each</code> and in a slice (<code>xs[1..=3]</code>)</td></tr>
+        <tr><td><code>each i, v in xs</code></td><td>an indexed loop providing the element's index <code>i</code> alongside item <code>v</code></td></tr>
+        <tr><td><code>assert cond</code>, <code>!assert cond</code></td><td>contract assertions: verifies <code>cond</code> is true (or false for <code>!assert</code>); optional custom or regional message</td></tr>
+        <tr><td><code>&amp; | ^^ ~&amp; ~| ~^ &lt;&lt; &gt;&gt; ~</code></td><td>bitwise operations: AND, OR, XOR (<code>^^</code>), NAND, NOR, XNOR, left/right shifts, and NOT (<code>~</code>)</td></tr>
+        <tr><td><code>and or not xor nand nor !</code></td><td>boolean logic for conditions: short-circuiting <code>and</code>, <code>or</code>, <code>nand</code>, <code>nor</code>, exclusive-or <code>xor</code>, and negation <code>not</code>/<code>!</code></td></tr>
+        <tr><td><code>call()!</code>, <code>call() !&gt; h</code></td><td>postfix error propagation: unwraps <code>T ~ E</code> or early-fails; <code>!&gt;</code> handles or maps errors inline</td></tr>
         <tr><td><code>=</code></td><td>assignment, the value of a binding, the value a <a href="#field-defaults">field</a> or a <a href="#optional-arguments">parameter</a> falls back on, and the value a <code>case</code> gives</td></tr>
         <tr><td><code>+ - * / %</code>, <code>== != &lt; &lt;= &gt; &gt;=</code></td><td>arithmetic and comparison (see <a href="#comparing">Comparing</a>)</td></tr>
         <tr><td><code>x++</code>, <code>x--</code>, <code>x += v</code></td><td>a place counted by one, or given its operator's result with <code>v</code> (also <code>-= *= /= %= **=</code>); statements of their own (see <a href="#steps">Steps</a>)</td></tr>
@@ -491,6 +549,35 @@ finally</pre>
       </p>
       <p>
         Every program starts at <code>task main()</code>, which takes no parameters and returns nothing.
+      </p>
+
+      <h3 id="assert">Assertions: assert and !assert</h3>
+      <p>
+        Invariants and contract conditions are checked with <code>assert</code> and <code>!assert</code> statements.
+        An <code>assert</code> statement verifies that a boolean condition holds true at runtime; <code>!assert</code> verifies that the condition is false.
+        If the condition fails, the process traps immediately, printing the source location and failed expression to standard error.
+        An optional message expression (literal string, interpolation, or regional text <code>text@r</code>) can be provided after a comma:
+      </p>
+      <pre><span class="keyword">task</span> deposit(flex&amp; balance: int, amount: int)
+    <span class="keyword">assert</span> amount &gt; <span class="number">0</span>, <span class="string">"deposit amount must be positive"</span>
+    balance += amount
+    <span class="keyword">!assert</span> balance &lt; <span class="number">0</span>   <span class="comment">; verifies balance is not negative</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> verify_equal&lt;T: same&gt;(a: T, b: T)
+    <span class="keyword">assert</span> a == b, <span class="string">"values must match"</span>
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">flex</span> bal = <span class="number">100</span>
+    deposit(&amp;bal, <span class="number">25</span>)
+    verify_equal(bal, <span class="number">125</span>)
+    <span class="keyword">assert</span> bal &gt; <span class="number">0</span>, <span class="string">"invalid balance: {bal}"</span> <span class="keyword">at</span> r
+<span class="keyword">fi</span></pre>
+      <p>
+        Assertions compile to direct C runtime checks with zero allocation overhead when they succeed.
+        Unit tests running under <code>vela test</code> leverage <code>assert</code> and <code>!assert</code> to verify test cases and report exact trap diagnostics.
       </p>
 
       <h3 id="optional-arguments">Optional arguments</h3>
@@ -1435,19 +1522,46 @@ small++                     <span class="comment">; stops: vela: 128 does not fi
     show(<span class="string">"over three: "</span>, int(n &gt; <span class="number">3</span>))    <span class="comment">; over three: 1</span>
     show(int(<span class="number">1.0</span> / <span class="number">0.0</span>))               <span class="comment">; stops: vela: inf does not fit in an int at 6:10 in task 'main'</span>
 <span class="keyword">fi</span></pre>
+      <h3 id="bitwise">Bitwise Operators</h3>
+      <p>
+        Integer types (<code>int</code>, <code>unit</code>, and sized integers <code>int8</code>..<code>int32</code>, <code>uint16</code>..<code>uint64</code>) support bitwise operations:
+      </p>
+      <ul>
+        <li><strong>Bitwise AND</strong> (<code>&amp;</code>): <code>a &amp; b</code></li>
+        <li><strong>Bitwise OR</strong> (<code>|</code>): <code>a | b</code></li>
+        <li><strong>Bitwise XOR</strong> (<code>^^</code>): <code>a ^^ b</code> (double caret <code>^^</code> distinguishes from pointer dereference <code>^</code>)</li>
+        <li><strong>Bitwise NAND</strong> (<code>~&amp;</code>): <code>a ~&amp; b</code> (bitwise NOT-AND)</li>
+        <li><strong>Bitwise NOR</strong> (<code>~|</code>): <code>a ~| b</code> (bitwise NOT-OR)</li>
+        <li><strong>Bitwise XNOR</strong> (<code>~^</code>): <code>a ~^ b</code> (bitwise NOT-XOR)</li>
+        <li><strong>Bitwise NOT (Invert)</strong> (<code>~</code>): <code>~a</code> (bitwise one's complement)</li>
+        <li><strong>Bitwise Shifts</strong> (<code>&lt;&lt;</code>, <code>&gt;&gt;</code>): <code>a &lt;&lt; n</code> and <code>a &gt;&gt; n</code>. Shifts are signed-aware and runtime-checked: shifting by negative counts or &ge; bit width traps cleanly rather than causing C undefined behavior.</li>
+      </ul>
+      <pre><span class="keyword">task</span> main()
+    <span class="keyword">fixed</span> mask = (<span class="number">1</span> &lt;&lt; <span class="number">4</span>) | <span class="number">0b11</span>         <span class="comment">; 19</span>
+    <span class="keyword">fixed</span> xor_val = <span class="number">0b1010</span> ^^ <span class="number">0b1100</span>     <span class="comment">; 0b0110 (6)</span>
+    <span class="keyword">fixed</span> u = unit(<span class="number">0</span>)
+    show(~u)                              <span class="comment">; 255 (unit complement)</span>
+    show(mask, <span class="string">" "</span>, xor_val)
+<span class="keyword">fi</span></pre>
+
       <p>Operators bind from loosest to tightest as follows; operators on the same row group from the left.</p>
       <table>
         <tr><th>Operators</th><th>Example</th></tr>
-        <tr><td><code>or</code></td><td><code>a or b and c</code> is <code>a or (b and c)</code></td></tr>
-        <tr><td><code>and</code></td><td></td></tr>
+        <tr><td><code>or</code>, <code>nor</code></td><td><code>a or b and c</code> is <code>a or (b and c)</code></td></tr>
+        <tr><td><code>and</code>, <code>nand</code></td><td><code>a and b nand c</code> binds left-to-right</td></tr>
+        <tr><td><code>xor</code></td><td>boolean exclusive-or</td></tr>
         <tr><td><code>== != ~= &lt;&gt;</code></td><td></td></tr>
         <tr><td><code>&lt; &lt;= &gt; &gt;=</code></td><td><code>1 &lt; 2 &lt; 3</code> is an error: <code>1 &lt; 2</code> is a <code>bool</code></td></tr>
-        <tr><td><code>|&gt; |&gt;&gt; …</code></td><td><code>a + 1 |&gt; f() == 3</code> is <code>f(a + 1) == 3</code> (see <a href="#pipes">Call pipes</a>)</td></tr>
-        <tr><td><code>..</code></td><td><code>0..n + 1</code> is <code>0..(n + 1)</code></td></tr>
+        <tr><td><code>|</code>, <code>~|</code></td><td>bitwise OR, NOR</td></tr>
+        <tr><td><code>^^</code>, <code>~^</code></td><td>bitwise XOR, XNOR</td></tr>
+        <tr><td><code>&amp;</code>, <code>~&amp;</code></td><td>bitwise AND, NAND</td></tr>
+        <tr><td><code>&lt;&lt; &gt;&gt;</code></td><td>bitwise left and right shift</td></tr>
+        <tr><td><code>|&gt; |&gt;&gt; …</code>, <code>!&gt; !&gt;&gt; …</code></td><td><code>a + 1 |&gt; f() == 3</code> is <code>f(a + 1) == 3</code>; <code>call() !&gt; Err.new()</code> maps failure (see <a href="#error-propagation">Error propagation</a> and <a href="#pipes">Call pipes</a>)</td></tr>
+        <tr><td><code>..</code>, <code>..=</code></td><td><code>0..n + 1</code> is <code>0..(n + 1)</code>; <code>0..=10</code> inclusive</td></tr>
         <tr><td><code>+ -</code></td><td></td></tr>
         <tr><td><code>* / %</code></td><td><code>2 + 3 * 4</code> is <code>14</code></td></tr>
-        <tr><td><code>-x</code>, <code>not x</code>, <code>fail e</code>, <code>&amp;x</code></td><td><code>not a == b</code> is <code>(not a) == b</code>; write <code>not (a == b)</code>. <code>&amp;p^.x</code> is the place <code>p^.x</code></td></tr>
-        <tr><td><code>a.x</code>, <code>p^</code>, <code>xs[i]</code>, <code>f(x)</code>, <code>x { … }</code></td><td><code>p^.x</code> reads a field through a pointer; <code>x { 0 } * 2</code> is <code>(x { 0 }) * 2</code></td></tr>
+        <tr><td><code>-x</code>, <code>~x</code>, <code>not x</code>, <code>!x</code>, <code>fail e</code>, <code>&amp;x</code></td><td><code>not a == b</code> is <code>(not a) == b</code>; write <code>not (a == b)</code>. <code>&amp;p^.x</code> is the place <code>p^.x</code></td></tr>
+        <tr><td><code>a.x</code>, <code>p^</code>, <code>xs[i]</code>, <code>f(x)</code>, <code>x!</code>, <code>x { … }</code></td><td><code>p^.x</code> reads a field through a pointer; <code>call()!.meth()</code> propagates failures through chains; <code>x { 0 } * 2</code> is <code>(x { 0 }) * 2</code></td></tr>
       </table>
       <p>
         <code>at r</code> after text joined with <code>+</code>, or after a call, names the region of the whole chain
@@ -1619,8 +1733,11 @@ small++                     <span class="comment">; stops: vela: 128 does not fi
         reads numbers keeps nothing.
       </p>
       <p>
-        Logic uses words: <code>and</code>, <code>or</code>, and <code>not</code> work on <code>bool</code>, and
-        <code>and</code>/<code>or</code> skip the right side when the left side decides the result. Conditions in
+        Logic uses words and symbols: <code>and</code>, <code>or</code>, <code>not</code> (or <code>!</code>), <code>xor</code>,
+        <code>nand</code>, and <code>nor</code> work on <code>bool</code>. <code>and</code>, <code>or</code>, <code>nand</code>,
+        and <code>nor</code> short-circuit: the right side is skipped whenever the left side decides the outcome (for example,
+        <code>false nand f()</code> does not call <code>f()</code>, and <code>true nor g()</code> skips <code>g()</code>).
+        <code>xor</code> tests exclusive alternation (true if exactly one side is true). Conditions in
         <code>when</code> and <code>loop</code> must be <code>bool</code>: <code>when count</code> is an error.
         <code>==</code> and <code>!=</code> compare each type by a rule of its own, and <code>~=</code> compares two
         values item by item (see <a href="#comparing">Comparing</a>). <code>&lt;</code>, <code>&gt;</code>,
@@ -4128,6 +4245,32 @@ show(total)</pre>
           <code>break</code> takes only a name. <code>continue</code> never takes a value.</li>
       </ul>
 
+      <h3 id="range-step">Ranges, Stepping, and Indexed Loops</h3>
+      <p>
+        Ranges define arithmetic sequences and slice boundaries. Vela provides both half-open (exclusive) and closed (inclusive) ranges,
+        with optional step values:
+      </p>
+      <ul>
+        <li><strong>Exclusive range</strong>: <code>0..10</code> generates numbers <code>0</code> through <code>9</code>.</li>
+        <li><strong>Inclusive range</strong>: <code>0..=10</code> generates numbers <code>0</code> through <code>10</code>.</li>
+        <li><strong>Stepped ranges</strong>: <code>start..step..end</code> and <code>start..step..=end</code>. For example, <code>0..2..=10</code> produces <code>0, 2, 4, 6, 8, 10</code>. Steps can be negative for descending loops (e.g. <code>10..-1..=0</code>). A constant step of <code>0</code> is rejected at compile time; dynamic steps are verified at runtime. Range stepping uses safe unsigned modular bounds checking, preventing signed overflow undefined behavior even near <code>INT64_MIN</code> and <code>INT64_MAX</code>.</li>
+        <li><strong>Indexed loops</strong>: <code>each i, item in xs</code> provides the zero-based index <code>i</code> alongside each element <code>item</code> when iterating over arrays, slices, or iterators.</li>
+        <li><strong>Inclusive slicing</strong>: <code>xs[1..=3]</code> and <code>text[1..=3]</code> slice from index 1 up to and including index 3 (equivalent to <code>1..4</code>). Slices do not permit step values; write an <code>each</code> loop or iterator to stride through elements.</li>
+      </ul>
+      <pre><span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">fixed</span> words = [<span class="string">"alpha"</span>, <span class="string">"beta"</span>, <span class="string">"gamma"</span>]
+    <span class="keyword">each</span> i, w <span class="keyword">in</span> words
+        show(i, <span class="string">": "</span>, w)               <span class="comment">; 0: alpha, 1: beta, 2: gamma</span>
+    <span class="keyword">fi</span>
+
+    <span class="keyword">flex</span> evens = <span class="keyword">new</span> [<span class="type">int</span>]() <span class="keyword">at</span> r
+    <span class="keyword">each</span> n <span class="keyword">in</span> <span class="number">0</span>..<span class="number">2</span>..=<span class="number">8</span>
+        evens.add(n)                   <span class="comment">; [0, 2, 4, 6, 8]</span>
+    <span class="keyword">fi</span>
+    show(evens)
+<span class="keyword">fi</span></pre>
+
       <h3 id="loop-values">Loops that give a value</h3>
       <p>
         A <code>loop</code> or an <code>each</code> can be a value, wherever a value goes: <code>fixed r = loop … finally v fi</code>,
@@ -4534,6 +4677,45 @@ save(500) {
           <code>x: T ~ text</code>, gives a <code>maybe T</code> whatever <code>T</code> is.
         </p>
       </div>
+
+      <h3 id="error-propagation">Error propagation: <code>!</code> and <code>!&gt;</code></h3>
+      <p>
+        Inside a task or method that returns a failure (<code>-&gt; R ~ E</code>), postfix <code>!</code> unwraps a
+        fallible result or immediately returns its failure to the caller &mdash; including chained calls such as
+        <code>call()!.method()!.step()</code>. The inner failure type must match <code>E</code> or fit into an imitating
+        kind (<code>kind E::Inner</code>). Because <code>!</code> is a postfix operator, prefix negation continues to use
+        <code>not x</code> (and <code>?</code> remains reserved for decorators and dynamic tuple queries).
+      </p>
+      <p>
+        When failures have different types, the error-mapping pipeline <code>!&gt;</code> (and positional
+        <code>!&gt;&gt;</code>, <code>!&gt;&gt;&gt;</code>, &hellip;) converts a failure using a constructor, shared
+        method, variant, task, or expression that produces a plain failure value <code>E_out</code> (never
+        <code>T ~ E</code> or <code>nothing</code>). Like call pipes, <code>!&gt;</code> passes the failure as an
+        optional first argument (or without an argument if the step takes none), while <code>!&gt;&gt;</code> inserts
+        it as the 2nd argument, <code>!&gt;&gt;&gt;</code> as the 3rd, and so on. To inspect or transform the failure
+        inline, refer to it with <code>failure</code> or bind a name with <code>e -&gt; expr</code>:
+      </p>
+      <pre><code><span class="keyword">task</span> load_port(raw: text@r, r: <span class="keyword">region default</span>) -&gt; int ~ AppErr@r
+    <span class="comment">; Postfix '!' propagates through chained fallible calls and imitating kinds:</span>
+    <span class="keyword">fixed</span> cfg = parse_config(raw)!.normalize()!
+
+    <span class="comment">; Error pipelines '!&gt;' and '!&gt;&gt;' map failures before propagating or Plan B:</span>
+    <span class="keyword">fixed</span> p = read_port(cfg) !&gt;&gt; AppErr.with_context(<span class="string">"port:"</span>, r) !&gt; OuterErr.new(r)
+
+    <span class="comment">; Inline 'failure' or 'e -&gt; expr' customize mapping like map_err in Rust:</span>
+    <span class="keyword">fixed</span> checked = (open_port(p) !&gt; e -&gt; AppErr.from_msg(e.detail(r))).bind(r)!
+    &lt;- checked.number
+<span class="keyword">fi</span>
+
+<span class="comment">; Adding a Plan B block catches the mapped error instead of returning early:</span>
+<span class="keyword">fixed</span> fallback = risky() !&gt;&gt; X.new(<span class="string">"error:"</span>) !&gt; Z.new() { <span class="keyword">failure</span> f
+    show(<span class="string">"recovered: "</span>, f)
+    default_value()
+}</code></pre>
+      <p>
+        On an early return through <code>!</code> or an uncaught <code>!&gt;</code>, Vela runs task exit hooks and
+        frees local regions and commitments cleanly before returning <code>fail ...</code> to the caller.
+      </p>
 
       <h3 id="pipes">Call pipes</h3>
       <p>
@@ -5606,9 +5788,11 @@ show(area(square))             <span class="comment">; error: unknown task 'area
         Vela ships message-passing concurrency and reactive hooks without shared-memory data races:
       </p>
       <ul>
-        <li><strong>Bounded Channels &amp; Linear Ownership:</strong> <code>Chan[T]</code> and <code>Chan[own T]</code> transfer values safely across tasks using <code>dispatch</code> / <code>wait_and_receive</code> / <code>receive</code> / <code>close</code> or the arrow shortcuts <code>val -&gt;&gt; ch</code> and <code>&lt;&lt;- ch</code>, plus multi-channel <code>select ... case ... otherwise ... fi</code> multiplexing. See <a href="channels.html">Channels &amp; Ownership</a>.</li>
+        <li><strong>Bounded Channels &amp; Linear Ownership:</strong> <code>Chan[T]</code> and <code>Chan[own T]</code> transfer values safely across tasks using <code>dispatch</code> / <code>wait_and_receive</code> / <code>receive</code> / <code>close</code> or the arrow shortcuts <code>val -&gt;&gt; ch</code> and <code>&lt;&lt;- ch</code>, plus multi-channel <code>select ... case ... otherwise ... fi</code> multiplexing. See <a href="channels.html">Channels &amp; Ownership</a> and <a href="channel-lifecycle.html">Channel Lifecycle</a>.</li>
+        <li><strong>Colorless Commitments (<code>rush</code> &amp; <code>Commitment[T]</code>):</strong> Launch concurrent tasks cleanly without function coloring, await with <code>&lt;&lt;- c</code> or race in <code>select</code>, chain via <code>|&gt;</code>, <code>=&gt;</code>, or <code>.then()</code>/<code>.recover()</code>, and splice worker allocations in <em>O(1)</em> into caller destination regions. See <a href="commitment.html">Commitments</a>.</li>
         <li><strong>Isolated Actors:</strong> Encapsulated <code>actor</code> declarations with private state, <code>on Msg(...)</code> handlers, <code>spawn</code>, and an M:N worker-pool scheduler. See <a href="actors.html">Actors</a> and <a href="concurrency.html">Concurrency &amp; Design Boundaries</a>.</li>
         <li><strong>Reactive Events:</strong> Compile-time-verified <code>event</code> hooks on field mutations (<code>on</code>), reads (<code>on read</code>), call interception (<code>before</code>/<code>after</code>), and lifecycle (<code>on init</code>, <code>on drop</code>, <code>on start</code>, <code>on end</code>) guarded by transitive <code>alters(...)</code> contracts and guarded cycle termination. See <a href="events.html">Vela Events</a> and <a href="safety.html#data-races">Safety &amp; Race Guarantees</a>.</li>
+        <li><strong>Performance &amp; Engineering Benchmarks:</strong> Cross-language comparisons against C, Rust, Go, and Zig across 9 workloads plus an interactive optimization simulator in <a href="benchmarks.html">Benchmarks &amp; Roadmap</a>.</li>
       </ul>
     </section>
 
@@ -5623,8 +5807,9 @@ show(area(square))             <span class="comment">; error: unknown task 'area
           <a href="#regions">Memory and Regions</a>).</li>
         <li>Text has <code>==</code>, <code>&lt;</code> and the other comparisons, <code>.len</code>, parts
           (<code>t[a..b]</code>), joining (<code>a + b at r</code>), values turned into it (<code>n.str() at r</code>),
-          numbers read from it (<code>int(t)</code>), <code>show</code>, and <code>scan</code>. It has no
-          search, no trimming, and no case changes yet.</li>
+          numbers read from it (<code>int(t)</code>), <code>show</code>, and <code>scan</code>. High-level string
+          manipulation (search, trim, case conversions, split, join, and replacement) is provided by
+          <a href="std.html#txt"><code>std/txt</code></a>.</li>
         <li>Input is read a line of text at a time with <code>scan</code>, or a number at a time with
           <code>scan("Age: ", int)</code>; nothing reads part of a line from input; files are read and written with <a href="std.html#files"><code>std/files</code></a>.</li>
         <li>An array's count is known before the program runs (see <a href="#arrays">Arrays</a>). Tuples are taken apart in
@@ -5692,24 +5877,19 @@ show(area(square))             <span class="comment">; error: unknown task 'area
 ./target/debug/vela program.vela -o program
 CC=clang ./target/debug/vela program.vela -o program</pre>
       <p>
-        <code>vela &lt;input.vela&gt; [-o &lt;output&gt;] [--emit-c | --check | --quick] [--no-notices] [--repeat-warnings] [--]</code>: <code>-o</code> names the executable
-        (<code>a.out</code> by default), <code>--quick</code> builds it without optimizing the C (<code>-O0</code>
-        rather than <code>-O2</code>): often several times faster to build, and slower to run, <code>--no-notices</code>
-        builds a program that writes no notices to standard error, as of a <a href="#decorators">startup decorator</a>
-        whose failure it lets pass (not with <code>--check</code>, which builds none), <code>--repeat-warnings</code>
-        shows every place a warning said once for each task or file applies, not only the first (see
-        <a href="#slice-warnings">Warnings</a>), <code>--emit-c</code> prints the generated C instead of compiling it (or,
-        with <code>-o</code>, writes it to that file; a program without <code>main</code> is allowed here), <code>--check</code>
-        only checks the program (everything a build checks before running the C compiler, including that it has a
-        <code>main</code>), <code>-h</code>/<code>--help</code> prints the usage, and <code>--version</code> prints the
-        compiler's version. The files the program includes are read from the disk, next to it (see
-        <a href="#modules">Modules</a>). The output can't be the program's own file or a file it includes. A file name
-        starting with <code>-</code> goes after <code>--</code>. A built program writes its output line by line to a
-        terminal, and in blocks to a pipe or a file, which is much faster; it writes out what it holds before
-        <code>scan</code> reads, before a file is read or written, and when a runtime error stops it. A program the system
-        stops (a recursion too deep for the stack, or Ctrl-C) loses what it held, as a C program does. The exit status is 0 on
-        success, 1 when the program can't be read or doesn't compile (in Vela or in C), and 2 for wrong arguments.
+        The CLI provides direct building, execution, testing, and language server capabilities:
       </p>
+      <ul>
+        <li><code>vela &lt;input.vela&gt; [-o &lt;output&gt;] [--emit-c | --check | --quick] [--no-notices] [--repeat-warnings] [--cc &lt;cmd&gt;] [--]</code>:
+          compiles a program into an executable (defaulting to <code>a.out</code>). <code>--quick</code> builds without C optimizations for faster iteration;
+          <code>--emit-c</code> prints the generated ISO C11; <code>--check</code> type-checks without building; and <code>--cc</code> overrides the C compiler.</li>
+        <li><code>vela run &lt;input.vela&gt; [args...]</code>:
+          builds and immediately executes the program, forwarding all trailing command-line arguments to <code>sys.args()</code> and preserving the process exit code.</li>
+        <li><code>vela test [path] [--filter &lt;pattern&gt;] [--quick] [--no-notices]</code>:
+          scans the given file or directory for tasks annotated with the <code>#test</code> decorator, builds and runs each test in an isolated process, and reports ok, FAILED, traps, or failure values.</li>
+        <li><code>vela lsp</code>:
+          launches the native Language Server Protocol daemon for editor integrations.</li>
+      </ul>
       <pre>./target/debug/vela program.vela --emit-c -o program.c
 cc -std=c11 -I runtime program.c -o program -lm   # the C includes runtime/vela_rt.h</pre>
       <p>Errors point at the exact place in your source:</p>
@@ -5776,5 +5956,24 @@ CC=clang cargo test</pre>
   <footer>
     <p>Vela — designed and implemented as a minimal systems language experiment.</p>
   </footer>
+
+  <div id="vela-scroll-bar" aria-hidden="true"></div>
+  <button id="vela-back-top" type="button" aria-label="Back to top">&uarr; Top</button>
+  <script>
+    (function () {
+      const bar = document.getElementById('vela-scroll-bar');
+      const btn = document.getElementById('vela-back-top');
+      if (!bar || !btn) return;
+      function updateScroll() {
+        const doc = document.documentElement;
+        const max = doc.scrollHeight - doc.clientHeight;
+        bar.style.width = (max > 0 ? Math.min(100, (window.scrollY / max) * 100) : 0) + '%';
+        btn.classList.toggle('visible', window.scrollY > 360);
+      }
+      window.addEventListener('scroll', updateScroll, { passive: true });
+      btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+      updateScroll();
+    })();
+  </script>
 </body>
 </html>

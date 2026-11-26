@@ -132,32 +132,81 @@
       color: var(--muted);
       border-top: 1px solid var(--border);
     }
-  
-    /* Unified pill navigation polish */
+    /* === Vela Docs Unified Polish & Motion === */
+    html { scroll-behavior: smooth; }
     nav.top-nav, .doc-nav {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-      gap: 0.45rem 0.9rem;
-      max-width: 1040px;
-      margin: 0 auto 1.5rem;
+      gap: 0.4rem 0.7rem;
+      max-width: 1120px;
+      margin: 0 auto 1.65rem;
+      padding: 0.55rem 0.85rem;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(51, 65, 85, 0.75);
+      border-radius: 999px;
+      backdrop-filter: blur(10px);
     }
     nav.top-nav a, .doc-nav a {
       color: var(--muted, #94a3b8);
       text-decoration: none;
-      font-size: 0.9rem;
+      font-size: 0.86rem;
       font-weight: 500;
-      padding: 0.25rem 0.65rem;
+      padding: 0.28rem 0.68rem;
       border-radius: 999px;
-      transition: color 0.15s ease, background 0.15s ease;
+      transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
     }
     nav.top-nav a:hover,
     nav.top-nav a.active,
     .doc-nav a:hover,
     .doc-nav a[aria-current="page"] {
       color: var(--accent, #38bdf8);
-      background: rgba(56, 189, 248, 0.12);
+      background: rgba(56, 189, 248, 0.14);
+      transform: translateY(-1px);
     }
+    .card, .mini-card, .entry, .option, .hazard-card, .idea {
+      transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+    .card:hover, .mini-card:hover, .entry:hover, .option:hover, .hazard-card:hover, .idea:hover {
+      transform: translateY(-2px);
+      border-color: rgba(56, 189, 248, 0.42);
+      box-shadow: 0 10px 26px rgba(2, 6, 23, 0.32);
+    }
+    .table-wrap {
+      border-radius: 10px;
+      overflow-x: auto;
+    }
+    tr { transition: background 0.12s ease; }
+    @keyframes velaFadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    main section { animation: velaFadeUp 0.4s ease both; }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      main section, .card, .mini-card, .entry, .option, .hazard-card, .idea, nav.top-nav a {
+        animation: none !important;
+        transition: none !important;
+        transform: none !important;
+      }
+    }
+    #vela-scroll-bar {
+      position: fixed; top: 0; left: 0; height: 3px; width: 0%;
+      background: linear-gradient(90deg, var(--accent-3, #34d399), var(--accent, #38bdf8));
+      z-index: 9999; pointer-events: none; transition: width 0.08s linear;
+    }
+    #vela-back-top {
+      position: fixed; bottom: 1.25rem; right: 1.25rem; z-index: 9998;
+      padding: 0.45rem 0.85rem; border-radius: 999px;
+      border: 1px solid var(--border, #334155);
+      background: rgba(17, 24, 39, 0.88);
+      color: var(--fg, #f8fafc); font-size: 0.82rem; font-weight: 600;
+      cursor: pointer; opacity: 0; pointer-events: none;
+      backdrop-filter: blur(8px); transition: opacity 0.2s ease, transform 0.15s ease, border-color 0.15s ease;
+    }
+    #vela-back-top.visible { opacity: 1; pointer-events: auto; }
+    #vela-back-top:hover { transform: translateY(-2px); border-color: var(--accent, #38bdf8); color: var(--accent, #38bdf8); }
+
   </style>
 </head>
 <body>
@@ -169,6 +218,7 @@
       <a href="regions.html">Regions</a>
       <a href="safety.html">Safety</a>
       <a href="channels.html">Channels</a>
+      <a href="channel-lifecycle.html">Lifecycle</a>
       <a href="actors.html">Actors</a>
       <a href="events.html">Events</a>
       <a href="concurrency.html">Concurrency</a>
@@ -178,6 +228,7 @@
       <a href="gui.html">GUI</a>
       <a href="ide.html">Studio</a>
       <a href="comparison.html">Comparison</a>
+      <a href="benchmarks.html">Benchmarks</a>
       <a href="future.html">Future</a>
       <a href="tricks.html">Tricks</a>
       <a href="maywaste.html">May Waste</a>
@@ -260,6 +311,10 @@
         <tr><td><code>find(xs, test) -&gt; maybe T</code></td><td>the first item <code>test</code> holds for, or <code>none</code></td></tr>
         <tr><td><code>all(xs, test) -&gt; bool</code></td><td>whether <code>test</code> holds for every item; true for none</td></tr>
         <tr><td><code>any(xs, test) -&gt; bool</code></td><td>whether <code>test</code> holds for some item; false for none</td></tr>
+        <tr><td><code>sort(flex xs: [T]@a)</code></td><td>sorts a flexible slice of ordered items (<code>T: ordered</code>) in place using adaptive introsort (quicksort + heapsort + insertion sort)</td></tr>
+        <tr><td><code>sort_by(flex xs: [T]@a, cmp)</code></td><td>sorts a flexible slice in place with a custom comparator <code>(T, T) -&gt; int</code></td></tr>
+        <tr><td><code>sorted(xs, cmp, r) -&gt; [T]@r</code></td><td>copies <code>frozen</code> items into a new slice in region <code>r</code> and returns it sorted by <code>cmp</code></td></tr>
+        <tr><td><code>reverse(flex xs: [T]@a)</code></td><td>reverses the items of a flexible slice in place without heap allocations</td></tr>
       </table>
       <ul>
         <li><strong>Eager.</strong> Each task goes through all the items when it is called, and <code>map</code>,
@@ -429,7 +484,10 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
       <pre><span class="keyword">include</span> std/gui {Window, Canvas, GuiEvent, Point, Rect, Color, Style, Button, ProgressBar}
 
 <span class="keyword">task</span> main()
-    <span class="keyword">flex</span> win = Window.open(<span class="string">"GUI Application"</span>, 340, 220) { <span class="keyword">failure</span> _ &lt;- }
+    <span class="keyword">flex</span> win = Window.open(<span class="string">"GUI Application"</span>, 340, 220) {
+        <span class="keyword">failure</span> _
+            <span class="keyword">&lt;-</span>
+    }
     <span class="keyword">fixed</span> btn = Button { rect: Rect { x: 30, y: 120, width: 90, height: 36 }, label: <span class="string">"Action"</span>, style: Style.primary() }
     <span class="keyword">fixed</span> canvas = win.canvas()
 
@@ -455,8 +513,9 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
         <tr><td><code>Rect</code></td><td>2D bounding box: <code>Rect { x, y, width, height }</code>, with <code>.contains(point)</code> and <code>.intersects(other_rect)</code></td></tr>
         <tr><td><code>Color</code></td><td>RGBA color: <code>Color { r, g, b, a }</code>, <code>Color.rgb(r, g, b)</code>, <code>Color.rgba(r, g, b, a)</code>, <code>Color.hex(0xRRGGBB)</code>, and built-in palettes (<code>.black()</code>, <code>.white()</code>, <code>.red()</code>, <code>.green()</code>, <code>.blue()</code>, <code>.gray()</code>, <code>.transparent()</code>)</td></tr>
         <tr><td><code>Style</code></td><td>Unified styling theme shape: presets <code>Style.default()</code>, <code>.primary()</code>, <code>.secondary()</code>, <code>.success()</code>, <code>.danger()</code>, <code>.dark()</code>, <code>.light()</code>, and fluent modifiers <code>.with_bg(c)</code>, <code>.with_fg(c)</code>, <code>.with_border(c, width)</code>, <code>.with_padding(p)</code></td></tr>
-        <tr><td><code>Window</code></td><td>Window context: <code>Window.open(title, width, height)</code>, <code>.canvas()</code>, <code>.poll_event()</code>, <code>.push_event(type, a1, a2, a3)</code>, <code>.present()</code>, <code>.close()</code>, <code>.is_open</code></td></tr>
-        <tr><td><code>Canvas</code></td><td>Software rasterization drawing context: <code>.clear(color)</code>, <code>.draw_pixel(x, y, color)</code>, <code>.pixel_at(x, y)</code>, <code>.fill_rect(rect, color)</code>, <code>.draw_rect(rect, color)</code>, <code>.draw_line(x1, y1, x2, y2, color)</code>, <code>.draw_text(msg, pos, color)</code>, <code>.export_ppm(r)</code></td></tr>
+        <tr><td><code>Window</code></td><td>Window context: <code>Window.open(title, width, height)</code>, <code>.canvas()</code>, <code>.poll_event()</code>, <code>.push_event(type, a1, a2, a3)</code>, <code>.present()</code>, <code>.frame_delay(ms)</code>, <code>.close()</code>, <code>.is_open</code></td></tr>
+        <tr><td><code>Canvas</code></td><td>Software rasterization drawing context: <code>.clear(color)</code>, <code>.draw_pixel(x, y, color)</code>, <code>.pixel_at(x, y)</code>, <code>.fill_rect(rect, color)</code>, <code>.draw_rect(rect, color)</code>, <code>.draw_line(x1, y1, x2, y2, color)</code>, <code>.draw_text(msg, pos, color)</code>, <code>.draw_spinner(center, radius, tick, color)</code>, <code>.export_ppm(r)</code></td></tr>
+        <tr><td><code>sleep_ms(ms)</code>, <code>time_ms()</code></td><td>Cooperative sleep timer and monotonic millisecond clock for smooth UI frame pacing and animations</td></tr>
         <tr><td><code>GuiEvent</code></td><td>Event kind: <code>MouseDown(x, y, btn)</code>, <code>MouseUp(x, y, btn)</code>, <code>MouseMove(x, y)</code>, <code>KeyDown(key, mods)</code>, <code>KeyUp(key, mods)</code>, <code>Resize(w, h)</code>, <code>CloseRequested</code>, <code>Redraw</code>, <code>None</code></td></tr>
         <tr><td><code>Button</code></td><td>Interactive widget: <code>Button { rect, label, style }</code>, <code>.draw(canvas, mouse_pos, is_down)</code>, <code>.clicked(pos)</code></td></tr>
         <tr><td><code>Label</code></td><td>Text widget: <code>Label { pos, text, color, bg }</code>, <code>.draw(canvas)</code></td></tr>
@@ -525,7 +584,7 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
 
 <span class="keyword">task</span> main()
     <span class="keyword">region</span> r <span class="keyword">default</span>
-    <span class="keyword">fixed</span> raw = <span class="string">"\{&quot;name&quot;: &quot;Vela&quot;, &quot;stars&quot;: 100, &quot;active&quot;: true\}"</span>
+    <span class="keyword">fixed</span> raw = <span class="string">"\{\&quot;name\&quot;: \&quot;Vela\&quot;, \&quot;stars\&quot;: 100, \&quot;active\&quot;: true\}"</span>
     <span class="keyword">fixed</span> doc = parse(raw, r) { Json.Null }
     <span class="keyword">fixed</span> name = doc.get(<span class="string">"name"</span>) { Json.Null }.as_text() { <span class="string">""</span> }
     <span class="keyword">fixed</span> stars = doc.get(<span class="string">"stars"</span>) { Json.Null }.as_int() { 0 }
@@ -620,6 +679,9 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
         (<em>'P' is a macro, a value that never changes, not a variable</em>), and a file that brings in
         <code>e</code> by name can't name a variable <code>e</code>; one that writes <code>math.e</code> can.
       </p>
+      <div class="note">
+        <strong>Performance Note (<a href="benchmarks.html#root-causes"><code>L1</code> in Benchmarks</a>):</strong> Today <code>x ** 0.5</code> calls C <code>pow(x, 0.5)</code> rather than hardware <code>sqrt(x)</code>. Adding a dedicated <code>math.sqrt</code> native binding and lowering <code>x ** 0.5</code> directly to <code>sqrt()</code> is Track C's top quick win (~3.5x speedup in N-Body vector physics).
+      </div>
     </section>
 
     <section>
@@ -641,6 +703,147 @@ show(kept.line() <span class="keyword">at</span> r { <span class="keyword">failu
       <table>
         <tr><th>Name</th><th>Role</th></tr>
         <tr><td><code>channel&lt;T&gt;(capacity: int) -&gt; Chan[T]</code></td><td>Creates a thread-safe bounded FIFO channel backed by <code>chan_new&lt;T&gt;(capacity)</code></td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2 id="random">std/random</h2>
+      <p>
+        Pseudo-random number generator, range selection, and Fisher-Yates slice shuffling. Brought in with
+        <code>include std/random {Rng, random_int, random_float, random_bool, shuffle, choice}</code>.
+      </p>
+      <pre><span class="keyword">include</span> std/random {Rng, shuffle, choice}
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">flex</span> rng = Rng.new(<span class="number">42</span>)
+    <span class="keyword">fixed</span> roll = rng.next_int(<span class="number">1</span>, <span class="number">6</span>)       <span class="comment">; random int in 1..6 inclusive</span>
+    <span class="keyword">fixed</span> chance = rng.next_float()        <span class="comment">; random float in [0.0, 1.0)</span>
+
+    <span class="keyword">flex</span> items = <span class="keyword">new</span> [<span class="type">int</span>]([<span class="number">10</span>, <span class="number">20</span>, <span class="number">30</span>, <span class="number">40</span>, <span class="number">50</span>]) <span class="keyword">at</span> r
+    shuffle(items)                          <span class="comment">; in-place Fisher-Yates shuffle</span>
+    <span class="keyword">fixed</span> picked = choice(items)            <span class="comment">; maybe int (none if empty)</span>
+    show(roll, <span class="string">" "</span>, picked { <span class="number">0</span> })
+<span class="keyword">fi</span></pre>
+      <table>
+        <tr><th>Name</th><th>Role</th></tr>
+        <tr><td><code>Rng.new(seed = 0) -&gt; Rng</code></td><td>Creates a stateful pseudo-random generator with a custom seed (or uses system seed when 0)</td></tr>
+        <tr><td><code>rng.next_int(min, max) -&gt; int</code></td><td>Generates an integer uniformly in the range <code>min..max</code> inclusive</td></tr>
+        <tr><td><code>rng.next_float() -&gt; float</code></td><td>Generates a double-precision floating-point number in <code>[0.0, 1.0)</code></td></tr>
+        <tr><td><code>rng.next_bool() -&gt; bool</code></td><td>Generates a random boolean with 50/50 probability</td></tr>
+        <tr><td><code>random_int(min, max)</code>, <code>random_float()</code>, <code>random_bool()</code></td><td>Global stateless random number generation using the process-wide default generator</td></tr>
+        <tr><td><code>shuffle(flex xs: [T]@a)</code></td><td>Performs an in-place Fisher-Yates shuffle on any flexible slice without heap allocations</td></tr>
+        <tr><td><code>choice(xs: [T]@a) -&gt; maybe T</code></td><td>Uniformly selects a random item from a slice, returning <code>none</code> if the slice is empty</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2 id="sys">std/sys</h2>
+      <p>
+        Command-line arguments, typed flag parsing (Go-style <code>name=value</code>), environment variable lookups,
+        strict <code>.env</code> file shape deserialization with name-casting modes, working directory, and process exit.
+        Brought in with <code>include std/sys</code> or <code>include std/sys {flag, env, envs, args}</code>.
+      </p>
+      <pre><span class="keyword">include</span> std/sys
+
+<span class="keyword">shape</span> AppConfig
+    host: text
+    port: int
+    debug: bool
+    rate_limit: maybe float
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> load_config(r: <span class="keyword">region</span>) -&gt; AppConfig@r ~ sys.EnvsFailure
+    <span class="keyword">&lt;-</span> sys.envs(sys.EnvNameCastModes.SNAKE_CASE, <span class="string">".env"</span>) <span class="keyword">at</span> r
+<span class="keyword">fi</span>
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="comment">; 1. Typed CLI flag parsing from argv (name=value)</span>
+    <span class="keyword">fixed</span> port = sys.flag&lt;<span class="type">int</span>&gt;(<span class="string">"port"</span>, <span class="number">8080</span>) { <span class="number">8080</span> }
+    <span class="keyword">fixed</span> verbose = sys.flag(<span class="string">"verbose"</span>, <span class="keyword">false</span>, <span class="keyword">true</span>) { <span class="keyword">false</span> } <span class="comment">; parse_similars=true</span>
+    <span class="keyword">fixed</span> token = sys.flag(<span class="string">"token"</span>, <span class="string">"anonymous"</span>)@r { <span class="string">"anonymous"</span> }
+
+    <span class="comment">; 2. Deserialize .env file directly into AppConfig shape with SNAKE_CASE casting</span>
+    <span class="keyword">when</span> load_config(r) <span class="keyword">is</span> {conf}
+        show(<span class="string">"Server running at "</span>, conf.host, <span class="string">":"</span>, conf.port)
+    <span class="keyword">else</span>
+        show(<span class="string">"Default port="</span>, port, <span class="string">" verbose="</span>, verbose, <span class="string">" token="</span>, token)
+    <span class="keyword">fi</span>
+<span class="keyword">fi</span></pre>
+      <table>
+        <tr><th>Task / Shape</th><th>Role</th></tr>
+        <tr><td><code>args(r) -&gt; [text]@r</code></td><td>Returns all process command-line arguments as a slice of text allocated in region <code>r</code></td></tr>
+        <tr><td><code>flag&lt;T&gt;(name, default = none, parse_similars = false) -&gt; T ~ CliFlagParseError</code></td><td>Scans arguments for <code>name=value</code> or <code>name="value"</code>, parsing into type <code>T</code> (<code>int</code>, <code>float</code>, <code>bool</code>, <code>char</code>, or <code>text</code>). If missing, returns <code>default</code> or fails with <code>NotPassed</code>. When <code>parse_similars=true</code>, auto-coerces compatible numeric/boolean formats.</td></tr>
+        <tr><td><code>env(key, r) -&gt; maybe text@r</code>, <code>os_env(key, r)</code></td><td>Reads an environment variable into region <code>r</code>, giving <code>none</code> if unset</td></tr>
+        <tr><td><code>env_parsed&lt;T&gt;(key, default = none, parse_similars = false) -&gt; T ~ EnvParseError</code></td><td>Reads and parses an environment variable into type <code>T</code>, returning <code>default</code> or failing with <code>NotSet</code> / <code>WrongEnvType</code></td></tr>
+        <tr><td><code>envs&lt;T&gt;(name_cast_mode, path = ".env", use_os_envs = false, parse_similars = false) -&gt; T ~ EnvsFailure</code></td><td>Parses a <code>.env</code> file directly into shape <code>T</code>. Automatically maps field names according to <code>EnvNameCastModes</code> (e.g. converting <code>PORT</code> or <code>SERVER_PORT</code> to match shape fields).</td></tr>
+        <tr><td><code>os_envs&lt;T&gt;(name_cast_mode, parse_similars = false) -&gt; T ~ EnvsFailure</code></td><td>Populates shape <code>T</code> directly from OS process environment variables</td></tr>
+        <tr><td><code>EnvNameCastModes</code></td><td>Cast mode kind: <code>NONE</code>, <code>UPPERCASE</code>, <code>LOWERCASE</code>, <code>CAMELCASE</code>, <code>CAPITALCASE</code>, <code>PASCALCASE</code>, <code>SNAKE_CASE</code></td></tr>
+        <tr><td><code>cwd(r) -&gt; maybe text@r</code></td><td>Returns the current process working directory in region <code>r</code></td></tr>
+        <tr><td><code>exit(code = 0)</code></td><td>Terminates the process immediately with the given status code</td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2 id="time">std/time</h2>
+      <p>
+        High-resolution monotonic clocks, wall-clock timestamps, sleep delays, and duration helpers.
+        Brought in with <code>include std/time {now_ms, now_unix, monotonic_ns, monotonic_ms, sleep, Duration}</code>.
+      </p>
+      <pre><span class="keyword">include</span> std/time {now_ms, monotonic_ns, sleep, Duration}
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r <span class="keyword">default</span>
+    <span class="keyword">fixed</span> start = monotonic_ns()
+    sleep(<span class="number">50</span>)                               <span class="comment">; sleep 50 milliseconds</span>
+    <span class="keyword">fixed</span> elapsed_ns = monotonic_ns() - start
+    <span class="keyword">fixed</span> dur = Duration { ms: elapsed_ns / <span class="number">1000000</span> }
+    show(<span class="string">"Elapsed: "</span>, dur.seconds(), <span class="string">"s ("</span>, dur.str(r), <span class="string">")"</span>)
+<span class="keyword">fi</span></pre>
+      <table>
+        <tr><th>Name</th><th>Role</th></tr>
+        <tr><td><code>monotonic_ns() -&gt; int</code></td><td>High-precision monotonic clock in nanoseconds, suitable for microbenchmarks and latency metrics</td></tr>
+        <tr><td><code>monotonic_ms() -&gt; int</code></td><td>Monotonic clock in milliseconds</td></tr>
+        <tr><td><code>now_ms() -&gt; int</code></td><td>Current UNIX epoch time in milliseconds</td></tr>
+        <tr><td><code>now_unix() -&gt; int</code></td><td>Current UNIX epoch time in seconds</td></tr>
+        <tr><td><code>sleep(ms: int)</code></td><td>Suspends execution of the current thread for <code>ms</code> milliseconds</td></tr>
+        <tr><td><code>Duration</code></td><td>Time duration shape: <code>.ms</code>, <code>.seconds() -&gt; float</code>, <code>.nanos() -&gt; int</code>, <code>.sleep()</code>, and <code>.str(r) -&gt; text@r</code></td></tr>
+      </table>
+    </section>
+
+    <section>
+      <h2 id="txt">std/txt</h2>
+      <p>
+        String search, case conversions, trimming, splitting, joining, and ASCII character classification.
+        Brought in with <code>include std/txt</code> or <code>include std/txt {replace, split, join, trim, starts_with}</code>.
+      </p>
+      <pre><span class="keyword">include</span> std/txt
+
+<span class="keyword">task</span> main()
+    <span class="keyword">region</span> r
+    <span class="keyword">fixed</span> raw = <span class="string">"  apple, banana, orange  "</span>
+    <span class="keyword">fixed</span> clean = txt.trim(raw)
+    <span class="keyword">fixed</span> parts = txt.split(clean, <span class="string">", "</span>, r)   <span class="comment">; ["apple", "banana", "orange"]</span>
+    <span class="keyword">fixed</span> joined = txt.join(parts, <span class="string">" | "</span>, r)   <span class="comment">; "apple | banana | orange"</span>
+    <span class="keyword">fixed</span> rep = txt.replace(joined, <span class="string">"banana"</span>, <span class="string">"mango"</span>, r)
+    show(rep)                                 <span class="comment">; "apple | mango | orange"</span>
+<span class="keyword">fi</span></pre>
+      <table>
+        <tr><th>Task</th><th>Role</th></tr>
+        <tr><td><code>replace(s, old, replacement, r) -&gt; text@r</code></td><td>Replaces occurrences of <code>old</code> with <code>replacement</code> in region <code>r</code> (memory-safe and bounds-checked)</td></tr>
+        <tr><td><code>repeat(s, count, r) -&gt; text@r</code></td><td>Repeats string <code>s</code> <code>count</code> times into region <code>r</code></td></tr>
+        <tr><td><code>split(s, sep, r) -&gt; [text]@r</code></td><td>Splits <code>s</code> by separator <code>sep</code> into a slice of text allocated in region <code>r</code></td></tr>
+        <tr><td><code>lines(s, r) -&gt; [text]@r</code></td><td>Splits multiline text by <code>\n</code> / <code>\r\n</code> line endings into a slice in region <code>r</code></td></tr>
+        <tr><td><code>join(parts, sep, r) -&gt; text@r</code></td><td>Joins a slice of strings with separator <code>sep</code> into region <code>r</code></td></tr>
+        <tr><td><code>trim(s) -&gt; text@p</code>, <code>trim_start(s)</code>, <code>trim_end(s)</code></td><td>Returns a zero-allocation sliced view of <code>s</code> with leading/trailing whitespace removed</td></tr>
+        <tr><td><code>starts_with(s, prefix) -&gt; bool</code>, <code>ends_with(s, suffix) -&gt; bool</code></td><td>Checks if string begins with <code>prefix</code> or ends with <code>suffix</code></td></tr>
+        <tr><td><code>strip_prefix(s, prefix)</code>, <code>strip_suffix(s, suffix)</code></td><td>Removes <code>prefix</code> or <code>suffix</code>, returning <code>maybe text</code> (or <code>none</code> if unmatched)</td></tr>
+        <tr><td><code>contains(s, sub) -&gt; bool</code></td><td>Returns true if <code>sub</code> is a substring of <code>s</code></td></tr>
+        <tr><td><code>find(s, sub, from = 0) -&gt; maybe int</code>, <code>rfind(s, sub)</code></td><td>Finds first or last byte index of <code>sub</code>, returning <code>none</code> if not found</td></tr>
+        <tr><td><code>to_lower(s, r) -&gt; text@r</code>, <code>to_upper(s, r) -&gt; text@r</code></td><td>Converts ASCII characters to lowercase or uppercase in region <code>r</code></td></tr>
+        <tr><td><code>eq_ignore_case(a, b) -&gt; bool</code></td><td>Compares two strings case-insensitively without creating copies</td></tr>
+        <tr><td><code>is_digit(c)</code>, <code>is_alpha(c)</code>, <code>is_alnum(c)</code>, <code>is_space(c)</code></td><td>ASCII character classification helpers returning <code>bool</code></td></tr>
       </table>
     </section>
 
@@ -689,11 +892,11 @@ $(auth)
         <tr><td><code>$get, $post, $put, $patch, $delete, $route</code></td><td>Startup decorators that register handlers to the default router before <code>main</code></td></tr>
         <tr><td><code>$on_error, on_error(handler)</code></td><td>Custom error handler decorator for <code>DefaultRouter</code> or programmatic <code>router.on_error(handler)</code> / <code>server.on_error(handler)</code> accepting <code>(err: WebError@r, req: Request@r, r: region default) -&gt; Response@r</code></td></tr>
         <tr><td><code>Router</code></td><td>Programmatic router shape: <code>Router.new()</code>, <code>.get(pattern, h)</code>, <code>.post(pattern, h)</code>, <code>.on_error(h)</code>, <code>.enroll(method_code, pattern, h)</code>, <code>.route(req, r)</code></td></tr>
-        <tr><td><code>Server</code></td><td>Configurable server shape: <code>Server.new(addr)</code>, <code>.timeouts(read_ms, idle_ms)</code>, <code>.body_limit(bytes)</code>, <code>.keep_alive(bool)</code>, <code>.on_error(h)</code>, <code>.serve(handler)</code>, <code>Server.stop()</code></td></tr>
+        <tr><td><code>Server</code></td><td>Configurable server shape: <code>Server.new(addr)</code>, <code>.timeouts(read_ms, idle_ms)</code>, <code>.body_limit(bytes)</code>, <code>.keep_alive(bool)</code>, <code>.on_error(h)</code>, <code>.serve(handler)</code>, <code>.serve_concurrent(handler, workers, stop)</code>, <code>Server.stop()</code></td></tr>
         <tr><td><code>Poll</code></td><td>Descriptor readiness table: <code>Poll.clear()</code>, <code>Poll.watch(sock, events)</code>, <code>Poll.unwatch(sock)</code>, <code>Poll.wait(timeout_ms)</code>, <code>Poll.is_readable(sock)</code>, <code>Poll.is_writable(sock)</code></td></tr>
-        <tr><td><code>serve(addr, handler)</code></td><td>Listens on TCP address and drives the non-blocking event loop dispatching incoming requests</td></tr>
+        <tr><td><code>serve(addr, handler)</code>, <code>serve_concurrent(addr, handler, workers)</code></td><td>Listens on TCP address and drives either the single-threaded non-blocking event loop or a multi-worker <code>rush</code> pool</td></tr>
         <tr><td><code>Client</code></td><td>Configurable HTTP client: <code>Client.new(timeout_ms)</code>, <code>.timeout(ms)</code>, <code>.get(url, r)</code>, <code>.post(url, body, ct, r)</code>, <code>.post_json(url, body, r)</code></td></tr>
-        <tr><td><code>fetch(url, r)</code></td><td>Performs an HTTP GET request and parses response into <code>Response@r ~ WebError@r</code></td></tr>
+        <tr><td><code>fetch(url, r)</code>, <code>fetch_with_timeout(url, timeout_ms, r)</code></td><td>Performs an HTTP GET request (with optional timeout) and parses response into <code>Response@r ~ WebError@r</code> (supports parallel <code>rush</code> region splicing)</td></tr>
         <tr><td><code>fetch_post(url, body, ct, r)</code>, <code>fetch_json(url, body, r)</code></td><td>Performs an HTTP POST request and parses response into <code>Response@r ~ WebError@r</code></td></tr>
         <tr><td><code>FileServer</code></td><td>Configurable static file server shape: <code>FileServer.new(folder, prefix)</code>, <code>.serve(req, r)</code></td></tr>
         <tr><td><code>serve_files(pattern, folder, prefix)</code>, <code>files(folder, req, prefix, r)</code></td><td>Serves static files with path confinement discipline (rejecting <code>..</code>, backslashes, colons, control chars, and empty segments) and MIME mapping</td></tr>
@@ -703,6 +906,11 @@ $(auth)
         <tr><td><code>sse_event(data, event, id, r)</code>, <code>sse_msg(event, data, r)</code></td><td>Formats compliant SSE stream messages (<code>event: ...\ndata: ...\n\n</code>)</td></tr>
         <tr><td><code>req.body_lines(r)</code></td><td>Parses request body line-by-line into a region-scoped slice <code>[text]@r</code></td></tr>
         <tr><td><code>WebSocket</code></td><td>RFC 6455 WebSocket handle: <code>.send_text(msg, r)</code>, <code>.send_binary(data, r)</code>, <code>.ping(data, r)</code>, <code>.pong(data, r)</code>, <code>.close(code, reason, r)</code>, <code>.recv(into)</code>, <code>.is_open()</code></td></tr>
+        <tr><td><code>RpcFraming</code>, <code>RpcError</code></td><td>JSON-RPC 2.0 framing modes (<code>Line</code>, <code>ContentLength</code>) and standard/application error kinds (<code>BadJson</code>, <code>InvalidRequest</code>, <code>MethodNotFound</code>, <code>InvalidParams</code>, <code>InternalError</code>, <code>TransportError(why)</code>, <code>ServerError(code, message, data)</code>)</td></tr>
+        <tr><td><code>RpcRequest</code>, <code>RpcResponse</code></td><td>Typed JSON-RPC 2.0 request and response envelopes with <code>.is_notification()</code>, <code>.is_ok()</code>, <code>.to_json(r)</code>, and <code>.encode(r)</code></td></tr>
+        <tr><td><code>JsonRpcConn</code></td><td>JSON-RPC 2.0 connection over framed TCP <code>Socket</code> or <code>WebSocket</code>: <code>.from_socket(...)</code>, <code>.from_ws(...)</code>, <code>.connect(...)</code>, <code>.connect_ws(...)</code>, <code>.call(method, params, r)</code>, <code>.notify(method, params, r)</code>, <code>.recv_request(r)</code>, <code>.send_result(...)</code>, <code>.send_error(...)</code></td></tr>
+        <tr><td><code>RpcServer</code>, <code>Router.rpc</code>, <code>Router.ws_rpc</code></td><td>Method registry &amp; dispatcher supporting single calls, notifications, batch arrays, HTTP POST routes (<code>rpc</code> / <code>Router.rpc</code>), WebSocket RPC upgrades (<code>ws_rpc</code> / <code>Router.ws_rpc</code>), and streaming <code>.serve_conn(...)</code></td></tr>
+        <tr><td><code>Client.rpc_call</code>, <code>Client.rpc_notify</code>, <code>rpc_connect</code>, <code>rpc_connect_ws</code>, <code>rpc_call</code>, <code>rpc_notify</code></td><td>High-level HTTP and persistent socket/WebSocket JSON-RPC 2.0 client operations</td></tr>
         <tr><td><code>WebSocketMessage</code></td><td>Typed message kind: <code>Text(payload)</code>, <code>Binary(payload)</code>, <code>Close(code, reason)</code>, <code>Ping(payload)</code>, <code>Pong(payload)</code>, <code>None</code></td></tr>
         <tr><td><code>ws_upgrade(client_key, r)</code>, <code>ws_accept(req, client, r)</code></td><td>Performs RFC 6455 WebSocket handshake and produces HTTP 101 Switching Protocols response</td></tr>
         <tr><td><code>ws_connect(url, r)</code></td><td>Connects to a WebSocket server URL (<code>ws://host:port/path</code>) and completes client handshake</td></tr>
@@ -747,5 +955,24 @@ $(auth)
   <footer>
     <p>Vela — a minimal systems language experiment.</p>
   </footer>
+
+  <div id="vela-scroll-bar" aria-hidden="true"></div>
+  <button id="vela-back-top" type="button" aria-label="Back to top">&uarr; Top</button>
+  <script>
+    (function () {
+      const bar = document.getElementById('vela-scroll-bar');
+      const btn = document.getElementById('vela-back-top');
+      if (!bar || !btn) return;
+      function updateScroll() {
+        const doc = document.documentElement;
+        const max = doc.scrollHeight - doc.clientHeight;
+        bar.style.width = (max > 0 ? Math.min(100, (window.scrollY / max) * 100) : 0) + '%';
+        btn.classList.toggle('visible', window.scrollY > 360);
+      }
+      window.addEventListener('scroll', updateScroll, { passive: true });
+      btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+      updateScroll();
+    })();
+  </script>
 </body>
 </html>

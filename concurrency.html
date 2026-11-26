@@ -208,32 +208,81 @@
       color: var(--muted);
       font-size: 0.9rem;
     }
-  
-    /* Unified pill navigation polish */
+    /* === Vela Docs Unified Polish & Motion === */
+    html { scroll-behavior: smooth; }
     nav.top-nav, .doc-nav {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-      gap: 0.45rem 0.9rem;
-      max-width: 1040px;
-      margin: 0 auto 1.5rem;
+      gap: 0.4rem 0.7rem;
+      max-width: 1120px;
+      margin: 0 auto 1.65rem;
+      padding: 0.55rem 0.85rem;
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(51, 65, 85, 0.75);
+      border-radius: 999px;
+      backdrop-filter: blur(10px);
     }
     nav.top-nav a, .doc-nav a {
       color: var(--muted, #94a3b8);
       text-decoration: none;
-      font-size: 0.9rem;
+      font-size: 0.86rem;
       font-weight: 500;
-      padding: 0.25rem 0.65rem;
+      padding: 0.28rem 0.68rem;
       border-radius: 999px;
-      transition: color 0.15s ease, background 0.15s ease;
+      transition: color 0.15s ease, background 0.15s ease, transform 0.15s ease;
     }
     nav.top-nav a:hover,
     nav.top-nav a.active,
     .doc-nav a:hover,
     .doc-nav a[aria-current="page"] {
       color: var(--accent, #38bdf8);
-      background: rgba(56, 189, 248, 0.12);
+      background: rgba(56, 189, 248, 0.14);
+      transform: translateY(-1px);
     }
+    .card, .mini-card, .entry, .option, .hazard-card, .idea {
+      transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    }
+    .card:hover, .mini-card:hover, .entry:hover, .option:hover, .hazard-card:hover, .idea:hover {
+      transform: translateY(-2px);
+      border-color: rgba(56, 189, 248, 0.42);
+      box-shadow: 0 10px 26px rgba(2, 6, 23, 0.32);
+    }
+    .table-wrap {
+      border-radius: 10px;
+      overflow-x: auto;
+    }
+    tr { transition: background 0.12s ease; }
+    @keyframes velaFadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    main section { animation: velaFadeUp 0.4s ease both; }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      main section, .card, .mini-card, .entry, .option, .hazard-card, .idea, nav.top-nav a {
+        animation: none !important;
+        transition: none !important;
+        transform: none !important;
+      }
+    }
+    #vela-scroll-bar {
+      position: fixed; top: 0; left: 0; height: 3px; width: 0%;
+      background: linear-gradient(90deg, var(--accent-3, #34d399), var(--accent, #38bdf8));
+      z-index: 9999; pointer-events: none; transition: width 0.08s linear;
+    }
+    #vela-back-top {
+      position: fixed; bottom: 1.25rem; right: 1.25rem; z-index: 9998;
+      padding: 0.45rem 0.85rem; border-radius: 999px;
+      border: 1px solid var(--border, #334155);
+      background: rgba(17, 24, 39, 0.88);
+      color: var(--fg, #f8fafc); font-size: 0.82rem; font-weight: 600;
+      cursor: pointer; opacity: 0; pointer-events: none;
+      backdrop-filter: blur(8px); transition: opacity 0.2s ease, transform 0.15s ease, border-color 0.15s ease;
+    }
+    #vela-back-top.visible { opacity: 1; pointer-events: auto; }
+    #vela-back-top:hover { transform: translateY(-2px); border-color: var(--accent, #38bdf8); color: var(--accent, #38bdf8); }
+
   </style>
 </head>
 <body>
@@ -243,6 +292,7 @@
       <a href="regions.html">Regions</a>
       <a href="safety.html">Safety</a>
       <a href="channels.html">Channels</a>
+      <a href="channel-lifecycle.html">Lifecycle</a>
       <a href="actors.html">Actors</a>
       <a href="events.html">Events</a>
       <a href="concurrency.html" class="active" aria-current="page">Concurrency</a>
@@ -252,6 +302,7 @@
       <a href="gui.html">GUI</a>
       <a href="ide.html">Studio</a>
       <a href="comparison.html">Comparison</a>
+      <a href="benchmarks.html">Benchmarks</a>
       <a href="future.html">Future</a>
       <a href="tricks.html">Tricks</a>
       <a href="maywaste.html">May Waste</a>
@@ -321,12 +372,18 @@
             and regional values (<code>@r</code>) are rejected at channel and actor boundaries so memory never outlives its region.
           </p>
         </div>
+        <div class="mini-card">
+          <h4>6. Colorless Commitments (<code>rush</code> &amp; <code>Commitment[T]</code>)</h4>
+          <p>
+            Launch synchronous tasks concurrently with prefix <code>rush task(...)</code>, gather or cancel via structured block scope exit, wait with <code>&lt;&lt;- c</code> or <code>select</code>, and splice worker allocations in <em>O(1)</em> into one destination caller region (<a href="commitment.html">Commitments</a>).
+          </p>
+        </div>
       </div>
 
       <p>
         For the full mechanics of message passing and isolated actor state, see <a href="channels.html">Channels</a>,
         <a href="channel-lifecycle.html">Channel Lifecycle &amp; Explicit Closing</a>,
-        <a href="actors.html">Actors</a>, and <a href="safety.html#data-races">Data Races &amp; Alters</a>.
+        <a href="actors.html">Actors</a>, <a href="commitment.html">Commitments</a>, and <a href="safety.html#data-races">Data Races &amp; Alters</a>.
       </p>
     </section>
 
@@ -363,39 +420,35 @@
 
       <div class="card">
         <h3>
-          <span>2. No <code>async</code> / <code>await</code> or Futures Runtime</span>
-          <span class="badge b-amber">Deferred / Unlikely</span>
+          <span>2. No Colored <code>async</code> / <code>await</code> Functions &mdash; Solved via Colorless <code>rush</code></span>
+          <span class="badge b-green">Colorless Model Shipped</span>
         </h3>
         <div class="tag-row">
-          Missing primitives: <code>async task</code>, <code>await</code>, <code>Future[T]</code>, stackless coroutine state machines
+          Omits: colored <code>async task</code> keywords and infectious <code>Future[T]</code> viral function splitting
         </div>
         <p>
-          Vela tasks are ordinary synchronous functions compiled directly to plain C11 functions. There is no
-          <code>async</code> keyword, no <code>Future</code> trait, and no compiler transform splitting functions into
-          resumable poll state machines.
+          Vela tasks remain ordinary colorless C11 functions: calling a task normally awaits by default with zero runtime overhead, while writing <code>rush task_call(...)</code> launches it on the concurrent scheduler returning a structured <a href="commitment.html"><code>Commitment[T]</code></a> handle.
         </p>
         <p>
-          <strong>Why we didn't implement this:</strong>
+          <strong>Why we keep concurrency colorless:</strong>
         </p>
         <ul>
-          <li><strong>Avoiding "function coloring":</strong> In async/await languages, calling an async helper forces the caller — and every caller above it — to become <code>async</code> too, splitting standard libraries and user code into two incompatible worlds.</li>
-          <li><strong>Keeping generated C predictable and zero-surprise:</strong> Async state machines introduce invisible heap allocations, self-referential frame pinning problems, and cancellation traps (dropping a half-awaited future mid-flight).</li>
-          <li><strong>Actors already cover non-blocking coordination:</strong> An actor message step runs on the runtime worker pool without tying up the caller; if a caller wants a reply, it creates a small <code>Chan[T]</code>, passes it inside the message, and reads it back with <code>wait_and_receive()</code> or polls with <code>receive()</code>. If Vela ever adds cooperative suspension later, algebraic effects are a cleaner fit than colored functions.</li>
+          <li><strong>Zero "function coloring":</strong> Standard utilities, collections, and lambdas never split into duplicated <code>sync</code> and <code>async</code> APIs.</li>
+          <li><strong>Pay-for-what-you-use execution:</strong> Sequential calls compile to plain direct C11 calls without heap state frames, while <code>rush</code> handles support <code>&lt;&lt;-</code>, non-blocking <code>.poll()</code>, <code>select</code> racing, <code>|&gt;</code> pipes, and inline <code>=&gt;</code> / <code>.then()</code> continuations.</li>
+          <li><strong>Actors + Commitments together:</strong> Use <code>spawn Actor(...)</code> for long-lived encapsulated state daemons, and <code>rush</code> commitments for finite structured parallel tasks.</li>
         </ul>
       </div>
 
       <div class="card">
         <h3>
-          <span>3. No Whole-Region Cross-Thread Transfer (<code>Chan[own region]</code>)</span>
-          <span class="badge b-amber">Deferred (Safety Guarded)</span>
+          <span>3. No Whole-Region Channel Transfer (<code>Chan[own region]</code>)</span>
+          <span class="badge b-amber">Deferred for Channels &bull; Shipped for Commitments</span>
         </h3>
         <div class="tag-row">
-          Missing primitives: <code>dispatch(c, own work_region)</code>, sending <code>@r</code> values over channels or actor messages
+          Missing on channels: <code>dispatch(c, own work_region)</code> &bull; Shipped on <code>rush</code>: single-destination <em>O(1)</em> region splicing
         </div>
         <p>
-          Today, only self-contained values and owned non-regional shapes (<code>own T</code>) can cross channels, actor
-          messages, or <code>spawn</code> arguments. Passing a value tied to a region (like <code>text@r</code> or
-          <code>^Node@r</code>) across a thread boundary is rejected at compile time.
+          For <code>Chan[own T]</code> and actor messages, only self-contained values and moved <code>own T</code> shapes can cross threads today (while <code>rush</code> tasks already splice one isolated worker region directly into a destination caller <code>region</code> on settlement).
         </p>
         <p>
           <strong>Why we didn't implement this yet:</strong>
@@ -481,17 +534,21 @@
             <td>Built-in multi-channel <code>select</code> waits atomically on receives, bounded sends, channel close (<code>none &lt;&lt;- ch</code>), and <code>after ms</code> timeouts.</td>
           </tr>
           <tr>
-            <td><code>async fn</code> request/response</td>
-            <td>Actor message carrying a one-shot <code>Chan[T]</code></td>
-            <td>Functions remain uncolored synchronous Vela code while work executes concurrently in the background.</td>
+            <td><code>async fn</code> / Promise fan-out</td>
+            <td><code>fixed c = rush fetch()</code> &rarr; <code>&lt;&lt;- c</code> (plus <code>select</code>)</td>
+            <td>Functions remain uncolored synchronous C11 while concurrent branches run asynchronously with automatic scope cancel/join.</td>
           </tr>
           <tr>
             <td>Parallel batch loop</td>
-            <td>N spawned worker actors + result collector channel</td>
-            <td>Each worker owns its chunk and isolated state, dispatching finished items cleanly back to main.</td>
+            <td>N spawned worker actors + collector <code>Chan[T]</code>, or sibling <code>rush</code> calls</td>
+            <td>Each worker owns its chunk and isolated state or region, dispatching finished items cleanly back to caller.</td>
           </tr>
         </tbody>
       </table>
+
+      <div class="note">
+        <strong>Runtime Performance Roadmap (<code>benchmarks.html</code>):</strong> Today's channel &amp; scheduler implementation runs on OS <code>pthread</code>s with mutex/condvar signaling (<code>482.4 ms</code> vs Go's <code>29.2 ms</code> on 100k token hops). See <a href="benchmarks.html#improvements">Benchmarks Track A (C1&ndash;C4)</a> for our 3-phase upgrade to lock-free handle tables, Vyukov atomic ring buffers, user-space M:N fibers, and direct <code>sudog</code> stack handoff.
+      </div>
 
       <div class="note">
         <strong>Summary Example:</strong> Spawning work concurrently, keeping state race-free, and collecting a reply without locks or <code>async</code> keywords:
@@ -519,6 +576,25 @@
   <footer>
     <p>Vela Language Documentation &copy; 2026. Concurrency without shared-memory locks, compiled to ISO C11.</p>
   </footer>
+
+  <div id="vela-scroll-bar" aria-hidden="true"></div>
+  <button id="vela-back-top" type="button" aria-label="Back to top">&uarr; Top</button>
+  <script>
+    (function () {
+      const bar = document.getElementById('vela-scroll-bar');
+      const btn = document.getElementById('vela-back-top');
+      if (!bar || !btn) return;
+      function updateScroll() {
+        const doc = document.documentElement;
+        const max = doc.scrollHeight - doc.clientHeight;
+        bar.style.width = (max > 0 ? Math.min(100, (window.scrollY / max) * 100) : 0) + '%';
+        btn.classList.toggle('visible', window.scrollY > 360);
+      }
+      window.addEventListener('scroll', updateScroll, { passive: true });
+      btn.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+      updateScroll();
+    })();
+  </script>
 </body>
 </html>
 
