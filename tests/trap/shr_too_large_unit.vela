@@ -1,5 +1,6 @@
-; trap: shift count out of range at 5:12 in task 'main'
+; trap: shift count out of range at 6:12 in task 'main'
 task main()
+    show("before")
     flex u = unit(7)
     flex shift = 8
     show(u >> shift)

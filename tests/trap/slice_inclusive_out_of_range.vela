@@ -1,5 +1,6 @@
-; trap: slice 1..6 is out of range 0..5 at 6:12 in task 'main'
+; trap: slice 1..6 is out of range 0..5 at 7:12 in task 'main'
 task main()
+    show("before")
     region r
     fixed xs = new [int]([1, 2, 3, 4, 5]) at r
     flex hi = 5
